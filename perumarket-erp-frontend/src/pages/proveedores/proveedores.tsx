@@ -1,6 +1,6 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
+import axios from "axios";
 import {
-  FaEye,
   FaEdit,
   FaTrash,
   FaPlus,
@@ -10,19 +10,34 @@ import {
   FaUsers,
 } from "react-icons/fa";
 
+// Interfaz para coincidir con el DTO del backend
+interface ProveedorData {
+  id?: number; 
+  ruc: string;
+  razon_social: string; // Coincide con @JsonProperty del DTO
+  contacto: string;
+  telefono: string;
+  correo: string;
+  direccion: string;
+  estado: "ACTIVO" | "INACTIVO";
+}
+
+// URL completa: http://localhost:8080 (puerto) + /api (context-path) + /proveedores (controller mapping)
+const API_BASE_URL = "http://localhost:8080/api/proveedores"; 
+
 export default function Proveedores() {
-  // Estado para saber si estamos editando
+  // --- Estados Principales ---
+  const [proveedores, setProveedores] = useState<ProveedorData[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
   const [isEditing, setIsEditing] = useState(false);
-
   const [showModal, setShowModal] = useState(false);
-
-  // Estado para modal de eliminar
   const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const [deleteTarget, setDeleteTarget] = useState<ProveedorData | null>(null);
+  const [searchTerm, setSearchTerm] = useState("");
 
-  // proveedor seleccionado para eliminar
-  const [deleteTarget, setDeleteTarget] = useState(null);
-
-  const [formData, setFormData] = useState({
+  const initialFormData: ProveedorData = {
     ruc: "",
     razon_social: "",
     contacto: "",
@@ -30,9 +45,37 @@ export default function Proveedores() {
     correo: "",
     direccion: "",
     estado: "ACTIVO",
-  });
+  };
+  const [formData, setFormData] = useState<ProveedorData>(initialFormData);
 
-  const handleInputChange = (e) => {
+
+  // --- Función de Carga de Datos ---
+  const fetchProveedores = async (query = "") => {
+    setLoading(true);
+    setError(null);
+    try {
+      const url = query
+        ? `${API_BASE_URL}/buscar?q=${query}`
+        : API_BASE_URL;
+        
+      const response = await axios.get<ProveedorData[]>(url);
+      setProveedores(response.data);
+    } catch (err) {
+      console.error("Error al cargar proveedores:", err);
+      // Muestra el mensaje que se configuró para el error
+      setError("No se pudieron cargar los proveedores. (Verifique que el Backend esté corriendo)");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchProveedores();
+  }, []);
+
+  // --- Handlers de Interfaz y CRUD ---
+
+  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
     const { name, value } = e.target;
     setFormData((prev) => ({
       ...prev,
@@ -40,49 +83,94 @@ export default function Proveedores() {
     }));
   };
 
-  // Abrir modal de edición
-  const handleEdit = (proveedor) => {
+  const handleCreateClick = () => {
+    setIsEditing(false);
+    setFormData(initialFormData);
+    setShowModal(true);
+  };
+
+  const handleEdit = (proveedor: ProveedorData) => {
     setIsEditing(true);
     setFormData(proveedor);
     setShowModal(true);
   };
 
-  // Abrir modal de eliminar
-  const handleDeleteClick = (proveedor) => {
+  const handleDeleteClick = (proveedor: ProveedorData) => {
     setDeleteTarget(proveedor);
     setShowDeleteModal(true);
   };
 
-  // Confirmar eliminación
-  const confirmDelete = () => {
-    console.log("Proveedor eliminado:", deleteTarget);
-
-    setShowDeleteModal(false);
-    alert("Proveedor eliminado correctamente");
+  const handleSearch = (e: React.FormEvent) => {
+    e.preventDefault();
+    fetchProveedores(searchTerm);
   };
 
-  const handleSubmit = (e) => {
+  const confirmDelete = async () => {
+    if (!deleteTarget?.id) return;
+
+    try {
+      await axios.delete(`${API_BASE_URL}/${deleteTarget.id}`);
+      setShowDeleteModal(false);
+      setDeleteTarget(null);
+      alert("Proveedor eliminado correctamente");
+      fetchProveedores(searchTerm); 
+    } catch (err) {
+      console.error("Error al eliminar proveedor:", err);
+      alert("Error al eliminar el proveedor. Puede que esté asociado a otros registros (ej: productos).");
+    }
+  };
+
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
-    if (isEditing) {
-      console.log("Proveedor editado:", formData);
-    } else {
-      console.log("Proveedor creado:", formData);
+    try {
+      if (isEditing && formData.id) {
+        // Petición PUT
+        await axios.put(`${API_BASE_URL}/${formData.id}`, formData);
+        alert("Proveedor editado correctamente");
+      } else {
+        // Petición POST
+        await axios.post(API_BASE_URL, formData);
+        alert("Proveedor creado correctamente");
+      }
+
+      setShowModal(false);
+      setIsEditing(false);
+      fetchProveedores(searchTerm); 
+
+    } catch (err: any) {
+      console.error("Error al guardar proveedor:", err.response || err);
+      const errorMessage = err.response?.data || "Error al guardar el proveedor. Verifique RUC duplicado o datos.";
+      alert(errorMessage);
     }
-
-    setShowModal(false);
-    setIsEditing(false);
-
-    setFormData({
-      ruc: "",
-      razon_social: "",
-      contacto: "",
-      telefono: "",
-      correo: "",
-      direccion: "",
-      estado: "ACTIVO",
-    });
   };
+  
+  // --- Renderizado ---
+
+  if (loading && proveedores.length === 0 && !error) {
+    return (
+      <div className="w-full p-6 bg-gray-100 min-h-screen">
+        <p className="text-center text-xl mt-10">Cargando proveedores...</p>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="w-full p-6 bg-gray-100 min-h-screen">
+        <h1 className="text-2xl font-bold mb-6 flex items-center gap-3">
+          <FaUsers className="text-[#7E1F20]" />
+          <span>PROVEEDORES</span>
+        </h1>
+        <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded relative" role="alert">
+            <strong className="font-bold">Error de Conexión: </strong>
+            <span className="block sm:inline">{error}</span>
+            <p className="mt-2 text-sm">Asegúrese de que el backend de Spring Boot esté **ejecutándose** en `http://localhost:8080/api` y que el **CORS** esté configurado correctamente.</p>
+        </div>
+      </div>
+    );
+  }
+
 
   return (
     <div className="w-full p-6 bg-gray-100 min-h-screen">
@@ -100,7 +188,7 @@ export default function Proveedores() {
             </div>
             <div>
               <h3 className="text-gray-600 text-sm">Total de proveedores</h3>
-              <p className="text-2xl font-bold">25</p>
+              <p className="text-2xl font-bold">{proveedores.length}</p>
             </div>
           </div>
         </div>
@@ -111,8 +199,8 @@ export default function Proveedores() {
               <FaBox className="text-[#7E1F20] text-xl" />
             </div>
             <div>
-              <h3 className="text-gray-600 text-sm">Total de productos</h3>
-              <p className="text-2xl font-bold">156</p>
+              <h3 className="text-gray-600 text-sm">Total de productos (Simulado)</h3>
+              <p className="text-2xl font-bold">156</p> 
             </div>
           </div>
         </div>
@@ -127,36 +215,29 @@ export default function Proveedores() {
           Búsqueda de Proveedor
         </h3>
 
-        <div className="flex flex-col md:flex-row gap-3">
+        <form onSubmit={handleSearch} className="flex flex-col md:flex-row gap-3">
           <input
             type="text"
-            placeholder="Buscar por fecha o por RUC"
+            placeholder="Buscar por RUC o Razón Social"
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
             className="w-full p-3 rounded-lg border border-gray-300 focus:ring-2 focus:ring-[#7E1F20] focus:border-transparent"
           />
 
-          <button className="bg-[#7E1F20] text-white px-6 py-3 rounded-lg shadow-md hover:bg-[#65171A] flex items-center gap-2">
+          <button
+            type="submit"
+            className="bg-[#7E1F20] text-white px-6 py-3 rounded-lg shadow-md hover:bg-[#65171A] flex items-center justify-center gap-2"
+          >
             <FaSearch />
             Buscar
           </button>
-        </div>
+        </form>
       </div>
 
       {/* Botón Nuevo */}
       <div className="flex justify-start mb-3">
         <button
-          onClick={() => {
-            setIsEditing(false);
-            setFormData({
-              ruc: "",
-              razon_social: "",
-              contacto: "",
-              telefono: "",
-              correo: "",
-              direccion: "",
-              estado: "ACTIVO",
-            });
-            setShowModal(true);
-          }}
+          onClick={handleCreateClick}
           className="bg-[#7E1F20] text-white px-4 py-2 rounded-lg shadow hover:bg-[#65171A] transition flex items-center gap-2 text-sm font-semibold"
         >
           <FaPlus className="text-xs" />
@@ -169,6 +250,7 @@ export default function Proveedores() {
         <table className="min-w-full text-left text-sm">
           <thead className="bg-[#7E1F20] text-white">
             <tr>
+              <th className="p-3">ID</th>
               <th className="p-3">RUC</th>
               <th className="p-3">Razón Social</th>
               <th className="p-3">Contacto</th>
@@ -181,24 +263,25 @@ export default function Proveedores() {
           </thead>
 
           <tbody>
-            {[1, 2, 3, 4, 5].map((item) => (
-              <tr key={item} className="border-b hover:bg-gray-50">
-                <td className="p-3">20123456789</td>
-                <td className="p-3">Empresa Ejemplo {item}</td>
-                <td className="p-3">Juan Pérez</td>
-                <td className="p-3">555-1234</td>
-                <td className="p-3">contacto@empresa{item}.com</td>
-                <td className="p-3">Av. Ejemplo 123</td>
+            {proveedores.map((proveedor) => (
+              <tr key={proveedor.id} className="border-b hover:bg-gray-50">
+                <td className="p-3">{proveedor.id}</td>
+                <td className="p-3">{proveedor.ruc}</td>
+                <td className="p-3">{proveedor.razon_social}</td>
+                <td className="p-3">{proveedor.contacto}</td>
+                <td className="p-3">{proveedor.telefono}</td>
+                <td className="p-3">{proveedor.correo}</td>
+                <td className="p-3">{proveedor.direccion}</td>
 
                 <td className="p-3">
                   <span
-                    className={`px-2 py-1 rounded-full text-xs ${
-                      item % 2 === 0
+                    className={`px-2 py-1 rounded-full text-xs font-semibold ${
+                      proveedor.estado === "ACTIVO"
                         ? "bg-green-100 text-green-800"
                         : "bg-red-100 text-red-800"
                     }`}
                   >
-                    {item % 2 === 0 ? "ACTIVO" : "INACTIVO"}
+                    {proveedor.estado}
                   </span>
                 </td>
 
@@ -207,29 +290,14 @@ export default function Proveedores() {
                   <div className="flex gap-3">
                     <button
                       className="text-[#7E1F20] hover:text-[#65171A]"
-                      onClick={() =>
-                        handleEdit({
-                          ruc: "20123456789",
-                          razon_social: `Empresa Ejemplo ${item}`,
-                          contacto: "Juan Pérez",
-                          telefono: "555-1234",
-                          correo: `contacto@empresa${item}.com`,
-                          direccion: "Av. Ejemplo 123",
-                          estado: item % 2 === 0 ? "ACTIVO" : "INACTIVO",
-                        })
-                      }
+                      onClick={() => handleEdit(proveedor)}
                     >
                       <FaEdit />
                     </button>
 
                     <button
                       className="text-red-600 hover:text-red-800"
-                      onClick={() =>
-                        handleDeleteClick({
-                          ruc: "20123456789",
-                          razon_social: `Empresa Ejemplo ${item}`,
-                        })
-                      }
+                      onClick={() => handleDeleteClick(proveedor)}
                     >
                       <FaTrash />
                     </button>
@@ -237,6 +305,13 @@ export default function Proveedores() {
                 </td>
               </tr>
             ))}
+            {proveedores.length === 0 && !loading && (
+              <tr>
+                <td colSpan={9} className="p-4 text-center text-gray-500">
+                  No se encontraron proveedores.
+                </td>
+              </tr>
+            )}
           </tbody>
         </table>
       </div>
@@ -394,6 +469,7 @@ export default function Proveedores() {
 
             <div className="flex justify-end gap-3">
               <button
+                type="button"
                 onClick={() => setShowDeleteModal(false)}
                 className="px-4 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50"
               >
@@ -401,6 +477,7 @@ export default function Proveedores() {
               </button>
 
               <button
+                type="button"
                 onClick={confirmDelete}
                 className="px-4 py-2 bg-[#7E1F20] text-white rounded-lg hover:bg-[#65171A]"
               >

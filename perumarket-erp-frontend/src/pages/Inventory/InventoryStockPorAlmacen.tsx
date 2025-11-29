@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect, useCallback } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import {
   IoMdArrowRoundBack,
@@ -6,117 +6,61 @@ import {
   IoIosCube,
   IoIosStats,
   IoIosSearch
-} from 'react-icons/io';
+} from 'react-icons/io'; 
 
+// Interfaces que coinciden con los datos de la API
 interface Product {
   id: number;
-  name: string;
-  description: string;
-  category: string;
-  status: 'Disponible' | 'Stock Bajo' | 'Sin Stock';
-  price: number;
+  nombre: string;
   sku: string;
-  barcode: string;
-  stock: number;
-  minStock: number;
-  maxStock: number;
-  warehouse: string;
-  location: string;
-  cost: number;
-  unit: string;
+  categoria: string;
+  stockActual: number;
+  stockMinimo: number;
+  stockMaximo: number;
+  precioVenta: number;
+  almacenNombre: string;
+  unidad: string;
+  // Asumimos que la ubicación puede no venir de la API, la dejamos opcional
+  ubicacion?: string;
 }
 
 interface Warehouse {
   id: number;
-  name: string;
-  code: string;
-  status: 'ACTIVO' | 'INACTIVO';
-  address?: string;
+  nombre: string;
+  codigo: string;
+  estado: 'ACTIVO' | 'INACTIVO';
+  direccion: string;
 }
 
-const productData: Product[] = [
-  {
-    id: 1,
-    name: "ANITA TALLARIN",
-    description: "Ricos y deliciosos",
-    category: "Fideos",
-    status: "Disponible",
-    price: 12.00,
-    sku: "BULB-FA-001",
-    barcode: "1234567890123",
-    stock: 12,
-    minStock: 5,
-    maxStock: 50,
-    warehouse: "Almacén Principal",
-    location: "A-12-B-04",
-    cost: 15.00,
-    unit: "Unidad",
-  },
-  {
-    id: 2,
-    name: "LENTEJA VERDE",
-    description: "Menestra de alta calidad",
-    category: "Menestras",
-    status: "Stock Bajo",
-    price: 8.50,
-    sku: "MENS-LV-002",
-    barcode: "9876543210987",
-    stock: 4,
-    minStock: 5,
-    maxStock: 30,
-    warehouse: "Almacén Norte",
-    location: "B-01-C-10",
-    cost: 6.00,
-    unit: "Kilogramo",
-  },
-  {
-    id: 3,
-    name: "RESISTENCIA M-10",
-    description: "Resistencia electrónica 10 ohms",
-    category: "Electrónicos",
-    status: "Sin Stock",
-    price: 5.00,
-    sku: "ELEC-RM-003",
-    barcode: "1122334455667",
-    stock: 0,
-    minStock: 10,
-    maxStock: 100,
-    warehouse: "Almacén Sur",
-    location: "C-05-D-01",
-    cost: 3.50,
-    unit: "Unidad",
-  },
-];
-
-const warehouseData: Warehouse[] = [
-  { id: 1, name: "Almacén Principal", code: "ALM-PRIN", status: "ACTIVO", address: "Av. Industrial 123, Zona Industrial" },
-  { id: 2, name: "Almacén Norte", code: "ALM-NORTE", status: "ACTIVO", address: "Av. Norte 456, Distrito Norte" },
-  { id: 3, name: "Almacén Sur", code: "ALM-SUR", status: "ACTIVO", address: "Calle Sur 789, Urbanización Sur" },
-];
+const API_ALMACENES_URL = 'http://localhost:8080/api/almacenes';
+const API_PRODUCTOS_URL = 'http://localhost:8080/api/productos';
 
 export default function InventoryStockPorAlmacen() {
   const { id: warehouseIdParam } = useParams<{ id: string }>();
-  const initialWarehouse = useMemo(() => {
-    const id = warehouseIdParam ? parseInt(warehouseIdParam) : 1;
-    return warehouseData.find(w => w.id === id) || warehouseData[0];
-  }, [warehouseIdParam]);
-
+  
+  // Estados para manejar los datos de la API
+  const [allProducts, setAllProducts] = useState<Product[]>([]);
+  const [allWarehouses, setAllWarehouses] = useState<Warehouse[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  
   const [searchTerm, setSearchTerm] = useState('');
-  const [selectedWarehouse, setSelectedWarehouse] = useState<Warehouse>(initialWarehouse);
-
+  const [selectedWarehouse, setSelectedWarehouse] = useState<Warehouse | null>(null);
 
   const filteredProducts = useMemo(() => {
-    return productData.filter(product => {
-      const matchesWarehouse = product.warehouse === selectedWarehouse?.name;
-      const matchesSearch = product.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    if (!selectedWarehouse) return [];
+    
+    return allProducts.filter(product => {
+      const matchesWarehouse = product.almacenNombre === selectedWarehouse.nombre;
+      const matchesSearch = product.nombre.toLowerCase().includes(searchTerm.toLowerCase()) ||
         product.sku.toLowerCase().includes(searchTerm.toLowerCase());
 
       return matchesWarehouse && matchesSearch;
     });
-  }, [searchTerm, selectedWarehouse]);
+  }, [searchTerm, selectedWarehouse, allProducts]);
 
-  const totalStock = filteredProducts.reduce((sum, p) => sum + p.stock, 0);
-  const totalValue = filteredProducts.reduce((sum, p) => sum + p.stock * p.price, 0);
+  const totalStock = filteredProducts.reduce((sum, p) => sum + p.stockActual, 0);
+  const totalValue = filteredProducts.reduce((sum, p) => sum + p.stockActual * p.precioVenta, 0);
 
   const getStatusClasses = (stock: number, minStock: number): { text: string; color: string; } => {
     if (stock === 0) return { text: 'Sin Stock', color: 'bg-red-100 text-red-800' };
@@ -126,11 +70,51 @@ export default function InventoryStockPorAlmacen() {
 
   const handleWarehouseChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
     const selectedId = parseInt(e.target.value);
-    const newWarehouse = warehouseData.find(w => w.id === selectedId);
+    const newWarehouse = allWarehouses.find(w => w.id === selectedId);
     if (newWarehouse) {
       setSelectedWarehouse(newWarehouse);
     }
   };
+
+  const fetchData = useCallback(async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      const [almacenesResponse, productosResponse] = await Promise.all([
+        fetch(API_ALMACENES_URL),
+        fetch(API_PRODUCTOS_URL)
+      ]);
+
+      if (!almacenesResponse.ok) throw new Error('No se pudieron cargar los almacenes.');
+      if (!productosResponse.ok) throw new Error('No se pudieron cargar los productos.');
+
+      const almacenesData: Warehouse[] = await almacenesResponse.json();
+      const productosData: Product[] = await productosResponse.json();
+
+      setAllWarehouses(almacenesData);
+      setAllProducts(productosData);
+
+      // Establecer el almacén inicial basado en el parámetro de la URL
+      const initialId = warehouseIdParam ? parseInt(warehouseIdParam) : (almacenesData[0]?.id || null);
+      if (initialId) {
+        const initialWarehouse = almacenesData.find(w => w.id === initialId);
+        setSelectedWarehouse(initialWarehouse || almacenesData[0] || null);
+      }
+
+    } catch (err: any) {
+      setError(err.message);
+    } finally {
+      setLoading(false);
+    }
+  }, [warehouseIdParam]);
+
+  useEffect(() => {
+    fetchData();
+  }, [fetchData]);
+
+  if (loading) return <div className="p-6 text-center text-gray-500">Cargando datos del inventario...</div>;
+  if (error) return <div className="p-6 text-center text-red-600 border border-red-300 bg-red-50 rounded-lg">Error: {error}</div>;
+  if (!selectedWarehouse) return <div className="p-6 text-center text-gray-500">No se encontró el almacén seleccionado.</div>;
 
   return (
     <div className="min-h-screen bg-gray-50 p-6">
@@ -142,7 +126,7 @@ export default function InventoryStockPorAlmacen() {
           <div>
             <h1 className="text-2xl font-bold text-gray-900">Stock por Almacén</h1>
             <p className="text-gray-600">
-              Visualización detallada de inventario en: <span className="font-semibold text-blue-600">{selectedWarehouse?.name || 'N/A'}</span>
+              Visualización detallada de inventario 
             </p>
           </div>
         </div>
@@ -173,9 +157,9 @@ export default function InventoryStockPorAlmacen() {
           <div className="text-sm font-medium text-gray-600">Ubicación principal</div>
           <div className="flex items-center gap-2 mt-1">
             <IoIosPin className="w-5 h-5 text-red-500" />
-            <span className="text-lg font-bold text-gray-900">{selectedWarehouse?.code || 'N/A'}</span>
+            <p className="text-xs text-gray-500 mt-1">{selectedWarehouse?.direccion || 'Sin dirección registrada'}</p>
           </div>
-          <p className="text-xs text-gray-500 mt-1">{selectedWarehouse?.address || 'Sin dirección registrada'}</p>
+         
         </div>
       </div>
       <div className="bg-white rounded-lg p-4 shadow-sm border border-gray-200 mb-6">
@@ -187,9 +171,9 @@ export default function InventoryStockPorAlmacen() {
               value={selectedWarehouse?.id}
               onChange={handleWarehouseChange}
             >
-              {warehouseData.map((w) => (
+              {allWarehouses.map((w) => (
                 <option key={w.id} value={w.id}>
-                  {w.name} ({w.code})
+                  {w.nombre} ({w.codigo})
                 </option>
               ))}
             </select>
@@ -214,7 +198,6 @@ export default function InventoryStockPorAlmacen() {
               <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Producto</th>
               <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">SKU</th>
               <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">Stock Actual</th>
-              <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">Ubicación</th>
               <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">Mínimo</th>
               <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Estado</th>
             </tr>
@@ -222,21 +205,18 @@ export default function InventoryStockPorAlmacen() {
           <tbody className="bg-white divide-y divide-gray-200">
             {filteredProducts.length > 0 ? (
               filteredProducts.map((product) => {
-                const status = getStatusClasses(product.stock, product.minStock);
+                const status = getStatusClasses(product.stockActual, product.stockMinimo);
                 return (
                   <tr key={product.id} className="hover:bg-gray-50">
                     <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
-                      {product.name}
-                      <div className="text-xs text-gray-500">{product.category}</div>
+                      {product.nombre}
+                      <div className="text-xs text-gray-500">{product.categoria}</div>
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{product.sku}</td>
                     <td className="px-6 py-4 whitespace-nowrap text-center text-sm font-bold text-gray-900">
-                      {product.stock} {product.unit}
+                      {product.stockActual} {product.unidad}
                     </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-center text-sm text-blue-600 font-semibold">
-                      {product.location}
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-center text-sm text-gray-500">{product.minStock}</td>
+                    <td className="px-6 py-4 whitespace-nowrap text-center text-sm text-gray-500">{product.stockMinimo}</td>
                     <td className="px-6 py-4 whitespace-nowrap">
                       <span className={`px-3 py-1 inline-flex text-xs leading-5 font-semibold rounded-full ${status.color}`}>
                         {status.text}
@@ -248,7 +228,7 @@ export default function InventoryStockPorAlmacen() {
             ) : (
               <tr>
                 <td colSpan={6} className="px-6 py-8 text-center text-gray-500 text-lg">
-                  No se encontraron productos en el almacén "{selectedWarehouse?.name || 'N/A'}" con los filtros aplicados.
+                  No se encontraron productos en el almacén "{selectedWarehouse?.nombre || 'N/A'}" con los filtros aplicados.
                 </td>
               </tr>
             )}

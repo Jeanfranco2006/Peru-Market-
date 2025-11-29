@@ -1,4 +1,4 @@
-// Accesos.tsx - VERSIÓN CONECTADA AL BACKEND
+// Accesos.tsx - VERSIÓN CON ESTILOS MEJORADOS SIN BORDES
 import { useState, useEffect } from "react";
 import { FiPlus, FiEdit, FiTrash2, FiEye, FiMenu, FiX, FiUser, FiLock, FiSettings, FiShield } from "react-icons/fi";
 import { ModalDetalles, ModalEditar, ModalConfirmar, ModalPermisos } from "./AccesosModals";
@@ -7,6 +7,7 @@ import { UsuariosTab } from "./AccesosUsuarios";
 import { RolesTab } from "./AccesosRoles";
 import { ModulosTab } from "./AccesosModulos";
 import { accesosService } from "../../services/accesosService";
+import { api } from "../../services/api";
 
 export default function Accesos() {
   const [tab, setTab] = useState("usuarios");
@@ -22,7 +23,7 @@ export default function Accesos() {
   const [roleModulePermissions, setRoleModulePermissions] = useState<any[]>([]);
 
   // Agregar este estado para roles del dropdown
-const [rolesDropdown, setRolesDropdown] = useState<any[]>([]);
+  const [rolesDropdown, setRolesDropdown] = useState<any[]>([]);
 
   // Estados para modales
   const [modalDetalles, setModalDetalles] = useState({ 
@@ -53,41 +54,41 @@ const [rolesDropdown, setRolesDropdown] = useState<any[]>([]);
   });
 
   // Cargar datos iniciales
-useEffect(() => {
-  cargarDatosIniciales();
-}, []);
+  useEffect(() => {
+    cargarDatosIniciales();
+  }, []);
 
   const cargarDatosIniciales = async () => {
-  setLoading(true);
-  try {
-    console.log('📥 Cargando datos del backend...');
-    
-    const [usuariosData, rolesData, modulosData, rolesDropdownData] = await Promise.all([
-      accesosService.getUsuarios(),
-      accesosService.getRoles(),
-      accesosService.getModulos(),
-      accesosService.getRolesForDropdown() // Nuevo: cargar roles para dropdown
-    ]);
+    setLoading(true);
+    try {
+      console.log('📥 Cargando datos del backend...');
+      
+      const [usuariosData, rolesData, modulosData, rolesDropdownData] = await Promise.all([
+        accesosService.getUsuarios(),
+        accesosService.getRoles(),
+        accesosService.getModulos(),
+        accesosService.getRolesForDropdown()
+      ]);
 
-    console.log('✅ Datos cargados:', {
-      usuarios: usuariosData.length,
-      roles: rolesData.length,
-      modulos: modulosData.length,
-      rolesDropdown: rolesDropdownData.length
-    });
+      console.log('✅ Datos cargados:', {
+        usuarios: usuariosData.length,
+        roles: rolesData.length,
+        modulos: modulosData.length,
+        rolesDropdown: rolesDropdownData.length
+      });
 
-    setUsuarios(usuariosData);
-    setRoles(rolesData);
-    setModulos(modulosData);
-    setRolesDropdown(rolesDropdownData);
+      setUsuarios(usuariosData);
+      setRoles(rolesData);
+      setModulos(modulosData);
+      setRolesDropdown(rolesDropdownData);
 
-  } catch (error) {
-    console.error('❌ Error cargando datos:', error);
-    alert('Error al cargar los datos del servidor');
-  } finally {
-    setLoading(false);
-  }
-};
+    } catch (error) {
+      console.error('❌ Error cargando datos:', error);
+      alert('Error al cargar los datos del servidor');
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const tabs = [
     { id: "usuarios", nombre: "Usuarios", icon: FiUser, count: usuarios.length },
@@ -97,16 +98,16 @@ useEffect(() => {
 
   // Funciones de utilidad
   const getEstadoColor = (estado: string) => 
-    estado === 'ACTIVO' ? 'bg-green-100 text-green-800 border-green-200' : 'bg-red-100 text-red-800 border-red-200';
+    estado === 'ACTIVO' ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800';
   
   const getRolColor = (rolNombre: string) => {
     const colors: { [key: string]: string } = {
-      'Administrador': 'bg-blue-500',
-      'Vendedor': 'bg-green-500',
-      'Almacenero': 'bg-yellow-500',
-      'Almacén': 'bg-yellow-500'
+      'Administrador': 'bg-gradient-to-r from-blue-500 to-blue-600',
+      'Vendedor': 'bg-gradient-to-r from-green-500 to-green-600',
+      'Almacenero': 'bg-gradient-to-r from-yellow-500 to-yellow-600',
+      'Almacén': 'bg-gradient-to-r from-amber-500 to-amber-600'
     };
-    return colors[rolNombre] || 'bg-gray-500';
+    return colors[rolNombre] || 'bg-gradient-to-r from-gray-500 to-gray-600';
   };
 
   const getNombreCompleto = (persona: any) => 
@@ -119,65 +120,75 @@ useEffect(() => {
       isOpen: true,
       titulo: `Detalles del Usuario`,
       children: (
-        <div className="space-y-6">
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            <div className="space-y-4">
-              <h3 className="font-semibold text-gray-800 border-b pb-2">Información Personal</h3>
-              <div>
-                <label className="text-sm font-medium text-gray-600">Nombre Completo</label>
-                <p className="text-lg font-semibold">{getNombreCompleto(p)}</p>
-              </div>
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="text-sm font-medium text-gray-600">Documento</label>
-                  <p>{p?.tipoDocumento} - {p?.numeroDocumento}</p>
-                </div>
-                <div>
-                  <label className="text-sm font-medium text-gray-600">Fecha Nacimiento</label>
-                  <p>{p?.fechaNacimiento}</p>
+        <div className="space-y-8">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+            <div className="space-y-6">
+              <div className="bg-gradient-to-r from-blue-50 to-indigo-50 p-6 rounded-2xl">
+                <h3 className="font-bold text-gray-800 text-lg mb-4">Información Personal</h3>
+                <div className="space-y-4">
+                  <div>
+                    <label className="text-sm font-medium text-gray-600">Nombre Completo</label>
+                    <p className="text-xl font-bold text-gray-900 mt-1">{getNombreCompleto(p)}</p>
+                  </div>
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <label className="text-sm font-medium text-gray-600">Documento</label>
+                      <p className="font-semibold text-gray-800">{p?.tipoDocumento} - {p?.numeroDocumento}</p>
+                    </div>
+                    <div>
+                      <label className="text-sm font-medium text-gray-600">Fecha Nacimiento</label>
+                      <p className="font-semibold text-gray-800">{p?.fechaNacimiento}</p>
+                    </div>
+                  </div>
                 </div>
               </div>
             </div>
             
-            <div className="space-y-4">
-              <h3 className="font-semibold text-gray-800 border-b pb-2">Información de Contacto</h3>
-              <div>
-                <label className="text-sm font-medium text-gray-600">Correo Electrónico</label>
-                <p className="text-blue-600">{p?.correo}</p>
-              </div>
-              <div>
-                <label className="text-sm font-medium text-gray-600">Teléfono</label>
-                <p>{p?.telefono}</p>
-              </div>
-              <div>
-                <label className="text-sm font-medium text-gray-600">Dirección</label>
-                <p>{p?.direccion}</p>
+            <div className="space-y-6">
+              <div className="bg-gradient-to-r from-green-50 to-emerald-50 p-6 rounded-2xl">
+                <h3 className="font-bold text-gray-800 text-lg mb-4">Información de Contacto</h3>
+                <div className="space-y-4">
+                  <div>
+                    <label className="text-sm font-medium text-gray-600">Correo Electrónico</label>
+                    <p className="text-blue-600 font-semibold mt-1">{p?.correo}</p>
+                  </div>
+                  <div>
+                    <label className="text-sm font-medium text-gray-600">Teléfono</label>
+                    <p className="font-semibold text-gray-800 mt-1">{p?.telefono}</p>
+                  </div>
+                  <div>
+                    <label className="text-sm font-medium text-gray-600">Dirección</label>
+                    <p className="font-semibold text-gray-800 mt-1">{p?.direccion}</p>
+                  </div>
+                </div>
               </div>
             </div>
           </div>
           
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6 pt-4 border-t">
-            <div className="space-y-4">
-              <h3 className="font-semibold text-gray-800 border-b pb-2">Información de Cuenta</h3>
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="text-sm font-medium text-gray-600">Usuario</label>
-                  <p className="font-mono">@{usuario.username}</p>
-                </div>
-                <div>
-                  <label className="text-sm font-medium text-gray-600">Rol</label>
-                  <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${getRolColor(usuario.rol?.nombre || '')} text-white`}>
-                    {usuario.rol?.nombre}
-                  </span>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+            <div className="bg-gradient-to-r from-purple-50 to-violet-50 p-6 rounded-2xl">
+              <h3 className="font-bold text-gray-800 text-lg mb-4">Información de Cuenta</h3>
+              <div className="space-y-4">
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="text-sm font-medium text-gray-600">Usuario</label>
+                    <p className="font-mono text-gray-800 font-semibold mt-1">@{usuario.username}</p>
+                  </div>
+                  <div>
+                    <label className="text-sm font-medium text-gray-600">Rol</label>
+                    <span className={`inline-flex items-center px-3 py-1 rounded-full text-sm font-medium ${getRolColor(usuario.rol?.nombre || '')} text-white mt-1`}>
+                      {usuario.rol?.nombre}
+                    </span>
+                  </div>
                 </div>
               </div>
             </div>
             
-            <div className="space-y-4">
-              <h3 className="font-semibold text-gray-800 border-b pb-2">Estado</h3>
+            <div className="bg-gradient-to-r from-orange-50 to-amber-50 p-6 rounded-2xl">
+              <h3 className="font-bold text-gray-800 text-lg mb-4">Estado</h3>
               <div>
-                <label className="text-sm font-medium text-gray-600">Estado</label>
-                <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${getEstadoColor(usuario.estado)}`}>
+                <label className="text-sm font-medium text-gray-600">Estado de la Cuenta</label>
+                <span className={`inline-flex items-center px-3 py-1 rounded-full text-sm font-medium ${getEstadoColor(usuario.estado)} mt-1`}>
                   {usuario.estado}
                 </span>
               </div>
@@ -189,63 +200,60 @@ useEffect(() => {
   };
 
   const crearUsuario = () => {
-  setModalEditar({
-    isOpen: true,
-    titulo: "Crear Nuevo Usuario",
-    fields: {
-      username: "",
-      idRol: "",
-      password: "",
-      estado: "ACTIVO",
-      tipoDocumento: "DNI",
-      numeroDocumento: "",
-      nombres: "",
-      apellidoPaterno: "",
-      apellidoMaterno: "",
-      correo: "",
-      telefono: "",
-      fechaNacimiento: "",
-      direccion: ""
-    },
-    tipo: "usuario"
-  });
-};
+    setModalEditar({
+      isOpen: true,
+      titulo: "Crear Nuevo Usuario",
+      fields: {
+        username: "",
+        idRol: "",
+        password: "",
+        estado: "ACTIVO",
+        tipoDocumento: "DNI",
+        numeroDocumento: "",
+        nombres: "",
+        apellidoPaterno: "",
+        apellidoMaterno: "",
+        correo: "",
+        telefono: "",
+        fechaNacimiento: "",
+        direccion: ""
+      },
+      tipo: "usuario"
+    });
+  };
 
-  // Actualizar la función editarUsuario
-const editarUsuario = (usuario: any) => {
-  setModalEditar({
-    isOpen: true,
-    titulo: "Editar Usuario",
-    fields: {
-      id: usuario.id,
-      username: usuario.username,
-      idRol: usuario.rol.id, // Usar rol.id en lugar de id_rol
-      password: "", // Se deja vacío para no mostrar la contraseña actual
-      estado: usuario.estado,
-      tipoDocumento: usuario.persona?.tipoDocumento || "DNI",
-      numeroDocumento: usuario.persona?.numeroDocumento || "",
-      nombres: usuario.persona?.nombres || "",
-      apellidoPaterno: usuario.persona?.apellidoPaterno || "",
-      apellidoMaterno: usuario.persona?.apellidoMaterno || "",
-      correo: usuario.persona?.correo || "",
-      telefono: usuario.persona?.telefono || "",
-      fechaNacimiento: usuario.persona?.fechaNacimiento || "",
-      direccion: usuario.persona?.direccion || ""
-    },
-    tipo: "usuario"
-  });
-};
+  const editarUsuario = (usuario: any) => {
+    setModalEditar({
+      isOpen: true,
+      titulo: "Editar Usuario",
+      fields: {
+        id: usuario.id,
+        username: usuario.username,
+        idRol: usuario.rol.id,
+        password: "",
+        estado: usuario.estado,
+        tipoDocumento: usuario.persona?.tipoDocumento || "DNI",
+        numeroDocumento: usuario.persona?.numeroDocumento || "",
+        nombres: usuario.persona?.nombres || "",
+        apellidoPaterno: usuario.persona?.apellidoPaterno || "",
+        apellidoMaterno: usuario.persona?.apellidoMaterno || "",
+        correo: usuario.persona?.correo || "",
+        telefono: usuario.persona?.telefono || "",
+        fechaNacimiento: usuario.persona?.fechaNacimiento || "",
+        direccion: usuario.persona?.direccion || ""
+      },
+      tipo: "usuario"
+    });
+  };
 
   const guardarUsuario = async (formData: any) => {
     try {
       setLoading(true);
       
       if (formData.id) {
-        // Actualizar usuario existente
         const usuarioActualizado = await accesosService.updateUsuario(formData.id, formData);
         setUsuarios(prev => prev.map(u => u.id === formData.id ? usuarioActualizado : u));
       } else {
-        // Crear nuevo usuario
         const nuevoUsuario = await accesosService.createUsuario(formData);
         setUsuarios(prev => [...prev, nuevoUsuario]);
       }
@@ -280,40 +288,45 @@ const editarUsuario = (usuario: any) => {
 
   // ========== FUNCIONES ROLES ==========
   const verDetallesRol = (rol: any) => {
-  setModalDetalles({
-    isOpen: true,
-    titulo: `Detalles del Rol`,
-    children: (
-      <div className="space-y-6">
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-          <div className="space-y-4">
-            <h3 className="font-semibold text-gray-800 border-b pb-2">Información del Rol</h3>
-            <div>
-              <label className="text-sm font-medium text-gray-600">Nombre del Rol</label>
-              <p className="text-lg font-semibold">{rol.nombre}</p>
+    setModalDetalles({
+      isOpen: true,
+      titulo: `Detalles del Rol`,
+      children: (
+        <div className="space-y-8">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+            <div className="bg-gradient-to-r from-blue-50 to-indigo-50 p-6 rounded-2xl">
+              <h3 className="font-bold text-gray-800 text-lg mb-4">Información del Rol</h3>
+              <div className="space-y-4">
+                <div>
+                  <label className="text-sm font-medium text-gray-600">Nombre del Rol</label>
+                  <p className="text-xl font-bold text-gray-900 mt-1">{rol.nombre}</p>
+                </div>
+                <div>
+                  <label className="text-sm font-medium text-gray-600">Descripción</label>
+                  <p className="text-gray-700 font-medium mt-1">{rol.descripcion}</p>
+                </div>
+              </div>
             </div>
-            <div>
-              <label className="text-sm font-medium text-gray-600">Descripción</label>
-              <p className="text-gray-700">{rol.descripcion}</p>
-            </div>
-          </div>
-          
-          <div className="space-y-4">
-            <h3 className="font-semibold text-gray-800 border-b pb-2">Estadísticas</h3>
-            <div>
-              <label className="text-sm font-medium text-gray-600">Usuarios con este Rol</label>
-              <p className="text-2xl font-bold text-blue-600">{rol.usuariosCount || 0}</p>
-            </div>
-            <div>
-              <label className="text-sm font-medium text-gray-600">Módulos con Acceso</label>
-              <p className="text-2xl font-bold text-green-600">{rol.modulosActivosCount || 0}</p>
+            
+            <div className="bg-gradient-to-r from-green-50 to-emerald-50 p-6 rounded-2xl">
+              <h3 className="font-bold text-gray-800 text-lg mb-4">Estadísticas</h3>
+              <div className="space-y-4">
+                <div>
+                  <label className="text-sm font-medium text-gray-600">Usuarios con este Rol</label>
+                  <p className="text-3xl font-bold text-blue-600 mt-1">{rol.usuariosCount || 0}</p>
+                </div>
+                <div>
+                  <label className="text-sm font-medium text-gray-600">Módulos con Acceso</label>
+                  <p className="text-3xl font-bold text-green-600 mt-1">{rol.modulosActivosCount || 0}</p>
+                </div>
+              </div>
             </div>
           </div>
         </div>
-      </div>
-    )
-  });
-};
+      )
+    });
+  };
+
   const crearRol = () => {
     setModalEditar({
       isOpen: true,
@@ -327,112 +340,144 @@ const editarUsuario = (usuario: any) => {
   };
 
   const editarRol = (rol: any) => {
-  setModalEditar({
-    isOpen: true,
-    titulo: "Editar Rol",
-    fields: {
-      id: rol.id,
-      nombre: rol.nombre,
-      descripcion: rol.descripcion
-    },
-    tipo: "rol"
-  });
-};
+    setModalEditar({
+      isOpen: true,
+      titulo: "Editar Rol",
+      fields: {
+        id: rol.id,
+        nombre: rol.nombre,
+        descripcion: rol.descripcion
+      },
+      tipo: "rol"
+    });
+  };
 
   const guardarRol = async (formData: any) => {
-  try {
-    setLoading(true);
-    
-    if (formData.id) {
-      // Actualizar rol existente
-      const rolActualizado = await accesosService.updateRol(formData.id, formData);
-      setRoles(prev => prev.map(r => r.id === formData.id ? rolActualizado : r));
-    } else {
-      // Crear nuevo rol
-      const nuevoRol = await accesosService.createRol(formData);
-      setRoles(prev => [...prev, nuevoRol]);
-      // Actualizar también el dropdown de roles
-      const nuevosRolesDropdown = await accesosService.getRolesForDropdown();
-      setRolesDropdown(nuevosRolesDropdown);
-    }
-    
-    console.log('✅ Rol guardado exitosamente');
-  } catch (error: any) {
-    console.error('❌ Error guardando rol:', error);
-    alert('Error al guardar rol: ' + error.message);
-  } finally {
-    setLoading(false);
-  }
-};
-
-  const confirmarEliminarRol = (rol: any) => {
-  setModalConfirmar({
-    isOpen: true,
-    titulo: "Eliminar Rol",
-    mensaje: `¿Estás seguro de que deseas eliminar el rol "${rol.nombre}"? Los usuarios con este rol quedarán sin rol asignado.`,
-    onConfirm: async () => {
-      try {
-        await accesosService.deleteRol(rol.id);
-        setRoles(prev => prev.filter(r => r.id !== rol.id));
-        // Actualizar también el dropdown de roles
+    try {
+      setLoading(true);
+      
+      if (formData.id) {
+        const rolActualizado = await accesosService.updateRol(formData.id, formData);
+        setRoles(prev => prev.map(r => r.id === formData.id ? rolActualizado : r));
+      } else {
+        const nuevoRol = await accesosService.createRol(formData);
+        setRoles(prev => [...prev, nuevoRol]);
         const nuevosRolesDropdown = await accesosService.getRolesForDropdown();
         setRolesDropdown(nuevosRolesDropdown);
-        console.log('✅ Rol eliminado exitosamente');
-      } catch (error: any) {
-        console.error('❌ Error eliminando rol:', error);
-        alert('Error al eliminar rol: ' + error.message);
       }
-    },
-    tipo: "eliminar"
-  });
-};
+      
+      console.log('✅ Rol guardado exitosamente');
+    } catch (error: any) {
+      console.error('❌ Error guardando rol:', error);
+      alert('Error al guardar rol: ' + error.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const confirmarEliminarRol = async (rol: any) => {
+    try {
+      const dependencies = await accesosService.checkRolDependencies(rol.id);
+      const usuariosCount = dependencies.usuariosAsociados;
+      const permisosCount = dependencies.permisosAsociados;
+      
+      if (usuariosCount > 0) {
+        alert(`❌ No se puede eliminar el rol "${rol.nombre}" porque tiene ${usuariosCount} usuario(s) asignado(s).\n\nReasigne los usuarios a otro rol primero.`);
+        return;
+      }
+      
+      let mensaje = `¿Estás seguro de que deseas eliminar el rol "${rol.nombre}"?`;
+      
+      if (permisosCount > 0) {
+        mensaje += `\n\n⚠️ Este rol tiene ${permisosCount} permiso(s) asociado(s) que se eliminarán automáticamente.`;
+      }
+      
+      mensaje += "\n\nEsta acción no se puede deshacer.";
+      
+      setModalConfirmar({
+        isOpen: true,
+        titulo: "Eliminar Rol",
+        mensaje: mensaje,
+        onConfirm: async () => {
+          try {
+            await accesosService.deleteRol(rol.id);
+            setRoles(prev => prev.filter(r => r.id !== rol.id));
+            
+            const nuevosRolesDropdown = await accesosService.getRolesForDropdown();
+            setRolesDropdown(nuevosRolesDropdown);
+            
+            alert(`✅ Rol "${rol.nombre}" eliminado correctamente${
+              permisosCount > 0 ? ` (junto con ${permisosCount} permiso(s))` : ''
+            }`);
+            
+          } catch (error: any) {
+            console.error('❌ Error eliminando rol:', error);
+            
+            let errorMessage = `Error al eliminar el rol "${rol.nombre}"`;
+            
+            if (error.message.includes('usuarios asignados')) {
+              errorMessage = error.message;
+            } else if (error.message.includes('no encontrado')) {
+              errorMessage = `El rol "${rol.nombre}" no existe o ya fue eliminado`;
+            }
+            
+            alert(`❌ ${errorMessage}`);
+          }
+        },
+        tipo: "eliminar"
+      });
+      
+    } catch (error: any) {
+      console.error('❌ Error verificando dependencias:', error);
+      alert('Error al verificar dependencias del rol: ' + error.message);
+    }
+  };
 
   // ========== FUNCIONES PERMISOS ==========
   const gestionarPermisos = async (rol: any) => {
-  try {
-    setLoading(true);
-    const permisos = await accesosService.getPermissionsByRol(rol.id);
-    
-    setModalPermisos({
-      isOpen: true,
-      rol,
-      permisos
-    });
-  } catch (error: any) {
-    console.error('❌ Error cargando permisos:', error);
-    alert('Error al cargar permisos: ' + error.message);
-  } finally {
-    setLoading(false);
-  }
-};
+    try {
+      setLoading(true);
+      const permisos = await accesosService.getPermissionsByRol(rol.id);
+      
+      setModalPermisos({
+        isOpen: true,
+        rol,
+        permisos
+      });
+    } catch (error: any) {
+      console.error('❌ Error cargando permisos:', error);
+      alert('Error al cargar permisos: ' + error.message);
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const guardarPermisos = async (permisos: any[]) => {
-  try {
-    setLoading(true);
-    
-    const request = {
-      idRol: modalPermisos.rol.id,
-      permissions: permisos
-    };
-    
-    await accesosService.updatePermissions(request);
-    
-    // Actualizar el contador de módulos activos en el rol
-    const modulosActivos = permisos.filter(p => p.hasAccess).length;
-    setRoles(prev => prev.map(r => 
-      r.id === modalPermisos.rol.id 
-        ? { ...r, modulosActivosCount: modulosActivos }
-        : r
-    ));
-    
-    console.log('✅ Permisos guardados exitosamente');
-  } catch (error: any) {
-    console.error('❌ Error guardando permisos:', error);
-    alert('Error al guardar permisos: ' + error.message);
-  } finally {
-    setLoading(false);
-  }
-};
+    try {
+      setLoading(true);
+      
+      const request = {
+        idRol: modalPermisos.rol.id,
+        permissions: permisos
+      };
+      
+      await accesosService.updatePermissions(request);
+      
+      const modulosActivos = permisos.filter(p => p.hasAccess).length;
+      setRoles(prev => prev.map(r => 
+        r.id === modalPermisos.rol.id 
+          ? { ...r, modulosActivosCount: modulosActivos }
+          : r
+      ));
+      
+      console.log('✅ Permisos guardados exitosamente');
+    } catch (error: any) {
+      console.error('❌ Error guardando permisos:', error);
+      alert('Error al guardar permisos: ' + error.message);
+    } finally {
+      setLoading(false);
+    }
+  };
 
   // ========== FUNCIONES MÓDULOS ==========
   const verDetallesModulo = (modulo: any) => {
@@ -440,25 +485,29 @@ const editarUsuario = (usuario: any) => {
       isOpen: true,
       titulo: `Detalles del Módulo`,
       children: (
-        <div className="space-y-6">
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            <div className="space-y-4">
-              <h3 className="font-semibold text-gray-800 border-b pb-2">Información del Módulo</h3>
-              <div>
-                <label className="text-sm font-medium text-gray-600">Nombre</label>
-                <p className="text-lg font-semibold">{modulo.nombre}</p>
-              </div>
-              <div>
-                <label className="text-sm font-medium text-gray-600">Descripción</label>
-                <p className="text-gray-700">{modulo.descripcion}</p>
+        <div className="space-y-8">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+            <div className="bg-gradient-to-r from-blue-50 to-indigo-50 p-6 rounded-2xl">
+              <h3 className="font-bold text-gray-800 text-lg mb-4">Información del Módulo</h3>
+              <div className="space-y-4">
+                <div>
+                  <label className="text-sm font-medium text-gray-600">Nombre</label>
+                  <p className="text-xl font-bold text-gray-900 mt-1">{modulo.nombre}</p>
+                </div>
+                <div>
+                  <label className="text-sm font-medium text-gray-600">Descripción</label>
+                  <p className="text-gray-700 font-medium mt-1">{modulo.descripcion}</p>
+                </div>
               </div>
             </div>
             
-            <div className="space-y-4">
-              <h3 className="font-semibold text-gray-800 border-b pb-2">Configuración</h3>
-              <div>
-                <label className="text-sm font-medium text-gray-600">Ruta</label>
-                <p className="font-mono text-blue-600">{modulo.ruta}</p>
+            <div className="bg-gradient-to-r from-green-50 to-emerald-50 p-6 rounded-2xl">
+              <h3 className="font-bold text-gray-800 text-lg mb-4">Configuración</h3>
+              <div className="space-y-4">
+                <div>
+                  <label className="text-sm font-medium text-gray-600">Ruta</label>
+                  <p className="font-mono text-blue-600 font-semibold mt-1">{modulo.ruta}</p>
+                </div>
               </div>
             </div>
           </div>
@@ -515,6 +564,41 @@ const editarUsuario = (usuario: any) => {
     }
   };
 
+  const buscarDatosReniec = async () => {
+    const dni = modalEditar.fields.numeroDocumento;
+
+    if (!dni || dni.length !== 8) {
+      alert("Por favor ingrese un DNI válido de 8 dígitos.");
+      return;
+    }
+
+    try {
+      setLoading(true);
+      
+      const datosPersona = await accesosService.consultarReniec(dni);
+
+      if (datosPersona) {
+        setModalEditar(prev => ({
+          ...prev,
+          fields: {
+            ...prev.fields,
+            nombres: datosPersona.nombres || '',
+            apellidoPaterno: datosPersona.apellidoPaterno || '',
+            apellidoMaterno: datosPersona.apellidoMaterno || '',
+            direccion: datosPersona.direccion || prev.fields.direccion || ''
+          }
+        }));
+        
+        console.log('✅ Datos de RENIEC cargados correctamente');
+      }
+    } catch (error: any) {
+      console.error('❌ Error consultando RENIEC:', error);
+      alert(error.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const confirmarEliminarModulo = (modulo: any) => {
     setModalConfirmar({
       isOpen: true,
@@ -534,7 +618,6 @@ const editarUsuario = (usuario: any) => {
     });
   };
 
-  // Función general para guardar
   const handleSaveFromModal = (formData: any) => {
     if (modalEditar.tipo === "usuario") guardarUsuario(formData);
     if (modalEditar.tipo === "rol") guardarRol(formData);
@@ -543,65 +626,50 @@ const editarUsuario = (usuario: any) => {
 
   if (loading && usuarios.length === 0) {
     return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+      <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100 flex items-center justify-center">
         <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto"></div>
-          <p className="mt-4 text-gray-600">Cargando datos...</p>
+          <div className="animate-spin rounded-full h-16 w-16 border-b-2 border-blue-600 mx-auto"></div>
+          <p className="mt-4 text-gray-600 text-lg font-medium">Cargando datos...</p>
         </div>
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100">
       <div className="p-6">
         {/* Header */}
         <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between mb-8">
           <div>
-            <h1 className="text-3xl font-bold text-gray-900 mb-2">Gestión de Accesos</h1>
-            <p className="text-gray-600">Administra usuarios, roles y permisos del sistema</p>
+            <h1 className="text-4xl font-bold text-gray-900 mb-3">Gestión de Accesos</h1>
+            <p className="text-gray-600 text-lg">Administra usuarios, roles y permisos del sistema</p>
           </div>
-          
-          {/* Botón de prueba de conexión */}
-          <button 
-            onClick={async () => {
-              try {
-                const result = await accesosService.testConnection();
-                alert(result);
-              } catch (error: any) {
-                alert('Error: ' + error.message);
-              }
-            }}
-            className="bg-green-500 text-white px-4 py-2 rounded hover:bg-green-600 mt-4 lg:mt-0"
-          >
-            Probar Conexión
-          </button>
-          
+
           <button 
             onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
-            className="lg:hidden mt-4 p-2 border rounded-lg hover:bg-gray-100 self-start"
+            className="lg:hidden mt-4 p-3 bg-white rounded-xl shadow-sm hover:shadow-md transition-shadow duration-200 self-start"
           >
-            {mobileMenuOpen ? <FiX size={20} /> : <FiMenu size={20} />}
+            {mobileMenuOpen ? <FiX size={24} /> : <FiMenu size={24} />}
           </button>
         </div>
 
         {/* Tabs */}
-        <div className="flex flex-col lg:flex-row gap-2 mb-8">
-          <div className="hidden lg:flex gap-2 bg-white p-2 rounded-lg shadow-sm border">
+        <div className="flex flex-col lg:flex-row gap-3 mb-8">
+          <div className="hidden lg:flex gap-3 bg-white p-3 rounded-2xl shadow-sm">
             {tabs.map((t) => (
               <button
                 key={t.id}
                 onClick={() => setTab(t.id)}
-                className={`flex items-center gap-3 px-4 py-3 rounded-md transition-all ${
+                className={`flex items-center gap-3 px-6 py-4 rounded-xl transition-all duration-200 ${
                   tab === t.id 
-                    ? "bg-blue-600 text-white shadow-sm" 
-                    : "text-gray-600 hover:bg-gray-100"
+                    ? "bg-gradient-to-r from-blue-600 to-indigo-600 text-white shadow-lg" 
+                    : "text-gray-600 hover:bg-gray-50 hover:shadow-md"
                 }`}
               >
-                <t.icon size={18} />
-                <span className="font-medium">{t.nombre}</span>
-                <span className={`px-2 py-1 rounded-full text-xs ${
-                  tab === t.id ? "bg-blue-500" : "bg-gray-200"
+                <t.icon size={20} />
+                <span className="font-semibold">{t.nombre}</span>
+                <span className={`px-3 py-1 rounded-full text-sm font-medium ${
+                  tab === t.id ? "bg-blue-500" : "bg-gray-100 text-gray-700"
                 }`}>
                   {t.count}
                 </span>
@@ -611,21 +679,21 @@ const editarUsuario = (usuario: any) => {
 
           {/* Mobile Tabs */}
           {mobileMenuOpen && (
-            <div className="lg:hidden flex flex-col gap-2 bg-white p-4 rounded-lg shadow-lg border">
+            <div className="lg:hidden flex flex-col gap-3 bg-white p-6 rounded-2xl shadow-lg">
               {tabs.map((t) => (
                 <button
                   key={t.id}
                   onClick={() => { setTab(t.id); setMobileMenuOpen(false); }}
-                  className={`flex items-center gap-3 px-4 py-3 rounded-md transition-all ${
+                  className={`flex items-center gap-3 px-6 py-4 rounded-xl transition-all duration-200 ${
                     tab === t.id 
-                      ? "bg-blue-600 text-white" 
-                      : "text-gray-600 hover:bg-gray-100"
+                      ? "bg-gradient-to-r from-blue-600 to-indigo-600 text-white" 
+                      : "text-gray-600 hover:bg-gray-50"
                   }`}
                 >
-                  <t.icon size={18} />
-                  <span className="font-medium">{t.nombre}</span>
-                  <span className={`px-2 py-1 rounded-full text-xs ${
-                    tab === t.id ? "bg-blue-500" : "bg-gray-200"
+                  <t.icon size={20} />
+                  <span className="font-semibold">{t.nombre}</span>
+                  <span className={`px-3 py-1 rounded-full text-sm font-medium ${
+                    tab === t.id ? "bg-blue-500" : "bg-gray-100 text-gray-700"
                   }`}>
                     {t.count}
                   </span>
@@ -637,10 +705,10 @@ const editarUsuario = (usuario: any) => {
 
         {/* Loading overlay */}
         {loading && (
-          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-            <div className="bg-white p-6 rounded-lg shadow-lg">
-              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto"></div>
-              <p className="mt-2 text-gray-600">Guardando...</p>
+          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 backdrop-blur-sm">
+            <div className="bg-white p-8 rounded-2xl shadow-xl">
+              <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto"></div>
+              <p className="mt-4 text-gray-600 font-medium">Guardando...</p>
             </div>
           </div>
         )}
@@ -733,14 +801,21 @@ const editarUsuario = (usuario: any) => {
       />
 
       <ModalEditar
-  isOpen={modalEditar.isOpen}
-  titulo={modalEditar.titulo}
-  fields={modalEditar.fields}
-  onSave={handleSaveFromModal}
-  onClose={() => setModalEditar({ isOpen: false, titulo: "", fields: {}, tipo: "" })}
-  type={modalEditar.tipo}
-  rolesDropdown={rolesDropdown} // Pasar los roles del dropdown
-/>
+        isOpen={modalEditar.isOpen}
+        titulo={modalEditar.titulo}
+        fields={modalEditar.fields}
+        onSave={handleSaveFromModal}
+        onClose={() => setModalEditar({ isOpen: false, titulo: "", fields: {}, tipo: "" })}
+        type={modalEditar.tipo}
+        rolesDropdown={rolesDropdown}
+        onSearchDni={buscarDatosReniec}
+        onChangeField={(campo, valor) => {
+          setModalEditar(prev => ({
+            ...prev,
+            fields: { ...prev.fields, [campo]: valor }
+          }));
+        }}
+      />
 
       <ModalConfirmar
         isOpen={modalConfirmar.isOpen}

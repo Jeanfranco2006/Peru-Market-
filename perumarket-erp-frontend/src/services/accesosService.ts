@@ -60,8 +60,8 @@ export interface Rol {
   id: number;
   nombre: string;
   descripcion: string;
-  usuariosCount: number;
-  modulosActivosCount: number;
+  usuariosCount?: number;
+  modulosActivosCount?: number;
 }
 
 export interface RolForDropdown {
@@ -78,7 +78,7 @@ export interface Modulo {
 
 export interface RolePermission {
   idModulo: number;
-  nombreModulo: string;
+  nombreModulo?: string;
   hasAccess: boolean;
 }
 
@@ -135,7 +135,7 @@ export const accesosService = {
     }
   },
 
-   async updateUsuario(id: number, usuario: UpdateUsuarioRequest): Promise<Usuario> {
+  async updateUsuario(id: number, usuario: UpdateUsuarioRequest): Promise<Usuario> {
     try {
       const response = await api.put(`/accesos/usuarios/${id}`, usuario);
       return response.data;
@@ -148,8 +148,7 @@ export const accesosService = {
     }
   },
 
-
-   async deleteUsuario(id: number): Promise<void> {
+  async deleteUsuario(id: number): Promise<void> {
     try {
       await api.delete(`/accesos/usuarios/${id}`);
     } catch (error: any) {
@@ -192,7 +191,7 @@ export const accesosService = {
     }
   },
 
-  async createRol(rol: Rol): Promise<Rol> {
+  async createRol(rol: Omit<Rol, 'id'>): Promise<Rol> {
     try {
       const response = await api.post('/accesos/roles', rol);
       return response.data;
@@ -205,7 +204,7 @@ export const accesosService = {
     }
   },
 
-  async updateRol(id: number, rol: Rol): Promise<Rol> {
+  async updateRol(id: number, rol: Omit<Rol, 'id'>): Promise<Rol> {
     try {
       const response = await api.put(`/accesos/roles/${id}`, rol);
       return response.data;
@@ -241,12 +240,12 @@ export const accesosService = {
     return response.data;
   },
 
-  async createModulo(modulo: Modulo): Promise<Modulo> {
+  async createModulo(modulo: Omit<Modulo, 'id'>): Promise<Modulo> {
     const response = await api.post('/accesos/modulos', modulo);
     return response.data;
   },
 
-  async updateModulo(id: number, modulo: Modulo): Promise<Modulo> {
+  async updateModulo(id: number, modulo: Omit<Modulo, 'id'>): Promise<Modulo> {
     const response = await api.put(`/accesos/modulos/${id}`, modulo);
     return response.data;
   },
@@ -256,7 +255,7 @@ export const accesosService = {
   },
 
   // ========== PERMISOS ==========
-   async getPermissionsByRol(rolId: number): Promise<RolePermission[]> {
+  async getPermissionsByRol(rolId: number): Promise<RolePermission[]> {
     try {
       const response = await api.get(`/accesos/roles/${rolId}/permisos`);
       return response.data;
@@ -278,4 +277,66 @@ export const accesosService = {
     }
   },
 
+  // ========== RENIEC ==========
+  // En accesosService.ts - actualiza la función consultarReniec
+async consultarReniec(dni: string): Promise<{
+  nombres: string;
+  apellidoPaterno: string;
+  apellidoMaterno: string;
+  direccion: string;
+}> {
+  try {
+    console.log('🔍 Consultando RENIEC para DNI:', dni);
+    
+    // Validar formato DNI
+    if (!dni || dni.length !== 8 || !/^\d+$/.test(dni)) {
+      throw new Error('DNI debe tener exactamente 8 dígitos numéricos');
+    }
+
+    const response = await api.get(`/accesos/personas/consulta-reniec/${dni}`);
+    
+    console.log('✅ Respuesta RENIEC completa:', response.data);
+
+    if (!response.data.success) {
+      throw new Error(response.data.message || 'Error en la consulta RENIEC');
+    }
+
+    if (!response.data.data) {
+      throw new Error('No se recibieron datos del servidor');
+    }
+
+    return {
+      nombres: response.data.data.nombres || '',
+      apellidoPaterno: response.data.data.apellidoPaterno || '',
+      apellidoMaterno: response.data.data.apellidoMaterno || '',
+      direccion: response.data.data.direccion || ''
+    };
+  } catch (error: any) {
+    console.error('❌ Error consultando RENIEC:', {
+      message: error.message,
+      status: error.response?.status,
+      data: error.response?.data
+    });
+    
+    // Mensajes de error específicos
+    if (error.response?.data?.message) {
+      throw new Error(error.response.data.message);
+    } else if (error.message.includes('Network Error')) {
+      throw new Error('No se pudo conectar con el servidor');
+    } else {
+      throw new Error('Error al consultar RENIEC: ' + error.message);
+    }
+  }
+},
+
+  // ========== DEPENDENCIAS ==========
+  async checkRolDependencies(id: number): Promise<{usuariosAsociados: number, permisosAsociados: number}> {
+    try {
+      const response = await api.get(`/accesos/roles/${id}/dependencies`);
+      return response.data;
+    } catch (error: any) {
+      console.error('❌ Error verificando dependencias del rol:', error);
+      throw new Error('Error al verificar dependencias: ' + error.message);
+    }
+  }
 };

@@ -1,4 +1,4 @@
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { useState } from 'react';
 import {
     IoMdArrowRoundBack,
@@ -9,35 +9,145 @@ import {
     IoIosWarning
 } from 'react-icons/io';
 
+// Interfaz para los datos que se enviarán (coincide con AlmacenRequest del backend)
+interface AlmacenFormData {
+    nombre: string;
+    codigo: string;
+    direccion: string;
+    capacidadM3: number;
+    responsable: string;
+}
+
+const API_URL = 'http://localhost:8080/api/almacenes'; 
+
 export default function InventoryAddAlmacenes() {
+    const navigate = useNavigate();
+    const [formData, setFormData] = useState<AlmacenFormData>({
+        nombre: '', // Mapea a 'name' en el formulario original, pero enviamos 'nombre'
+        codigo: '', // Mapea a 'code'
+        direccion: '', // Mapea a 'address'
+        capacidadM3: 0, // Mapea a 'capacityTotal'
+        responsable: '' // Mapea a 'responsible'
+    });
     const [showNotification, setShowNotification] = useState(false);
+    const [notificationMessage, setNotificationMessage] = useState('');
+    const [notificationType, setNotificationType] = useState<'success' | 'error'>('success');
     const [showCancelModal, setShowCancelModal] = useState(false);
+    const [validationErrors, setValidationErrors] = useState<Record<string, string>>({});
 
-    const handleSubmit = (event: React.FormEvent) => {
+
+    const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+        const { name, value } = e.target;
+        setFormData(prev => ({
+            ...prev,
+            // Utilizamos los nombres del DTO de request aquí para el estado: nombre, codigo, direccion, capacidadM3, responsable
+            [name]: name === 'capacidadM3' ? parseFloat(value) || 0 : value,
+        }));
+        // Limpiar el error de validación cuando el usuario escribe
+        setValidationErrors(prev => {
+            const newErrors = { ...prev };
+            delete newErrors[name];
+            return newErrors;
+        });
+    };
+
+    const handleSubmit = async (event: React.FormEvent) => {
         event.preventDefault();
+        setValidationErrors({});
+        setShowNotification(false);
 
-        console.log('Almacén guardado');
+        try {
+            const requestData = {
+                nombre: formData.nombre,
+                codigo: formData.codigo,
+                direccion: formData.direccion,
+                capacidadM3: formData.capacidadM3,
+                responsable: formData.responsable,
+                // No enviamos 'estado', se establece en ACTIVO por defecto en el backend
+            };
 
-        setShowNotification(true);
+            const response = await fetch(API_URL, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify(requestData),
+            });
 
-        setTimeout(() => {
-            setShowNotification(false);
-        }, 3000);
+            if (!response.ok) {
+                const errorBody = await response.json();
+
+                if (response.status === 400 && errorBody.errors) {
+                    // Manejo de errores de validación de campos individuales (Bad Request)
+                    setValidationErrors(errorBody.errors);
+                    setNotificationMessage("Error de validación. Revise los campos marcados.");
+                } else {
+                    // Manejo de errores de negocio (409 Conflict o 404/500 genéricos)
+                    setNotificationMessage(errorBody.message || `Error al guardar: Código de estado ${response.status}`);
+                }
+                
+                setNotificationType('error');
+                setShowNotification(true);
+                return; // Detener la ejecución en caso de error
+            }
+
+            // Éxito (HTTP 201 Created)
+            setNotificationMessage('¡Almacén guardado correctamente!');
+            setNotificationType('success');
+            setShowNotification(true);
+            
+            // Redirigir al listado
+            setTimeout(() => {
+                navigate('/inventario/almacenes');
+            }, 1500);
+
+        } catch (error) {
+            console.error('Error de red:', error);
+            setNotificationMessage("Error de conexión con el servidor.");
+            setNotificationType('error');
+            setShowNotification(true);
+
+            setTimeout(() => {
+                setShowNotification(false);
+            }, 4000);
+        }
     };
 
     const handleCancel = () => {
         window.history.back();
     };
+    
+    // Función para obtener el nombre del campo en el DTO a partir del nombre en el input (si es diferente)
+    // Esto es necesario para mapear los errores de validación del backend a los inputs del formulario
+    const getFieldName = (inputName: string): keyof AlmacenFormData => {
+        switch (inputName) {
+            case 'name': return 'nombre';
+            case 'code': return 'codigo';
+            case 'address': return 'direccion';
+            case 'capacityTotal': return 'capacidadM3';
+            case 'responsible': return 'responsable';
+            default: return inputName as keyof AlmacenFormData;
+        }
+    };
+    
+    // Función de ayuda para renderizar el mensaje de error
+    const renderError = (fieldName: keyof AlmacenFormData) => (
+        validationErrors[fieldName] ? (
+            <p className="text-red-500 text-xs mt-1">{validationErrors[fieldName]}</p>
+        ) : null
+    );
 
     return (
         <div className="min-h-screen bg-gray-50 p-6">
+            {/* Notificación Dinámica */}
             {showNotification && (
-                <div className="fixed top-4 right-4 bg-green-500 text-white px-6 py-3 rounded-lg shadow-lg flex items-center gap-2 z-50 animate-fade-in">
-                    <IoIosCheckmarkCircle className="w-5 h-5" />
-                    <span>¡Almacén guardado correctamente!</span>
+                <div className={`fixed top-4 right-4 text-white px-6 py-3 rounded-lg shadow-lg flex items-center gap-2 z-50 animate-fade-in ${notificationType === 'success' ? 'bg-green-500' : 'bg-red-500'}`}>
+                    {notificationType === 'success' ? <IoIosCheckmarkCircle className="w-5 h-5" /> : <IoIosWarning className="w-5 h-5" />}
+                    <span>{notificationMessage}</span>
                 </div>
             )}
 
+            {/* Modal de Cancelación (sin cambios) */}
             {showCancelModal && (
                 <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
                     <div className="bg-white rounded-lg max-w-md w-full">
@@ -85,6 +195,7 @@ export default function InventoryAddAlmacenes() {
             </div>
 
             <form id="almacen-form" onSubmit={handleSubmit} className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                {/* ... Panel lateral (sin cambios) ... */}
                 <div className="lg:col-span-1 space-y-6">
                     <div className="bg-white rounded-lg p-6 shadow-sm border border-gray-200">
                         <h3 className="text-lg font-semibold mb-4 flex items-center gap-2">
@@ -103,6 +214,8 @@ export default function InventoryAddAlmacenes() {
                         </div>
                     </div>
                 </div>
+
+                {/* Formulario principal (MODIFICADO para usar formData y manejar errores) */}
                 <div className="lg:col-span-2 space-y-6">
                     <div className="bg-white rounded-lg p-6 shadow-sm border border-gray-200">
                         <h3 className="text-lg font-semibold mb-4">Información General</h3>
@@ -111,21 +224,27 @@ export default function InventoryAddAlmacenes() {
                                 <label className="block text-sm font-medium text-gray-700 mb-1">Nombre del Almacén *</label>
                                 <input
                                     type="text"
-                                    name="name"
+                                    name="nombre" 
                                     required
+                                    value={formData.nombre}
+                                    onChange={handleChange}
                                     placeholder="Ej: Almacén Principal A-01"
-                                    className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500"
+                                    className={`w-full border rounded-lg px-3 py-2 focus:ring-2 ${validationErrors.nombre ? 'border-red-500 focus:border-red-500 focus:ring-red-500' : 'border-gray-300 focus:border-blue-500 focus:ring-blue-500'}`}
                                 />
+                                {renderError('nombre')}
                             </div>
                             <div>
                                 <label className="block text-sm font-medium text-gray-700 mb-1">Código Único *</label>
                                 <input
                                     type="text"
-                                    name="code"
+                                    name="codigo"
                                     required
+                                    value={formData.codigo}
+                                    onChange={handleChange}
                                     placeholder="Ej: ALM-001"
-                                    className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500"
+                                    className={`w-full border rounded-lg px-3 py-2 focus:ring-2 ${validationErrors.codigo ? 'border-red-500 focus:border-red-500 focus:ring-red-500' : 'border-gray-300 focus:border-blue-500 focus:ring-blue-500'}`}
                                 />
+                                {renderError('codigo')}
                             </div>
                         </div>
 
@@ -133,11 +252,14 @@ export default function InventoryAddAlmacenes() {
                             <label className="block text-sm font-medium text-gray-700 mb-1">Dirección *</label>
                             <input
                                 type="text"
-                                name="address"
+                                name="direccion"
                                 required
+                                value={formData.direccion}
+                                onChange={handleChange}
                                 placeholder="Av. Los Tulipanes 123, Urb. Primavera"
-                                className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500"
+                                className={`w-full border rounded-lg px-3 py-2 focus:ring-2 ${validationErrors.direccion ? 'border-red-500 focus:border-red-500 focus:ring-red-500' : 'border-gray-300 focus:border-blue-500 focus:ring-blue-500'}`}
                             />
+                            {renderError('direccion')}
                         </div>
                     </div>
 
@@ -151,20 +273,27 @@ export default function InventoryAddAlmacenes() {
                                 <label className="block text-sm font-medium text-gray-700 mb-1">Responsable</label>
                                 <input
                                     type="text"
-                                    name="responsible"
+                                    name="responsable"
+                                    value={formData.responsable}
+                                    onChange={handleChange}
                                     placeholder="Nombre del encargado"
-                                    className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500"
+                                    className={`w-full border rounded-lg px-3 py-2 focus:ring-2 ${validationErrors.responsable ? 'border-red-500 focus:border-red-500 focus:ring-red-500' : 'border-gray-300 focus:border-blue-500 focus:ring-blue-500'}`}
                                 />
+                                {renderError('responsable')}
                             </div>
                             <div>
-                                <label className="block text-sm font-medium text-gray-700 mb-1">Capacidad Total (m³)</label>
+                                <label className="block text-sm font-medium text-gray-700 mb-1">Capacidad Total (m³) *</label>
                                 <input
                                     type="number"
                                     step="0.01"
-                                    name="capacityTotal"
+                                    name="capacidadM3"
+                                    required
+                                    value={formData.capacidadM3}
+                                    onChange={handleChange}
                                     placeholder="0.00"
-                                    className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500"
+                                    className={`w-full border rounded-lg px-3 py-2 focus:ring-2 ${validationErrors.capacidadM3 ? 'border-red-500 focus:border-red-500 focus:ring-red-500' : 'border-gray-300 focus:border-blue-500 focus:ring-blue-500'}`}
                                 />
+                                {renderError('capacidadM3')}
                             </div>
                         </div>
                     </div>

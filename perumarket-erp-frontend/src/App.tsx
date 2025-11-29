@@ -24,22 +24,25 @@ import AppClientes from "./pages/Clients/AppClients";
 import AppEmployees from "./pages/employees/AppEmployees";
 // Importa el nuevo componente de prueba
 import TestConnection from "./pages/TestConnection";
+import Unauthorized from "./pages/Unauthorized"; // Asegúrate de crear esta página
 
 function App() {
   const location = useLocation();
-  const hideLayout = location.pathname === "/login" || location.pathname === "/";
+  const hideLayout = location.pathname === "/login" || 
+                     location.pathname === "/" || 
+                     location.pathname === "/unauthorized";
 
   return (
     <div className="flex h-screen overflow-hidden">
 
-      {/* Mostrar Sidebar solo si NO estamos en Login */}
+      {/* Mostrar Sidebar solo si NO estamos en Login o Unauthorized */}
       {!hideLayout && <Sidebar />}
 
       <div className="flex-1 flex flex-col overflow-hidden">
-        {/* Header también oculto en Login */}
+        {/* Header también oculto en Login y Unauthorized */}
         {!hideLayout && <Header />}
 
-        {/* Contenedor principal sin padding cuando es login */}
+        {/* Contenedor principal sin padding cuando es login o unauthorized */}
         <div className={hideLayout ? "" : "p-4 overflow-auto flex-1"}>
 
           <Routes>
@@ -49,14 +52,17 @@ function App() {
             {/* LOGIN */}
             <Route path="/login" element={<Login />} />
 
+            {/* PÁGINA DE NO AUTORIZADO */}
+            <Route path="/unauthorized" element={<Unauthorized />} />
+
             {/* RUTA DE PRUEBA - No necesita protección para probar conexión */}
             <Route path="/test-connection" element={<TestConnection />} />
 
-            {/* RUTAS PROTEGIDAS */}
+            {/* RUTAS PROTEGIDAS CON MÓDULOS ESPECÍFICOS */}
             <Route
               path="/dashboard"
               element={
-                <ProtectedRoute>
+                <ProtectedRoute requiredModule="Dashboard">
                   <Dashboard />
                 </ProtectedRoute>
               }
@@ -65,7 +71,7 @@ function App() {
             <Route
               path="/accesos"
               element={
-                <ProtectedRoute>
+                <ProtectedRoute requiredModule="Accesos">
                   <Accesos />
                 </ProtectedRoute>
               }
@@ -74,7 +80,7 @@ function App() {
             <Route
               path="/proveedores"
               element={
-                <ProtectedRoute>
+                <ProtectedRoute requiredModule="Proveedores">
                   <Proveedores />
                 </ProtectedRoute>
               }
@@ -83,15 +89,16 @@ function App() {
             <Route
               path="/clientes"
               element={
-                <ProtectedRoute>
+                <ProtectedRoute requiredModule="Clientes">
                   <AppClientes />
                 </ProtectedRoute>
               }
             />
+
             <Route
               path="/empleados"
               element={
-                <ProtectedRoute>
+                <ProtectedRoute requiredModule="Empleados">
                   <AppEmployees />
                 </ProtectedRoute>
               }
@@ -100,66 +107,134 @@ function App() {
             <Route
               path="/ventas"
               element={
-                <ProtectedRoute>
+                <ProtectedRoute requiredModule="Ventas">
                   <VentasList />
                 </ProtectedRoute>
               }
             />
+
             <Route
               path="/pedidos"
               element={
-                <ProtectedRoute>
+                <ProtectedRoute requiredModule="Pedidos">
                   <PedidosList />
                 </ProtectedRoute>
               }
             />
-           
 
             <Route
-              path="/report"
+              path="/reportes"
               element={
-                <ProtectedRoute>
+                <ProtectedRoute requiredModule="Reportes">
                   <Reportes />
                 </ProtectedRoute>
               }
             />
 
+            {/* RUTAS DE INVENTARIO */}
             <Route
               path="/inventario"
               element={
-                <ProtectedRoute>
+                <ProtectedRoute requiredModule="Inventario">
                   <Inventory />
                 </ProtectedRoute>
               }
             />
 
+            <Route 
+              path="/inventario/nuevo"
+              element={
+                <ProtectedRoute requiredModule="Inventario">
+                  <InventoryAddProduct />
+                </ProtectedRoute>
+              }
+            />
+
+            <Route 
+              path="/inventario/editar/:id"
+              element={
+                <ProtectedRoute requiredModule="Inventario">
+                  <InventoryEditProduct />
+                </ProtectedRoute>
+              }
+            />
+
+            <Route 
+              path="/inventario/movimientos/:id"
+              element={
+                <ProtectedRoute requiredModule="Inventario">
+                  <InventoryMovements />
+                </ProtectedRoute>
+              }
+            />
+
+            <Route 
+              path="/inventario/almacenes"
+              element={
+                <ProtectedRoute requiredModule="Inventario">
+                  <WarehouseManagement />
+                </ProtectedRoute>
+              }
+            />
+
+            <Route 
+              path="/inventario/almacenes/nuevo"
+              element={
+                <ProtectedRoute requiredModule="Inventario">
+                  <InventoryAddAlmacenes />
+                </ProtectedRoute>
+              }
+            />
+
+            <Route 
+              path="/inventario/stock/:id"
+              element={
+                <ProtectedRoute requiredModule="Inventario">
+                  <InventoryStockPorAlmacen />
+                </ProtectedRoute>
+              }
+            />
+
+            {/* RUTAS DE ENVÍOS */}
             <Route
               path="/envios"
               element={
-                <ProtectedRoute>
+                <ProtectedRoute requiredModule="Envios">
                   <Envios />
                 </ProtectedRoute>
               }
             />
 
+            {/* RUTAS DE COMPRAS */}
             <Route
               path="/compras"
               element={
-                <ProtectedRoute>
-                  <PurchaseHistory />
+                <ProtectedRoute requiredModule="Compras">
+                  <PurchaseList />
                 </ProtectedRoute>
               }
             />
 
-            <Route path="/compras/historial" element={<PurchaseList />} /> 
-            <Route path="/compras/nueva" element={<NewPurchase />} /> 
+            <Route 
+              path="/compras/historial" 
+              element={
+                <ProtectedRoute requiredModule="Compras">
+                  <PurchaseHistory />
+                </ProtectedRoute>
+              } 
+            />
 
-            <Route path="/inventario/nuevo" element={<InventoryAddProduct />} />
-            <Route path="/inventario/editar/:id" element={<InventoryEditProduct />} />
-            <Route path="/inventario/movimientos/:id" element={<InventoryMovements />} />
-            <Route path="/inventario/almacenes" element={<WarehouseManagement />} />
-            <Route path="/inventario/almacenes/nuevo" element={<InventoryAddAlmacenes />} />
-            <Route path="/inventario/stock/:id" element={<InventoryStockPorAlmacen />} />
+            <Route 
+              path="/compras/nueva" 
+              element={
+                <ProtectedRoute requiredModule="Compras">
+                  <NewPurchase />
+                </ProtectedRoute>
+              } 
+            />
+
+            {/* Ruta 404 - Redirigir al dashboard */}
+            <Route path="*" element={<Navigate to="/dashboard" replace />} />
 
           </Routes>
         </div>

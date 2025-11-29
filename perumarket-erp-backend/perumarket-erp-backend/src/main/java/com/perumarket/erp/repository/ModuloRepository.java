@@ -1,7 +1,8 @@
-// ModuloRepository.java
+// ModuloRepository.java - COMPLETO
 package com.perumarket.erp.repository;
 
 import java.util.List;
+import java.util.Optional;
 
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
@@ -13,7 +14,7 @@ import com.perumarket.erp.models.entity.Modulo;
 @Repository
 public interface ModuloRepository extends JpaRepository<Modulo, Long> {
     
-    // CONSULTA NATIVA CORREGIDA - usa tu tabla role_module_permissions
+    // Método para buscar módulos por rol (si lo necesitas)
     @Query(value = "SELECT m.* FROM modulo m " +
                    "INNER JOIN role_module_permissions rmp ON m.id = rmp.id_modulo " +
                    "WHERE rmp.id_rol = :roleId " +
@@ -21,6 +22,13 @@ public interface ModuloRepository extends JpaRepository<Modulo, Long> {
                    "ORDER BY m.nombre", 
            nativeQuery = true)
     List<Modulo> findModulesByRole(@Param("roleId") Long roleId);
-     // MÉTODO NUEVO A AGREGAR (si no lo tienes)
+    
+    // Método para obtener todos los módulos ordenados
     List<Modulo> findAllByOrderByIdDesc();
+    
+    // Método para verificar si existe un módulo por nombre
+    boolean existsByNombre(String nombre);
+    
+    // Método para buscar módulo por nombre
+    Optional<Modulo> findByNombre(String nombre);
 }

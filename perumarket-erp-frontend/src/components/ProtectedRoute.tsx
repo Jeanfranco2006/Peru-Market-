@@ -1,12 +1,34 @@
-import type { JSX } from "react";
-import { Navigate } from "react-router-dom";
+// src/components/ProtectedRoute.tsx
+import { Navigate, useLocation } from 'react-router-dom';
+import { useAuth } from '../hooks/useAuth';
 
-interface Props {
-  children: JSX.Element;
+interface ProtectedRouteProps {
+  children: React.ReactNode;
+  requiredModule?: string;
 }
 
-export default function ProtectedRoute({ children }: Props) {
-  const isLogged = localStorage.getItem("logged");
+export default function ProtectedRoute({ 
+  children, 
+  requiredModule 
+}: ProtectedRouteProps) {
+  const { isAuthenticated, isLoading, hasModuleAccess } = useAuth();
+  const location = useLocation();
 
-  return isLogged ? children : <Navigate to="/login" replace />;
+  if (isLoading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-amber-600"></div>
+      </div>
+    );
+  }
+
+  if (!isAuthenticated) {
+    return <Navigate to="/login" state={{ from: location }} replace />;
+  }
+
+  if (requiredModule && !hasModuleAccess(requiredModule)) {
+    return <Navigate to="/unauthorized" replace />;
+  }
+
+  return <>{children}</>;
 }

@@ -1,481 +1,631 @@
-import React, { useState, useRef } from "react";
-import { Link } from 'react-router-dom';
+import React, { useState, useRef, useEffect } from "react";
+import type { ChangeEvent, DragEvent, FormEvent } from "react"; 
+import { Link, useParams, useNavigate } from "react-router-dom";
+import { api } from "../../services/api"; 
 import {
-  IoMdArrowRoundBack,
-  IoIosSave,
-  IoIosCube,
-  IoIosClock,
-  IoIosCash,
-  IoIosArchive,
-  IoIosBarcode,
-  IoIosCloudUpload,
-  IoIosCheckmarkCircle,
-  IoIosWarning
+    IoMdArrowRoundBack, IoIosSave, IoIosCube, IoIosClock, IoIosCash, 
+    IoIosArchive, IoIosBarcode, IoIosCloudUpload, IoIosCheckmarkCircle, IoIosWarning 
 } from "react-icons/io";
 
-const ProductForm: React.FC = () => {
-  const productId = 2;
-  const [imagePreview, setImagePreview] = useState<string | null>(null);
-  const [barcode, setBarcode] = useState("1234567890123");
-  const [showNotification, setShowNotification] = useState(false);
-  const [showDeactivateModal, setShowDeactivateModal] = useState(false);
-  const [showCancelModal, setShowCancelModal] = useState(false);
-  const fileInputRef = useRef<HTMLInputElement>(null);
+// Definición del endpoint de categorías
+const API_CATEGORIAS = '/categorias'; 
 
-  const handleImageUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0];
-    if (file) {
-      if (!file.type.startsWith('image/')) {
-        alert('Por favor, selecciona un archivo de imagen válido');
-        return;
-      }
-      if (file.size > 5 * 1024 * 1024) {
-        alert('La imagen no debe superar los 5MB');
-        return;
-      }
-
-      const reader = new FileReader();
-      reader.onload = (e) => {
-        setImagePreview(e.target?.result as string);
-      };
-      reader.readAsDataURL(file);
-    }
-  };
-
-  const generateBarcode = () => {
-    const base = Math.floor(100000000000 + Math.random() * 900000000000).toString();
-    let sum = 0;
-    for (let i = 0; i < 12; i++) {
-      sum += parseInt(base[i]) * (i % 2 === 0 ? 1 : 3);
-    }
-    const checksum = (10 - (sum % 10)) % 10;
-    const newBarcode = base + checksum;
-    setBarcode(newBarcode);
-  };
-  const handleSubmit = (event: React.FormEvent) => {
-    event.preventDefault();
-    console.log('Producto actualizado');
-    setShowNotification(true);
-
-    setTimeout(() => {
-      setShowNotification(false);
-    }, 3000);
-  };
-
-
-  const handleDeactivateProduct = () => {
-    console.log('Producto desactivado');
-    setShowDeactivateModal(false);
-
-  };
-
-  const handleCancel = () => {
-    window.history.back();
-  };
-
-  const handleDrop = (event: React.DragEvent) => {
-    event.preventDefault();
-    const file = event.dataTransfer.files[0];
-    if (file) {
-      const input = fileInputRef.current;
-      if (input) {
-
-        const dataTransfer = new DataTransfer();
-        dataTransfer.items.add(file);
-        input.files = dataTransfer.files;
-
-        const changeEvent = new Event('change', { bubbles: true });
-        input.dispatchEvent(changeEvent);
-      }
-    }
-  };
-
-  const handleDragOver = (event: React.DragEvent) => {
-    event.preventDefault();
-  };
-
-  return (
-    <div className="min-h-screen bg-gray-50 p-6">
-      {showNotification && (
-        <div className="fixed top-4 right-4 bg-green-500 text-white px-6 py-3 rounded-lg shadow-lg flex items-center gap-2 z-50 animate-fade-in">
-          <IoIosCheckmarkCircle className="w-5 h-5" />
-          <span>¡Producto actualizado exitosamente!</span>
-        </div>
-      )}
-      {showCancelModal && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-lg max-w-md w-full">
-            <div className="p-6">
-              <div className="flex items-center gap-3 mb-4">
-                <div className="bg-yellow-100 p-2 rounded-full">
-                  <IoIosWarning className="w-6 h-6 text-yellow-600" />
-                </div>
-                <div>
-                  <h3 className="text-lg font-semibold text-gray-900">Cancelar Edición</h3>
-                  <p className="text-sm text-gray-600">¿Estás seguro de que quieres cancelar? Se perderán todos los cambios no guardados.</p>
-                </div>
-              </div>
-
-              <div className="flex gap-3 justify-end">
-                <button
-                  onClick={() => setShowCancelModal(false)}
-                  className="px-4 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 transition-colors"
-                >
-                  Continuar Editando
-                </button>
-                <button
-                  onClick={handleCancel}
-                  className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors flex items-center gap-2"
-                >
-                  <IoIosWarning className="w-4 h-4" />
-                  Sí, Cancelar
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
-      {showDeactivateModal && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-lg max-w-md w-full">
-            <div className="p-6">
-              <div className="flex items-center gap-3 mb-4">
-                <div className="bg-red-100 p-2 rounded-full">
-                  <IoIosWarning className="w-6 h-6 text-red-600" />
-                </div>
-                <div>
-                  <h3 className="text-lg font-semibold text-gray-900">Desactivar Producto</h3>
-                  <p className="text-sm text-gray-600">¿Estás seguro de que quieres desactivar este producto?</p>
-                </div>
-              </div>
-
-              <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4 mb-4">
-                <p className="text-sm text-yellow-800">
-                  <strong>Nota:</strong> El producto ya no estará disponible para ventas y se ocultará del inventario activo.
-                </p>
-              </div>
-
-              <div className="flex gap-3 justify-end">
-                <button
-                  onClick={() => setShowDeactivateModal(false)}
-                  className="px-4 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 transition-colors"
-                >
-                  Cancelar
-                </button>
-                <button
-                  onClick={handleDeactivateProduct}
-                  className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors flex items-center gap-2"
-                >
-                  <IoIosWarning className="w-4 h-4" />
-                  Sí, Desactivar
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
-
-      <div className="flex justify-between items-center mb-6">
-        <div className="flex items-center gap-3">
-          <Link to="/inventario" className="p-2 hover:bg-gray-100 rounded-lg transition-colors">
-            <IoMdArrowRoundBack className="h-5 w-5 text-gray-700" />
-          </Link>
-          <div>
-            <h1 className="text-2xl font-bold text-gray-900">Editar Producto #{productId}</h1>
-            <p className="text-gray-600">Modifique la información del producto</p>
-          </div>
-        </div>
-      </div>
-
-      <form id="edit-product-form" onSubmit={handleSubmit}>
-        <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
-          <div className="lg:col-span-1 space-y-6">
-            <div className="bg-white rounded-lg p-6 shadow-sm border border-gray-200">
-              <h3 className="text-lg font-semibold mb-4 flex items-center gap-2">
-                <IoIosCube className="h-5 w-5" />
-                Vista Previa
-              </h3>
-              <div className="text-center mb-4">
-                {imagePreview ? (
-                  <div className="relative">
-                    <img
-                      src={imagePreview}
-                      alt="Vista previa"
-                      className="w-32 h-32 rounded-lg mx-auto mb-3 object-cover border-2 border-gray-300"
-                    />
-                    <button
-                      type="button"
-                      onClick={() => setImagePreview(null)}
-                      className="absolute top-0 right-0 bg-red-500 text-white rounded-full p-1 hover:bg-red-600 transition-colors transform translate-x-1/2 -translate-y-1/2"
-                    >
-                      <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                      </svg>
-                    </button>
-                  </div>
-                ) : (
-                  <div className="w-32 h-32 bg-blue-50 rounded-lg mx-auto mb-3 flex items-center justify-center overflow-hidden border-2 border-dashed border-gray-300">
-                    <IoIosCube className="h-8 w-8 text-blue-400" />
-                  </div>
-                )}
-                <p className="text-xs text-gray-500 mt-1">
-                  {imagePreview ? 'Imagen actualizada' : 'Sin imagen'}
-                </p>
-              </div>
-              <div
-                className="border-2 border-dashed border-gray-300 rounded-lg p-4 text-center cursor-pointer hover:border-blue-400 transition-colors mb-4"
-                onDrop={handleDrop}
-                onDragOver={handleDragOver}
-                onClick={() => fileInputRef.current?.click()}
-              >
-                <IoIosCloudUpload className="w-8 h-8 mx-auto text-gray-400 mb-2" />
-                <p className="text-sm text-gray-600 mb-2">Arrastra o haz click para cambiar</p>
-                <p className="text-xs text-gray-500">PNG, JPG hasta 5MB</p>
-                <input
-                  ref={fileInputRef}
-                  accept="image/*"
-                  className="hidden"
-                  id="imagen-upload"
-                  type="file"
-                  onChange={handleImageUpload}
-                />
-                <label
-                  htmlFor="imagen-upload"
-                  className="mt-2 bg-gray-100 text-gray-700 px-3 py-1 rounded text-sm hover:bg-gray-200 cursor-pointer inline-block"
-                >
-                  Cambiar imagen
-                </label>
-              </div>
-
-              <div className="space-y-3">
-                <div>
-                  <h4 className="font-semibold text-gray-900">FIBRE AIRS Professional</h4>
-                  <p className="text-sm text-gray-600">Materiales</p>
-                </div>
-                <div className="flex justify-between items-center">
-                  <span className="text-2xl font-bold text-gray-900">S/20.00</span>
-                  <span className="bg-green-100 text-green-800 px-2 py-1 rounded-full text-xs font-medium">DISPONIBLE</span>
-                </div>
-                <div className="text-sm text-gray-600 space-y-1">
-                  <div>Stock: 12 unidades</div>
-                  <div>SKU: BULB-FA-001</div>
-                  <div>Proveedor: BULB Industries</div>
-                  <div>Almacén: Almacén Principal</div>
-                  <div>Ubicación: A-12-B-04</div>
-                </div>
-              </div>
-            </div>
-
-            <div className="bg-white rounded-lg p-6 shadow-sm border border-gray-200">
-              <h3 className="text-lg font-semibold mb-4 flex items-center gap-2">
-                <IoIosClock className="h-5 w-5" />
-                Historial de Cambios
-              </h3>
-              <div className="space-y-3">
-                <div className="border-l-2 border-blue-500 pl-3 py-1">
-                  <div className="flex justify-between items-start">
-                    <div>
-                      <p className="font-medium text-sm">Stock actualizado</p>
-                      <p className="text-xs text-gray-600">12 unidades</p>
-                    </div>
-                    <span className="text-xs text-gray-500 whitespace-nowrap">15 nov 2024, 9:55 PM</span>
-                  </div>
-                  <p className="text-xs text-gray-500 mt-1">Por: Admin</p>
-                </div>
-                <div className="border-l-2 border-blue-500 pl-3 py-1">
-                  <div className="flex justify-between items-start">
-                    <div>
-                      <p className="font-medium text-sm">Precio modificado</p>
-                      <p className="text-xs text-gray-600">S/18 → S/20</p>
-                    </div>
-                    <span className="text-xs text-gray-500 whitespace-nowrap">10 nov 2024, 2:30 PM</span>
-                  </div>
-                  <p className="text-xs text-gray-500 mt-1">Por: Admin</p>
-                </div>
-              </div>
-            </div>
-          </div>
-
-          <div className="lg:col-span-3">
-            <div className="bg-white rounded-lg p-6 shadow-sm border border-gray-200 mb-6">
-              <h3 className="text-lg font-semibold mb-4">Información del Producto</h3>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Nombre del Producto</label>
-                  <input
-                    className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500"
-                    type="text"
-                    defaultValue="FIBRE AIRS Professional"
-                    name="nombre"
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Categoría</label>
-                  <select className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500" name="categoria" defaultValue="Materiales">
-                    <option value="Materiales">Materiales</option>
-                    <option value="Herramientas">Herramientas</option>
-                    <option value="Farmacéuticos">Farmacéuticos</option>
-                    <option value="Electrónicos">Electrónicos</option>
-                    <option value="Otros">Otros</option>
-                  </select>
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">SKU</label>
-                  <input
-                    className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500"
-                    type="text"
-                    defaultValue="BULB-FA-001"
-                    name="sku"
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Código de Barras</label>
-                  <div className="flex gap-2">
-                    <input
-                      className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500"
-                      type="text"
-                      value={barcode}
-                      onChange={(e) => setBarcode(e.target.value)}
-                      name="barcode"
-                    />
-                    <button
-                      type="button"
-                      onClick={generateBarcode}
-                      className="bg-gray-600 text-white px-3 py-2 rounded-lg hover:bg-gray-700 transition-colors text-sm whitespace-nowrap"
-                    >
-                      Generar
-                    </button>
-                  </div>
-                </div>
-              </div>
-              <div className="bg-gray-50 p-4 rounded-lg border border-gray-200 mb-6">
-                <h4 className="text-sm font-semibold text-gray-700 mb-3 flex items-center gap-2">
-                  <IoIosBarcode className="w-4 h-4" />
-                  Vista Previa del Código de Barras
-                </h4>
-                <div className="bg-white p-4 rounded border">
-                  <div className="flex justify-center items-center space-x-1 mb-2">
-                    {barcode.split('').map((_, index) => (
-                      <div
-                        key={index}
-                        className="h-10 w-1 bg-black border border-gray-300"
-                      />
-                    ))}
-                  </div>
-                  <div className="text-center font-mono text-sm tracking-widest">
-                    {barcode}
-                  </div>
-                </div>
-                <div className="flex gap-2 mt-3">
-                  <button
-                    type="button"
-                    onClick={() => navigator.clipboard.writeText(barcode)}
-                    className="flex-1 bg-blue-600 text-white py-2 px-3 rounded text-sm hover:bg-blue-700 transition-colors"
-                  >
-                    Copiar Código
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => window.print()}
-                    className="flex-1 bg-gray-600 text-white py-2 px-3 rounded text-sm hover:bg-gray-700 transition-colors"
-                  >
-                    Imprimir
-                  </button>
-                </div>
-              </div>
-
-              <h3 className="text-lg font-semibold mb-4 flex items-center gap-2">
-                <IoIosCash className="h-5 w-5" />
-                Precios y Stock
-              </h3>
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Precio Venta (S/)</label>
-                  <input
-                    className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500"
-                    type="number"
-                    defaultValue={20}
-                    step={0.01}
-                    name="precio_venta"
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Precio Compra (S/)</label>
-                  <input
-                    className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500"
-                    type="number"
-                    defaultValue={15}
-                    step={0.01}
-                    name="precio_compra"
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Stock Actual</label>
-                  <input
-                    className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500"
-                    type="number"
-                    defaultValue={12}
-                    name="stock"
-                  />
-                </div>
-              </div>
-              <h3 className="text-lg font-semibold mb-4 flex items-center gap-2">
-                <IoIosArchive className="h-5 w-5" />
-                Especificaciones
-              </h3>
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Unidad de Medida</label>
-                  <select className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500" name="unidad_medida" defaultValue="Unidad">
-                    <option value="Unidad">Unidad</option>
-                    <option value="Caja">Caja</option>
-                    <option value="Frasco">Frasco</option>
-                  </select>
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Peso (kg)</label>
-                  <input
-                    className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500"
-                    type="number"
-                    step={0.001}
-                    defaultValue={0.5}
-                    name="peso_kg"
-                  />
-                </div>
-              </div>
-            </div>
-
-            <div className="flex justify-between items-center">
-              <button
-                type="button"
-                onClick={() => setShowDeactivateModal(true)}
-                className="text-red-600 hover:text-red-700 font-medium flex items-center gap-2 px-4 py-2 border border-red-200 rounded-lg hover:bg-red-50 transition-colors"
-              >
-                <IoIosWarning className="w-4 h-4" />
-                Desactivar Producto
-              </button>
-              <div className="flex gap-3">
-                <button
-                  type="button"
-                  onClick={() => setShowCancelModal(true)}
-                  className="px-4 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50"
-                >
-                  Cancelar
-                </button>
-                <button
-                  type="submit"
-                  className="bg-blue-600 text-white px-4 py-2 rounded-lg flex items-center gap-2 hover:bg-blue-700"
-                >
-                  <IoIosSave className="h-5 w-5" />
-                  Guardar Cambios
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
-      </form>
-    </div>
-  );
+// --- INTERFACES DE TIPADO ---
+interface CategoriaOption { id: number; nombre: string; }
+interface Movimiento {
+    id: number; tipoMovimiento: 'ENTRADA' | 'SALIDA' | string; cantidad: number; 
+    stockAnterior: number; stockNuevo: number; motivo: string; 
+    nombreAlmacen: string; fechaMovimiento: string; idUsuario: number;
+}
+interface ProductState {
+    id: number | null; nombre: string; descripcion: string; sku: string; 
+    precioVenta: number; precioCompra: number; unidadMedida: string; 
+    pesoKg: number; imagen: string | null; estado: string; 
+    stockActual: number; stockMinimo: number; stockMaximo: number; 
+    ubicacionPrincipal: string; codigoBarrasPrincipal: string; 
+    categoriaNombre: string; almacenNombre: string; proveedorRazonSocial: string;
+    fechaActualizacion: string | null;
+    categoriaId: string | null; almacenId: number; proveedorId: number; requiereCodigoBarras: boolean; 
+}
+const initialProductState: ProductState = {
+    id: null, nombre: '', descripcion: '', sku: '', 
+    precioVenta: 0.00, precioCompra: 0.00, unidadMedida: 'UNIDAD', 
+    pesoKg: 0.000, imagen: null, estado: 'ACTIVO', 
+    stockActual: 0, stockMinimo: 10, stockMaximo: 1000, 
+    ubicacionPrincipal: '', codigoBarrasPrincipal: 'N/A', 
+    categoriaNombre: '', almacenNombre: '', proveedorRazonSocial: '',
+    fechaActualizacion: null,
+    categoriaId: null, almacenId: 1, proveedorId: 1, requiereCodigoBarras: true, 
 };
 
-export default ProductForm;
+const initialOptions = { categorias: [] as CategoriaOption[], }
+
+
+const InventoryEditProduct: React.FC = () => {
+    const { id } = useParams();
+    const productId = Number(id); 
+    const navigate = useNavigate();
+
+    const [product, setProduct] = useState<ProductState>(initialProductState);
+    const [options, setOptions] = useState(initialOptions);
+    const [historial, setHistorial] = useState<Movimiento[]>([]);
+    const [loading, setLoading] = useState(true);
+    const [error, setError] = useState<string | null>(null); 
+    const [imagePreview, setImagePreview] = useState<string | null>(null); 
+    const [barcode, setBarcode] = useState(initialProductState.codigoBarrasPrincipal);
+    
+    const [showNotification, setShowNotification] = useState(false);
+    const [showDeactivateModal, setShowDeactivateModal] = useState(false);
+    const [showCancelModal, setShowCancelModal] = useState(false);
+    const fileInputRef = useRef<HTMLInputElement>(null); 
+
+    // Función para cargar el historial de movimientos
+    const fetchHistorial = async (pId: number) => {
+        try {
+            const historyResponse = await api.get(`/productos/${pId}/movimientos`);
+            setHistorial(historyResponse.data);
+        } catch (err: any) {
+            console.error("Error al cargar el historial:", err);
+        }
+    };
+
+    // --- LÓGICA DE CARGA INICIAL (GET) ---
+    useEffect(() => {
+        if (isNaN(productId) || productId === 0) {
+            setError('ID de producto no válido.'); 
+            setLoading(false);
+            return;
+        }
+
+        const fetchDependenciesAndProduct = async () => {
+            try {
+                // 1. CARGA REAL DE CATEGORÍAS
+                const categoriasResponse = await api.get(API_CATEGORIAS);
+                const categoriaData: CategoriaOption[] = categoriasResponse.data;
+                setOptions(prev => ({...prev, categorias: categoriaData}));
+                
+                // 2. Obtener Producto por ID
+                const productResponse = await api.get(`/productos/${productId}`);
+                const data = productResponse.data;
+                
+                setProduct(prev => ({
+                    ...prev, ...data,
+                    id: data.id,
+                    precioVenta: parseFloat(data.precioVenta || 0),
+                    precioCompra: parseFloat(data.precioCompra || 0),
+                    pesoKg: parseFloat(data.pesoKg || 0),
+                    stockMinimo: data.stockMinimo || 0,
+                    stockMaximo: data.stockMaximo || 0,
+                    stockActual: data.stockActual || 0,
+                    imagen: data.imagen || null,
+                    almacenId: 1, proveedorId: 1, 
+                    
+                    // SOLUCIÓN: Convertimos el ID a STRING para que el selector mantenga el valor
+                    categoriaId: data.categoriaId ? String(data.categoriaId) : null, 
+                }));
+                
+                setImagePreview(data.imagen || null); 
+                setBarcode(data.codigoBarrasPrincipal || data.sku || 'N/A'); 
+                
+                fetchHistorial(productId);
+
+            } catch (err: any) { 
+                console.error("Error al cargar datos:", err.response?.data || err);
+                const message = err.response?.data?.message || 'Error al conectar con la API para cargar el producto.';
+                setError(message);
+            } finally {
+                setLoading(false);
+            }
+        };
+        fetchDependenciesAndProduct();
+    }, [productId]);
+    
+    // Manejador de cambios en el formulario
+    const handleChange = (e: ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => { 
+        const { name, value } = e.target;
+        
+        const isCheckbox = (e.target as HTMLInputElement).type === 'checkbox';
+        const checked = isCheckbox ? (e.target as HTMLInputElement).checked : undefined;
+        
+        const isCategoryId = name === 'categoriaId'; 
+        
+        let parsedValue: any;
+
+        if (isCategoryId) {
+            parsedValue = value;
+        } else if ((name.includes('precio') || name.includes('peso') || name.includes('stock')) && value !== '') {
+            parsedValue = parseFloat(value);
+        } else if (name.includes('Id')) {
+            parsedValue = parseInt(value);
+        } else {
+            parsedValue = value;
+        }
+
+        setProduct(prev => ({
+            ...prev,
+            [name]: isCheckbox ? checked : parsedValue,
+        }));
+    };
+
+    // --- LÓGICA DE EDICIÓN (BOTÓN GUARDAR) ---
+    const handleSubmit = async (event: FormEvent) => {
+        event.preventDefault();
+        
+        if (product.categoriaId === null) {
+            alert("Por favor, selecciona una categoría.");
+            return;
+        }
+
+        const categoriaIdToSend = product.categoriaId ? Number(product.categoriaId) : null;
+
+        if (categoriaIdToSend === null) {
+            alert("Error interno de categoría.");
+            return;
+        }
+
+        const productRequestData = {
+            nombre: product.nombre, descripcion: product.descripcion, sku: product.sku,
+            precioVenta: product.precioVenta, precioCompra: product.precioCompra, 
+            unidadMedida: product.unidadMedida, pesoKg: product.pesoKg, 
+            imagen: product.imagen, requiereCodigoBarras: product.requiereCodigoBarras,
+            categoriaId: categoriaIdToSend, almacenId: product.almacenId, proveedorId: product.proveedorId,
+            stockInicial: product.stockActual, stockMinimo: product.stockMinimo, stockMaximo: product.stockMaximo, 
+            ubicacion: product.ubicacionPrincipal, 
+            codigoBarras: barcode,
+        };
+        
+        try {
+            await api.put(`/productos/${productId}`, productRequestData);
+            
+            const productResponse = await api.get(`/productos/${productId}`);
+            setProduct(prev => ({ ...prev, ...productResponse.data }));
+            fetchHistorial(productId);
+
+            setShowNotification(true);
+            setTimeout(() => {
+                setShowNotification(false);
+                navigate('/inventario'); // Redirección
+            }, 1000); 
+
+        } catch (err: any) { 
+            const errorMessage = err.response?.data?.message || 'Error desconocido al guardar. Revise el backend.';
+            console.error('Error al guardar:', err.response?.data || err);
+            alert(`Error al guardar: ${errorMessage}`);
+        }
+    };
+
+    // --- LÓGICA DE ACTIVAR / DESACTIVAR (TOGGLE) ---
+    const handleToggleProductState = async (newState: 'ACTIVO' | 'INACTIVO') => {
+        try {
+            const response = await api.patch(`/productos/${productId}/estado`, newState, {
+                headers: { 'Content-Type': 'text/plain' } 
+            }); 
+
+            setShowDeactivateModal(false);
+            alert(`Producto ${newState === 'ACTIVO' ? 'activado' : 'desactivado'} exitosamente.`);
+
+            setProduct(prev => ({ ...prev, ...response.data }));
+            fetchHistorial(productId);
+            
+            if (newState === 'INACTIVO') {
+                navigate('/inventario');
+            }
+
+        } catch (err: any) { 
+            const errorMessage = err.response?.data?.message || 'Error al cambiar el estado.';
+            console.error('Error al cambiar estado:', err.response?.data || err);
+            alert(`Error: ${errorMessage}`);
+            setShowDeactivateModal(false);
+        }
+    };
+
+    const handleOpenToggleModal = () => {
+        setShowDeactivateModal(true);
+    };
+
+    const handleCancel = () => { navigate('/inventario'); };
+    
+    // FUNCIONES AUXILIARES DE IMAGEN Y DRAG/DROP
+    const handleImageUpload = (event: ChangeEvent<HTMLInputElement>) => {
+        const file = event.target.files?.[0];
+        if (file) {
+            if (!file.type.startsWith('image/')) {
+                alert('Por favor, selecciona un archivo de imagen válido');
+                return;
+            }
+            if (file.size > 5 * 1024 * 1024) {
+                alert('La imagen no debe superar los 5MB');
+                return;
+            }
+            const reader = new FileReader();
+            reader.onload = (e) => {
+                setImagePreview(e.target?.result as string);
+                setProduct(prev => ({ ...prev, imagen: 'ruta/temporal/de/imagen.jpg' })); 
+            };
+            reader.readAsDataURL(file);
+        }
+    };
+    
+    const handleDrop = (event: DragEvent<HTMLDivElement>) => {
+        event.preventDefault();
+        const file = event.dataTransfer.files[0];
+        const input = fileInputRef.current; 
+        
+        if (file && input) { 
+            const dataTransfer = new DataTransfer();
+            dataTransfer.items.add(file);
+            input.files = dataTransfer.files; 
+            
+            const changeEvent = new Event('change', { bubbles: true });
+            input.dispatchEvent(changeEvent); 
+        }
+    };
+
+    const handleDragOver = (event: DragEvent<HTMLDivElement>) => {
+        event.preventDefault();
+    };
+    // FIN FUNCIONES AUXILIARES
+    
+    // Texto y colores dinámicos del botón
+    const actionText = product.estado === 'ACTIVO' ? 'Desactivar Producto' : 'Activar Producto';
+    const actionButtonColor = product.estado === 'ACTIVO' ? 'bg-red-600' : 'bg-green-600';
+    const actionState = product.estado === 'ACTIVO' ? 'INACTIVO' : 'ACTIVO';
+
+
+    // --- Manejo de Carga y Error ---
+    if (loading) {
+        return <div className="min-h-screen bg-gray-50 p-6 text-center text-gray-700">Cargando producto...</div>;
+    }
+
+    if (error) {
+        return <div className="min-h-screen bg-gray-50 p-6 text-center text-red-600">Error al cargar: {error}</div>;
+    }
+
+    // --- RENDERIZADO DEL COMPONENTE ---
+    return (
+        <div className="min-h-screen bg-gray-50 p-4 sm:p-6">
+            
+            {/* Notificación de éxito */}
+            {showNotification && (
+                <div className="fixed top-4 right-4 bg-green-500 text-white px-6 py-3 rounded-lg shadow-lg flex items-center gap-2 z-50 animate-fade-in">
+                    <IoIosCheckmarkCircle className="w-5 h-5" />
+                    <span>¡Producto actualizado exitosamente!</span>
+                </div>
+            )}
+            
+            {/* Modal de Cancelar */}
+            {showCancelModal && (
+                <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+                    <div className="bg-white rounded-lg max-w-md w-full">
+                        <div className="p-6">
+                             <div className="flex items-center gap-3 mb-4">
+                                <div className="bg-yellow-100 p-2 rounded-full">
+                                    <IoIosWarning className="w-6 h-6 text-yellow-600" />
+                                </div>
+                                <div>
+                                    <h3 className="text-lg font-semibold text-gray-900">Cancelar Edición</h3>
+                                    <p className="text-sm text-gray-600">¿Estás seguro de que quieres cancelar? Se perderán todos los cambios no guardados.</p>
+                                </div>
+                             </div>
+                             <div className="flex gap-3 justify-end">
+                                <button
+                                    onClick={() => setShowCancelModal(false)}
+                                    className="px-4 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 transition-colors"
+                                >
+                                    Continuar Editando
+                                </button>
+                                <button
+                                    onClick={handleCancel}
+                                    className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors flex items-center gap-2"
+                                >
+                                    <IoIosWarning className="w-4 h-4" />
+                                    Sí, Cancelar
+                                </button>
+                             </div>
+                        </div>
+                    </div>
+                </div>
+            )}
+            
+            {/* Modal de Desactivar / Activar */}
+            {showDeactivateModal && (
+                <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+                    <div className="bg-white rounded-lg max-w-md w-full">
+                        <div className="p-6">
+                            <div className="flex items-center gap-3 mb-4">
+                                <div className={`p-2 rounded-full ${actionState === 'INACTIVO' ? 'bg-red-100' : 'bg-green-100'}`}>
+                                    <IoIosWarning className={`w-6 h-6 ${actionState === 'INACTIVO' ? 'text-red-600' : 'text-green-600'}`} />
+                                </div>
+                                <div>
+                                    <h3 className="text-lg font-semibold text-gray-900">{actionText}</h3>
+                                    <p className="text-sm text-gray-600">
+                                        ¿Estás seguro de que quieres {actionState === 'INACTIVO' ? 'desactivar' : 'activar'} este producto?
+                                    </p>
+                                </div>
+                            </div>
+
+                            <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4 mb-4">
+                                <p className="text-sm text-yellow-800">
+                                    <strong>Nota:</strong> Al {actionState === 'INACTIVO' ? 'desactivar, no estará disponible para ventas.' : 'activar, estará disponible para ventas y pedidos.'}
+                                </p>
+                            </div>
+
+                            <div className="flex gap-3 justify-end">
+                                <button
+                                    onClick={() => setShowDeactivateModal(false)}
+                                    className="px-4 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 transition-colors"
+                                >
+                                    Cancelar
+                                </button>
+                                <button
+                                    onClick={() => handleToggleProductState(actionState)}
+                                    className={`px-4 py-2 text-white rounded-lg hover:opacity-90 transition-colors flex items-center gap-2 ${actionButtonColor}`}
+                                >
+                                    <IoIosWarning className="w-4 h-4" />
+                                    Sí, {actionState === 'INACTIVO' ? 'Desactivar' : 'Activar'}
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            <div className="flex justify-between items-center mb-6">
+                <div className="flex items-center gap-3">
+                    <Link to="/inventario" className="p-2 hover:bg-gray-100 rounded-lg transition-colors">
+                        <IoMdArrowRoundBack className="h-5 w-5 text-gray-700" />
+                    </Link>
+                    <div>
+                        <h1 className="text-xl sm:text-2xl font-bold text-gray-900">Editar Producto #{product.id}</h1>
+                        <p className="text-sm sm:text-base text-gray-600">Modifique la información del producto</p>
+                    </div>
+                </div>
+            </div>
+
+            <form id="edit-product-form" onSubmit={handleSubmit}>
+                <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
+                    {/* Columna Lateral (Vista Previa y Historial) */}
+                    <div className="lg:col-span-1 space-y-6 sm:order-last lg:order-first">
+                        <div className="bg-white rounded-lg p-6 shadow-sm border border-gray-200">
+                            <h3 className="text-lg font-semibold mb-4 flex items-center gap-2"><IoIosCube className="h-5 w-5" />Vista Previa</h3>
+                            
+                            {/* CONTENIDO DE IMAGEN Y PREVIEW */}
+                            <div className="text-center mb-4">
+                                {product.imagen && imagePreview ? (
+                                    <div className="relative">
+                                        <img
+                                            src={imagePreview}
+                                            alt="Vista previa"
+                                            className="w-32 h-32 rounded-lg mx-auto mb-3 object-cover border-2 border-gray-300"
+                                        />
+                                        <button
+                                            type="button"
+                                            onClick={() => setImagePreview(null)}
+                                            className="absolute top-0 right-0 bg-red-500 text-white rounded-full p-1 hover:bg-red-600 transition-colors transform translate-x-1/2 -translate-y-1/2"
+                                        >
+                                            <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                                            </svg>
+                                        </button>
+                                    </div>
+                                ) : (
+                                    <div className="w-32 h-32 bg-blue-50 rounded-lg mx-auto mb-3 flex items-center justify-center overflow-hidden border-2 border-dashed border-gray-300">
+                                        <IoIosCube className="h-8 w-8 text-blue-400" />
+                                    </div>
+                                )}
+                                <p className="text-xs text-gray-500 mt-1">
+                                    {imagePreview ? 'Imagen actual' : 'Sin imagen'}
+                                </p>
+                            </div>
+                            <div
+                                className="border-2 border-dashed border-gray-300 rounded-lg p-4 text-center cursor-pointer hover:border-blue-400 transition-colors mb-4"
+                                onDrop={handleDrop}
+                                onDragOver={handleDragOver}
+                                onClick={() => fileInputRef.current?.click()}
+                            >
+                                <IoIosCloudUpload className="w-8 h-8 mx-auto text-gray-400 mb-2" />
+                                <p className="text-sm text-gray-600 mb-2">Arrastra o haz click para cambiar</p>
+                                <p className="text-xs text-gray-500">PNG, JPG hasta 5MB</p>
+                                <input
+                                    ref={fileInputRef}
+                                    accept="image/*"
+                                    className="hidden"
+                                    id="imagen-upload"
+                                    type="file"
+                                    onChange={handleImageUpload}
+                                />
+                                <label
+                                    htmlFor="imagen-upload"
+                                    className="mt-2 bg-gray-100 text-gray-700 px-3 py-1 rounded text-sm hover:bg-gray-200 cursor-pointer inline-block"
+                                >
+                                    Cambiar imagen
+                                </label>
+                            </div>
+                            {/* Información del Producto */}
+                            <div className="space-y-3">
+                                <div>
+                                    <h4 className="font-semibold text-gray-900">{product.nombre}</h4>
+                                    <p className="text-sm text-gray-600">{product.categoriaNombre}</p>
+                                </div>
+                                <div className="flex justify-between items-center">
+                                    <span className="text-2xl font-bold text-gray-900">S/{product.precioVenta.toFixed(2)}</span>
+                                    <span className={`px-2 py-1 rounded-full text-xs font-medium ${product.estado === 'ACTIVO' ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}`}>{product.estado}</span>
+                                </div>
+                                <div className="text-sm text-gray-600 space-y-1">
+                                    <div>Stock: {product.stockActual} unidades</div>
+                                    <div>SKU: {product.sku}</div>
+                                    <div>Proveedor: {product.proveedorRazonSocial || 'N/A'}</div>
+                                    <div>Almacén: {product.almacenNombre || 'N/A'}</div>
+                                    <div>Ubicación: {product.ubicacionPrincipal || 'N/A'}</div>
+                                </div>
+                            </div>
+                        </div>
+
+                        {/* Bloque de Historial de Cambios */}
+                        <div className="bg-white rounded-lg p-6 shadow-sm border border-gray-200">
+                             <h3 className="text-lg font-semibold mb-4 flex items-center gap-2">
+                                <IoIosClock className="h-5 w-5" />
+                                Historial de Cambios
+                            </h3>
+                            <div className="space-y-3 max-h-40 overflow-y-auto">
+                                {historial.length > 0 ? (
+                                    historial.map((mov) => (
+                                        <div key={mov.id} className={`border-l-4 ${mov.tipoMovimiento === 'ENTRADA' ? 'border-green-500' : 'border-red-500'} pl-3 py-1`}>
+                                            <div className="flex justify-between items-start">
+                                                <div>
+                                                    <p className="font-medium text-sm">
+                                                        {mov.tipoMovimiento === 'ENTRADA' ? 'Ingreso de Stock' : mov.tipoMovimiento === 'SALIDA' ? 'Salida de Stock' : mov.tipoMovimiento}
+                                                    </p>
+                                                    <p className="text-xs text-gray-600">
+                                                        {mov.cantidad} unid. ({mov.stockAnterior} → {mov.stockNuevo})
+                                                    </p>
+                                                </div>
+                                                <span className="text-xs text-gray-500 whitespace-nowrap">
+                                                    {new Date(mov.fechaMovimiento).toLocaleDateString()}
+                                                </span>
+                                            </div>
+                                            <p className="text-xs text-gray-500 mt-1">Motivo: {mov.motivo}</p>
+                                        </div>
+                                    ))
+                                ) : (
+                                    <p className="text-sm text-gray-500">Última actualización: {product.fechaActualizacion ? new Date(product.fechaActualizacion).toLocaleString() : 'N/A'}</p>
+                                )}
+                            </div>
+                        </div>
+                    </div>
+
+                    {/* Columna Principal del Formulario */}
+                    <div className="lg:col-span-3">
+                        <div className="bg-white rounded-lg p-6 shadow-sm border border-gray-200 mb-6">
+                            <h3 className="text-lg font-semibold mb-4">Información del Producto</h3>
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
+                                {/* Nombre del Producto */}
+                                <div>
+                                    <label className="block text-sm font-medium text-gray-700 mb-1">Nombre del Producto</label>
+                                    <input className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500" type="text" value={product.nombre || ''} onChange={handleChange} name="nombre" />
+                                </div>
+                                {/* Categoría ID */}
+                                <div>
+                                    <label className="block text-sm font-medium text-gray-700 mb-1">Categoría</label>
+                                    <select 
+                                        className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500" 
+                                        name="categoriaId" 
+                                        value={product.categoriaId ?? ''} 
+                                        onChange={handleChange}
+                                    >
+                                        <option value="" disabled>Seleccionar categoría</option>
+                                        {options.categorias.map(cat => (
+                                            <option key={cat.id} value={String(cat.id)}>{cat.nombre}</option>
+                                        ))}
+                                    </select>
+                                </div>
+                                {/* SKU */}
+                                <div>
+                                    <label className="block text-sm font-medium text-gray-700 mb-1">SKU</label>
+                                    <input className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500" type="text" value={product.sku || ''} onChange={handleChange} name="sku" />
+                                </div>
+                                {/* Código de Barras (SOLO LECTURA) */}
+                                <div>
+                                    <label className="block text-sm font-medium text-gray-700 mb-1">Código de Barras</label>
+                                    <div className="flex gap-2">
+                                        <input 
+                                            className="w-full border border-gray-300 rounded-lg px-3 py-2 bg-gray-50 cursor-default" 
+                                            type="text" 
+                                            value={barcode} 
+                                            readOnly 
+                                            name="codigoBarras" 
+                                        />
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            {/* Vista Previa del Código de Barras */}
+                            <div className="bg-gray-50 p-4 rounded-lg border border-gray-200 mb-6">
+                                <h4 className="text-sm font-semibold text-gray-700 mb-3 flex items-center gap-2"><IoIosBarcode className="w-4 h-4" />Vista Previa del Código de Barras</h4>
+                                <div className="bg-white p-4 rounded border">
+                                    <div className="flex justify-center items-center space-x-1 mb-2">
+                                        {barcode.split('').map((_, index) => (<div key={index} className="h-10 w-1 bg-black border border-gray-300" />))}
+                                    </div>
+                                    <div className="text-center font-mono text-sm tracking-widest">{barcode}</div>
+                                </div>
+                                <div className="flex gap-2 mt-3">
+                                    <button type="button" onClick={() => navigator.clipboard.writeText(barcode)} className="flex-1 bg-blue-600 text-white py-2 px-3 rounded text-sm hover:bg-blue-700 transition-colors">Copiar Código</button>
+                                    <button type="button" onClick={() => window.print()} className="flex-1 bg-gray-600 text-white py-2 px-3 rounded text-sm hover:bg-gray-700 transition-colors">Imprimir</button>
+                                </div>
+                            </div>
+                            
+                            {/* 🚀 CAMPO DE DESCRIPCIÓN */}
+                            <div className="mb-6"> 
+                                <label className="block text-sm font-medium text-gray-700 mb-1">Descripción del Producto</label>
+                                <textarea
+                                    name="descripcion"
+                                    value={product.descripcion || ''} 
+                                    onChange={handleChange as any} // Usamos handleChange (soporta textarea)
+                                    rows={3}
+                                    placeholder="Ingrese detalles, especificaciones o notas sobre el producto."
+                                    className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500"
+                                />
+                            </div>
+                            {/* FIN CAMPO DESCRIPCIÓN */}
+
+                            <h3 className="text-lg font-semibold mb-4 flex items-center gap-2"><IoIosCash className="h-5 w-5" />Precios y Stock</h3>
+                            <div className="grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+                                {/* Precio Venta */}
+                                <div><label className="block text-sm font-medium text-gray-700 mb-1">Precio Venta (S/)</label><input className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500" type="number" value={product.precioVenta} onChange={handleChange} step={0.01} name="precioVenta" /></div>
+                                {/* Precio Compra */}
+                                <div><label className="block text-sm font-medium text-gray-700 mb-1">Precio Compra (S/)</label><input className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500" type="number" value={product.precioCompra} onChange={handleChange} step={0.01} name="precioCompra" /></div>
+                                {/* Stock Mínimo */}
+                                <div><label className="block text-sm font-medium text-gray-700 mb-1">Stock Mínimo</label><input className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500" type="number" value={product.stockMinimo} onChange={handleChange} name="stockMinimo" /></div>
+                                {/* Stock Máximo */}
+                                <div><label className="block text-sm font-medium text-gray-700 mb-1">Stock Máximo</label><input className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500" type="number" value={product.stockMaximo} onChange={handleChange} name="stockMaximo" /></div>
+                            </div>
+
+                            <h3 className="text-lg font-semibold mb-4 flex items-center gap-2"><IoIosArchive className="h-5 w-5" />Especificaciones</h3>
+                            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                                {/* Unidad de Medida */}
+                                <div>
+                                    <label className="block text-sm font-medium text-gray-700 mb-1">Unidad de Medida</label>
+                                    <select 
+                                        className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500" 
+                                        name="unidadMedida" 
+                                        value={product.unidadMedida ?? ''} 
+                                        onChange={handleChange}
+                                    >
+                                        <option value="UNIDAD">Unidad</option><option value="CAJA">Caja</option><option value="PAQUETE">Paquete</option><option value="KG">Kg (Kilogramo)</option><option value="LITRO">Litro</option>
+                                    </select>
+                                </div>
+                                {/* Peso (kg) */}
+                                <div><label className="block text-sm font-medium text-gray-700 mb-1">Peso (kg)</label><input className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500" type="number" step={0.001} value={product.pesoKg} onChange={handleChange} name="pesoKg" /></div>
+                                {/* Ubicación */}
+                                <div>
+                                    <label className="block text-sm font-medium text-gray-700 mb-1">Ubicación Principal</label><input className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500" type="text" value={product.ubicacionPrincipal} onChange={handleChange} name="ubicacionPrincipal" />
+                                </div>
+                            </div>
+                        </div>
+
+                        {/* Botones de Acción Final */}
+                        <div className="flex flex-col sm:flex-row justify-between items-center sm:items-end gap-3 mt-6">
+                            <button
+                                type="button"
+                                onClick={handleOpenToggleModal} 
+                                className={`w-full sm:w-auto font-medium flex items-center justify-center gap-2 px-4 py-2 border rounded-lg transition-colors 
+                                    ${product.estado === 'ACTIVO' 
+                                        ? 'text-red-600 hover:text-red-700 border-red-200 hover:bg-red-50' 
+                                        : 'text-green-600 hover:text-green-700 border-green-200 hover:bg-green-50'}`}
+                            >
+                                <IoIosWarning className="w-4 h-4" />
+                                {actionText}
+                            </button>
+                            <div className="flex gap-3 w-full sm:w-auto justify-end">
+                                <button type="button" onClick={() => setShowCancelModal(true)} className="flex-1 px-4 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50">Cancelar</button>
+                                <button type="submit" className="flex-1 bg-blue-600 text-white px-4 py-2 rounded-lg flex items-center justify-center gap-2 hover:bg-blue-700"><IoIosSave className="h-5 w-5" />Guardar Cambios</button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </form>
+        </div>
+    );
+};
+
+export default InventoryEditProduct;

@@ -1,12 +1,6 @@
-import type { Cliente } from "../../types/Employee";
+import type { Cliente } from "../../types/Client";
 import { formatDate } from "../../utils/format";
-
-import {  
-  FiCreditCard, 
-  FiMail, 
-  FiPhone, 
-  FiCalendar, 
-} from "react-icons/fi";
+import { FiCreditCard, FiMail, FiPhone, FiCalendar } from "react-icons/fi";
 
 interface Props {
   data: Cliente;
@@ -21,25 +15,24 @@ export default function ClienteCard({ data, onEdit, onDelete }: Props) {
 
   return (
     <div className="bg-white shadow-md rounded-lg p-4 hover:shadow-lg transition">
-
+      
       {/* HEADER */}
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-3">
-          <div className="bg-green-600 text-white rounded-full w-12 h-12 flex items-center justify-center text-lg font-semibold">
-            {iniciales}
-          </div>
-          <div>
-            <h2 className="font-bold text-lg">
-              {data.persona.nombres} {data.persona.apellidoPaterno} {data.persona.apellidoMaterno}
-            </h2>
-            <p className="text-gray-500 text-sm">Tipo: {data.tipo || "Sin especificar"}</p>
-          </div>
+      <div className="flex items-center gap-3">
+        <div className="bg-green-600 text-white rounded-full w-12 h-12 flex items-center justify-center text-lg font-semibold">
+          {iniciales}
+        </div>
+
+        <div>
+          <h2 className="font-bold text-lg">
+            {data.persona.nombres} {data.persona.apellidoPaterno}{" "}
+            {data.persona.apellidoMaterno}
+          </h2>
+          <p className="text-gray-500 text-sm">Tipo: {data.tipo}</p>
         </div>
       </div>
 
       {/* INFO */}
       <div className="mt-3 text-sm text-gray-700 space-y-2">
-
         <p className="flex items-center gap-2">
           <FiCreditCard className="text-blue-600" />
           N° Documento: {data.persona.numeroDocumento}
@@ -57,7 +50,7 @@ export default function ClienteCard({ data, onEdit, onDelete }: Props) {
 
         <p className="flex items-center gap-2">
           <FiCalendar className="text-blue-600" />
-          Registro: {formatDate(data.fechaRegistro)}
+          Registro: {formatDate(data.fechaCreacion)}
         </p>
       </div>
 

@@ -1,7 +1,8 @@
-// En RoleModulePermissionsRepository.java - VERIFICA QUE TENGA ESTE MÉTODO
+// RoleModulePermissionsRepository.java - COMPLETO
 package com.perumarket.erp.repository;
 
 import java.util.List;
+import java.util.Optional;
 
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Modifying;
@@ -21,8 +22,25 @@ public interface RoleModulePermissionsRepository extends JpaRepository<RoleModul
     
     List<RoleModulePermissions> findByRolId(Long rolId);
     
-    // ESTE MÉTODO ES CRÍTICO - DEBE ESTAR PRESENTE
+    // Método para eliminar permisos por rol
     @Modifying
     @Query("DELETE FROM RoleModulePermissions rmp WHERE rmp.rol.id = :rolId")
     void deleteByRolId(@Param("rolId") Long rolId);
+    
+    // Método para eliminar permisos por módulo
+    @Modifying
+    @Query("DELETE FROM RoleModulePermissions rmp WHERE rmp.modulo.id = :moduloId")
+    void deleteByModuloId(@Param("moduloId") Long moduloId);
+    
+    // Método para contar permisos por módulo
+    @Query("SELECT COUNT(rmp) FROM RoleModulePermissions rmp WHERE rmp.modulo.id = :moduloId")
+    long countByModuloId(@Param("moduloId") Long moduloId);
+
+    // En RoleModulePermissionsRepository.java - agregar este método
+@Query("SELECT COUNT(rmp) FROM RoleModulePermissions rmp WHERE rmp.rol.id = :rolId")
+long countByRolId(@Param("rolId") Long rolId);
+    
+    // Método para encontrar permisos específicos
+    @Query("SELECT rmp FROM RoleModulePermissions rmp WHERE rmp.rol.id = :rolId AND rmp.modulo.id = :moduloId")
+    Optional<RoleModulePermissions> findByRolIdAndModuloId(@Param("rolId") Long rolId, @Param("moduloId") Long moduloId);
 }

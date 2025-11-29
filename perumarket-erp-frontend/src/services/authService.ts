@@ -13,6 +13,7 @@ export interface UserInfo {
   apellidos: string;
   rol: string;
   email: string;
+  almacenId?:number;
 }
 
 export interface ModuleInfo {

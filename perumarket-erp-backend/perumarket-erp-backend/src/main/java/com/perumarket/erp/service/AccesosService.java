@@ -2,7 +2,9 @@
 package com.perumarket.erp.service;
 
 import java.time.LocalDate;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.stream.Collectors;
 
@@ -215,15 +217,37 @@ public class AccesosService {
     }
 
     @Transactional
-    public void deleteRol(Long id) {
-        // Verificar si hay usuarios con este rol
+public void deleteRol(Long id) {
+    try {
+        // Verificar si el rol existe
+        Rol rol = rolRepository.findById(id)
+                .orElseThrow(() -> new RuntimeException("Rol no encontrado"));
+
+        // 1. Verificar si hay usuarios con este rol
         Long userCount = rolRepository.countUsuariosByRolId(id);
         if (userCount > 0) {
-            throw new RuntimeException("No se puede eliminar el rol porque tiene usuarios asignados");
+            throw new RuntimeException("No se puede eliminar el rol porque tiene " + userCount + " usuario(s) asignado(s)");
         }
 
+        // 2. PRIMERO: Eliminar todos los permisos asociados a este rol
+        long permisosCount = permissionsRepository.countByRolId(id);
+        if (permisosCount > 0) {
+            System.out.println("🗑️ Eliminando " + permisosCount + " permisos asociados al rol: " + rol.getNombre());
+            permissionsRepository.deleteByRolId(id);
+        }
+
+        // 3. LUEGO: Eliminar el rol
         rolRepository.deleteById(id);
+        System.out.println("✅ Rol eliminado exitosamente: " + rol.getNombre());
+        
+    } catch (RuntimeException e) {
+        // Re-lanzar excepciones de negocio
+        throw e;
+    } catch (Exception e) {
+        System.err.println("❌ Error eliminando rol: " + e.getMessage());
+        throw new RuntimeException("Error al eliminar el rol: " + e.getMessage());
     }
+}
 
     private RolDTO convertToRolDTO(Rol rol) {
         RolDTO dto = new RolDTO();
@@ -284,8 +308,51 @@ public class AccesosService {
 
     @Transactional
     public void deleteModulo(Long id) {
+    try {
+        // Verificar si el módulo existe
+        Modulo modulo = moduloRepository.findById(id)
+            .orElseThrow(() -> new RuntimeException("Módulo no encontrado"));
+
+        // 1. Primero eliminar todos los permisos asociados a este módulo
+        permissionsRepository.deleteByModuloId(id);
+        
+        // 2. Luego eliminar el módulo
         moduloRepository.deleteById(id);
+        
+        System.out.println("✅ Módulo eliminado exitosamente: " + modulo.getNombre());
+        
+    } catch (Exception e) {
+        System.err.println("❌ Error eliminando módulo: " + e.getMessage());
+        throw new RuntimeException("Error al eliminar módulo: " + e.getMessage());
     }
+}
+
+// Método para verificar dependencias antes de eliminar
+public Map<String, Object> checkModuloDependencies(Long id) {
+    try {
+        Modulo modulo = moduloRepository.findById(id)
+            .orElseThrow(() -> new RuntimeException("Módulo no encontrado"));
+        
+        // Contar permisos asociados
+        long permisosCount = permissionsRepository.countByModuloId(id);
+        
+        Map<String, Object> result = new HashMap<>();
+        result.put("modulo", modulo.getNombre());
+        result.put("permisosAsociados", permisosCount);
+        result.put("puedeEliminar", permisosCount == 0);
+        
+        if (permisosCount > 0) {
+            result.put("mensaje", 
+                "No se puede eliminar el módulo porque tiene " + permisosCount + 
+                " permisos asociados. Se eliminarán automáticamente.");
+        }
+        
+        return result;
+        
+    } catch (Exception e) {
+        throw new RuntimeException("Error verificando dependencias: " + e.getMessage());
+    }
+}
 
     private ModuloDTO convertToModuloDTO(Modulo modulo) {
         ModuloDTO dto = new ModuloDTO();
@@ -314,6 +381,17 @@ public class AccesosService {
                 
                 dto.setHasAccess(existing.map(RoleModulePermissions::getHasAccess).orElse(false));
                 return dto;
+            })
+            .collect(Collectors.toList());
+}
+
+public List<Map<String, Object>> getRolesForDropdownSimple() {
+    return rolRepository.findAll().stream()
+            .map(rol -> {
+                Map<String, Object> roleMap = new HashMap<>();
+                roleMap.put("id", rol.getId());
+                roleMap.put("nombre", rol.getNombre());
+                return roleMap;
             })
             .collect(Collectors.toList());
 }
@@ -376,4 +454,76 @@ public void updatePermissions(UpdatePermissionsRequest request) {
                 })
                 .collect(Collectors.toList());
     }
+
+
+    // Método para eliminar solo los permisos de un módulo (sin eliminar el módulo)
+@Transactional
+public void deleteModuloPermissionsOnly(Long moduloId) {
+    try {
+        long count = permissionsRepository.countByModuloId(moduloId);
+        System.out.println("🗑️ Eliminando " + count + " permisos del módulo ID: " + moduloId);
+        permissionsRepository.deleteByModuloId(moduloId);
+        System.out.println("✅ Permisos eliminados correctamente");
+    } catch (Exception e) {
+        throw new RuntimeException("Error eliminando permisos del módulo: " + e.getMessage());
+    }
+}
+
+// Método para obtener estadísticas del sistema
+public Map<String, Object> getSystemStats() {
+    Map<String, Object> stats = new HashMap<>();
+    
+    try {
+        stats.put("totalUsuarios", usuarioRepository.count());
+        stats.put("totalRoles", rolRepository.count());
+        stats.put("totalModulos", moduloRepository.count());
+        stats.put("totalPermisos", permissionsRepository.count());
+        
+        // Contar usuarios activos
+        long usuariosActivos = usuarioRepository.findAll().stream()
+                .filter(u -> "ACTIVO".equals(u.getEstado()))
+                .count();
+        stats.put("usuariosActivos", usuariosActivos);
+        
+    } catch (Exception e) {
+        System.err.println("Error obteniendo estadísticas: " + e.getMessage());
+    }
+    
+    return stats;
+}
+
+
+// En AccesosService.java - método para verificar dependencias del rol
+public Map<String, Object> checkRolDependencies(Long id) {
+    try {
+        Rol rol = rolRepository.findById(id)
+                .orElseThrow(() -> new RuntimeException("Rol no encontrado"));
+        
+        // Contar usuarios con este rol
+        Long usuariosCount = rolRepository.countUsuariosByRolId(id);
+        
+        // Contar permisos asociados
+        long permisosCount = permissionsRepository.countByRolId(id);
+        
+        Map<String, Object> result = new HashMap<>();
+        result.put("rol", rol.getNombre());
+        result.put("usuariosAsociados", usuariosCount);
+        result.put("permisosAsociados", permisosCount);
+        result.put("puedeEliminar", usuariosCount == 0); // Solo se puede eliminar si no tiene usuarios
+        
+        if (usuariosCount > 0) {
+            result.put("mensaje", 
+                "No se puede eliminar el rol porque tiene " + usuariosCount + 
+                " usuario(s) asignado(s). Reasigne los usuarios a otro rol primero.");
+        } else if (permisosCount > 0) {
+            result.put("mensaje", 
+                "El rol tiene " + permisosCount + " permiso(s) asociados que se eliminarán automáticamente.");
+        }
+        
+        return result;
+        
+    } catch (Exception e) {
+        throw new RuntimeException("Error verificando dependencias: " + e.getMessage());
+    }
+}
 }

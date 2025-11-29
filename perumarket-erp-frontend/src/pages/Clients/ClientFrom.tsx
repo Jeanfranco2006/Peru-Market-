@@ -8,8 +8,9 @@ import {
   FaSignature,
 } from "react-icons/fa6";
 import { FaMapMarkerAlt } from "react-icons/fa";
-import type { Cliente } from "../../types/Employee";
+
 import type { FormEvent, JSX } from "react";
+import type { Cliente } from "../../types/Client";
 
 interface Props {
   state: Cliente;
@@ -18,7 +19,10 @@ interface Props {
   onSave: (cli: Cliente) => void;
 }
 
-// --- Componentes reutilizables ---
+// ------------------------------------------------------
+// CAMPOS REUTILIZABLES
+// ------------------------------------------------------
+
 interface InputFieldProps {
   label: string;
   icon: JSX.Element;
@@ -29,7 +33,9 @@ interface InputFieldProps {
 
 const InputField = ({ label, icon, value, type = "text", onChange }: InputFieldProps) => (
   <div>
-    <label className="text-sm font-medium flex items-center gap-1 text-black">{icon} {label}</label>
+    <label className="text-sm font-medium flex items-center gap-1 text-black">
+      {icon} {label}
+    </label>
     <input
       type={type}
       className="border rounded px-3 py-2 w-full text-black"
@@ -49,41 +55,55 @@ interface SelectFieldProps {
 
 const SelectField = ({ label, icon, value, options, onChange }: SelectFieldProps) => (
   <div>
-    <label className="text-sm font-medium flex items-center gap-1 text-black">{icon} {label}</label>
+    <label className="text-sm font-medium flex items-center gap-1 text-black">
+      {icon} {label}
+    </label>
     <select
       className="border rounded px-3 py-2 w-full text-black"
       value={value}
       onChange={(e) => onChange(e.target.value)}
     >
       <option value="">Seleccionar...</option>
-      {options.map(opt => <option key={opt} value={opt}>{opt}</option>)}
+      {options.map((opt) => (
+        <option key={opt} value={opt}>
+          {opt}
+        </option>
+      ))}
     </select>
   </div>
 );
 
-// --- Formulario principal ---
+// ------------------------------------------------------
+// FORMULARIO PRINCIPAL
+// ------------------------------------------------------
+
 export default function ClienteForm({ state, setField, onCancel, onSave }: Props) {
-  const tiposCliente = ["Natural", "Jurídico", "VIP"];
+  const tiposCliente = ["NATURAL", "JURIDICA",];
   const tiposDocumento = ["DNI", "Pasaporte", "CE"];
 
   function submit(e: FormEvent) {
     e.preventDefault();
 
-    // --- Validaciones básicas ---
-    if (!state.persona.nombres.trim()) return alert("El nombre es obligatorio");
-    if (!state.persona.numeroDocumento.trim()) return alert("El número de documento es obligatorio");
+    if (!state.persona.nombres.trim())
+      return alert("El nombre es obligatorio");
+
+    if (!state.persona.numeroDocumento.trim())
+      return alert("El número de documento es obligatorio");
 
     onSave(state);
   }
 
   return (
-    <form onSubmit={submit} className="grid grid-cols-1 gap-4 p-4 bg-white rounded shadow-md max-h-[85vh] overflow-y-auto">
+    <form
+      onSubmit={submit}
+      className="grid grid-cols-1 gap-4 p-4 bg-white rounded shadow-md max-h-[85vh] overflow-y-auto"
+    >
       <h2 className="text-lg font-semibold mb-4 flex items-center gap-2 text-black">
         <FaUserCheck className="text-black" /> Registrar / Editar Cliente
       </h2>
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        {/* COLUMNA IZQUIERDA */}
+        {/* -------- COLUMNA IZQUIERDA -------- */}
         <div className="space-y-3">
           <SelectField
             label="Tipo Cliente"
@@ -132,7 +152,7 @@ export default function ClienteForm({ state, setField, onCancel, onSave }: Props
           />
         </div>
 
-        {/* COLUMNA DERECHA */}
+        {/* -------- COLUMNA DERECHA -------- */}
         <div className="space-y-3">
           <InputField
             label="N° Documento"
@@ -164,7 +184,9 @@ export default function ClienteForm({ state, setField, onCancel, onSave }: Props
         </div>
       </div>
 
-      {/* BOTONES FIJOS */}
+      {/* ---------------------------------- */}
+      {/* BOTONES INFERIORES */}
+      {/* ---------------------------------- */}
       <div className="flex justify-end gap-3 mt-4 sticky bottom-0 bg-white py-3 border-t">
         <button
           type="button"

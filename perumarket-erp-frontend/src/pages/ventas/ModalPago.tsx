@@ -1,5 +1,7 @@
 import React from 'react';
 import { FaTrash, FaCreditCard, FaMoneyBillWave, FaReceipt, FaMobileAlt, FaUniversity } from 'react-icons/fa';
+import type { Cliente } from '../../types/Client';
+
 
 interface MetodoPago {
   id: number;
@@ -8,16 +10,6 @@ interface MetodoPago {
   estado: string;
 }
 
-interface Cliente {
-  id: number;
-  tipo_documento: string;
-  numero_documento: string;
-  nombres: string;
-  apellido_paterno: string;
-  apellido_materno: string;
-  correo: string;
-  telefono: string;
-}
 
 interface DetallePago {
   id_metodo_pago: number;
@@ -35,10 +27,11 @@ interface ModalPagoProps {
   isOpen: boolean;
   onClose: () => void;
   onConfirmar: (detallesPago: DetallePago[]) => void;
-  cliente: Cliente | null;
+  cliente: Cliente | null; // ya está usando tu tipo Cliente
   total: number;
   metodosPago: MetodoPago[];
 }
+
 
 const ModalPago: React.FC<ModalPagoProps> = ({ 
   isOpen, 
@@ -325,7 +318,7 @@ const ModalPago: React.FC<ModalPagoProps> = ({
             <div className="grid grid-cols-2 gap-2 text-sm">
               <div>
                 <span className="text-gray-600">Cliente:</span>
-                <p className="font-medium">{cliente?.nombres} {cliente?.apellido_paterno}</p>
+                <p className="font-medium">{cliente?.persona.nombres} {cliente?.persona.nombres}</p>
               </div>
               <div>
                 <span className="text-gray-600">Total a Pagar:</span>
