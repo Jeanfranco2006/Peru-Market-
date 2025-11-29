@@ -42,7 +42,7 @@ public class ClienteService {
     }
 
     // ---------------------------------------------------------
-    // FILTROS BÁSICOS (opcional)
+    // FILTROS BÁSICOS
     // ---------------------------------------------------------
     public List<ClienteDTO> findByFilters(String texto, String dni, Cliente.TipoCliente tipo) {
         return clienteRepository.findByFilters(
@@ -55,7 +55,7 @@ public class ClienteService {
     }
 
     // ---------------------------------------------------------
-    // CREAR / ACTUALIZAR CLIENTE
+    // CREAR CLIENTE
     // ---------------------------------------------------------
     @Transactional
     public ClienteDTO save(ClienteDTO clienteDTO) {
@@ -69,17 +69,10 @@ public class ClienteService {
         updatePersonaFromDTO(persona, clienteDTO.getPersona());
         persona = personaRepository.save(persona);
 
-        // Cliente
+        // Crear cliente
         Cliente cliente = new Cliente();
-
-        if (clienteDTO.getClienteid() != null) {
-            cliente = clienteRepository.findById(clienteDTO.getClienteid())
-                    .orElse(new Cliente());
-        }
-
         cliente.setPersona(persona);
         cliente.setTipo(clienteDTO.getTipo());
-
 
         cliente = clienteRepository.save(cliente);
 
@@ -87,15 +80,39 @@ public class ClienteService {
     }
 
     // ---------------------------------------------------------
-    // ELIMINAR
+    // ACTUALIZAR CLIENTE
     // ---------------------------------------------------------
     @Transactional
-    public void deleteById(Long id) {
-        clienteRepository.deleteById(id);
+    public Optional<ClienteDTO> update(Long id, ClienteDTO clienteDTO) {
+        return clienteRepository.findById(id).map(cliente -> {
+
+            // Actualizar persona asociada
+            Persona persona = cliente.getPersona();
+            updatePersonaFromDTO(persona, clienteDTO.getPersona());
+            personaRepository.save(persona);
+
+            // Actualizar cliente
+            cliente.setTipo(clienteDTO.getTipo());
+            clienteRepository.save(cliente);
+
+            return convertToDTO(cliente);
+        });
     }
 
     // ---------------------------------------------------------
-    // ACTUALIZAR PERSONA
+    // ELIMINAR CLIENTE
+    // ---------------------------------------------------------
+    @Transactional
+    public boolean deleteById(Long id) {
+        if (clienteRepository.existsById(id)) {
+            clienteRepository.deleteById(id);
+            return true;
+        }
+        return false;
+    }
+
+    // ---------------------------------------------------------
+    // ACTUALIZAR PERSONA DESDE DTO
     // ---------------------------------------------------------
     private void updatePersonaFromDTO(Persona persona, PersonaDTO dto) {
         persona.setTipoDocumento(dto.getTipoDocumento());
@@ -114,23 +131,23 @@ public class ClienteService {
     // ---------------------------------------------------------
     private ClienteDTO convertToDTO(Cliente cliente) {
         ClienteDTO dto = new ClienteDTO();
-
         dto.setClienteid(cliente.getId());
         dto.setTipo(cliente.getTipo());
         dto.setFechaCreacion(cliente.getFechaCreacion());
         dto.setFechaActualizacion(cliente.getFechaActualizacion());
 
+        Persona persona = cliente.getPersona();
         PersonaDTO personaDTO = new PersonaDTO();
-        personaDTO.setId(cliente.getPersona().getId());
-        personaDTO.setTipoDocumento(cliente.getPersona().getTipoDocumento());
-        personaDTO.setNumeroDocumento(cliente.getPersona().getNumeroDocumento());
-        personaDTO.setNombres(cliente.getPersona().getNombres());
-        personaDTO.setApellidoPaterno(cliente.getPersona().getApellidoPaterno());
-        personaDTO.setApellidoMaterno(cliente.getPersona().getApellidoMaterno());
-        personaDTO.setCorreo(cliente.getPersona().getCorreo());
-        personaDTO.setTelefono(cliente.getPersona().getTelefono());
-        personaDTO.setFechaNacimiento(cliente.getPersona().getFechaNacimiento());
-        personaDTO.setDireccion(cliente.getPersona().getDireccion());
+        personaDTO.setId(persona.getId());
+        personaDTO.setTipoDocumento(persona.getTipoDocumento());
+        personaDTO.setNumeroDocumento(persona.getNumeroDocumento());
+        personaDTO.setNombres(persona.getNombres());
+        personaDTO.setApellidoPaterno(persona.getApellidoPaterno());
+        personaDTO.setApellidoMaterno(persona.getApellidoMaterno());
+        personaDTO.setCorreo(persona.getCorreo());
+        personaDTO.setTelefono(persona.getTelefono());
+        personaDTO.setFechaNacimiento(persona.getFechaNacimiento());
+        personaDTO.setDireccion(persona.getDireccion());
 
         dto.setPersona(personaDTO);
 
