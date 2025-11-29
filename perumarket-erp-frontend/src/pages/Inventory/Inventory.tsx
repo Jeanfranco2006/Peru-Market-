@@ -4,10 +4,11 @@ import {
     IoIosCube, IoIosStats, IoIosPulse, IoMdArrowDropdown, IoIosSearch,
     IoMdHome, IoMdAdd, IoMdCheckmarkCircle, IoIosCart, IoMdClipboard,
     IoIosPin, IoIosBuild, IoIosPeople, IoMdCreate, IoMdRefresh, IoMdTrash,
-    IoIosArchive, IoIosBarcode
+    IoIosArchive, IoIosBarcode, IoIosImage
 } from 'react-icons/io';
 
-const API_PRODUCTOS = 'http://localhost:8080/api/productos';
+const API_BASE = 'http://localhost:8080/api';
+const API_PRODUCTOS = `${API_BASE}/productos`;
 
 // Interfaz adaptada al DTO de respuesta del backend (ProductoResponse)
 interface Product {
@@ -22,6 +23,7 @@ interface Product {
     stockActual: number;
     stockMinimo: number;
     stockMaximo: number;
+    imagen: string; // AGREGADO: Campo para la imagen
     
     // Propiedades simuladas/calculadas:
     purchases: number; 
@@ -42,8 +44,85 @@ const getStockStatus = (stock: number, minStock: number): 'Disponible' | 'Stock 
     return 'Disponible';
 };
 
+// Componente mejorado de visualización de código de barras con TEC-IT
 const BarcodeDisplay = ({ barcode, sku, name }: { barcode: string, sku: string, name: string }) => {
-    // Componente de visualización de código de barras
+    const [barcodeImageUrl, setBarcodeImageUrl] = useState<string>('');
+
+    useEffect(() => {
+        if (barcode && barcode.length >= 12) {
+            const url = `https://barcode.tec-it.com/barcode.ashx?data=${encodeURIComponent(barcode)}&code=EAN13&translate-esc=on&dpi=96`;
+            setBarcodeImageUrl(url);
+        } else {
+            setBarcodeImageUrl('');
+        }
+    }, [barcode]);
+
+    const printBarcode = () => {
+        if (barcodeImageUrl) {
+            const printWindow = window.open('', '_blank');
+            if (printWindow) {
+                printWindow.document.write(`
+                    <html>
+                        <head>
+                            <title>Imprimir Código de Barras - ${name}</title>
+                            <style>
+                                body { 
+                                    margin: 0; 
+                                    padding: 20px; 
+                                    font-family: Arial, sans-serif; 
+                                    text-align: center;
+                                    background: white;
+                                }
+                                .barcode-container { 
+                                    margin: 20px auto; 
+                                    max-width: 400px;
+                                    border: 1px solid #ddd;
+                                    padding: 20px;
+                                    border-radius: 8px;
+                                }
+                                .barcode-info {
+                                    margin-top: 15px;
+                                    font-size: 14px;
+                                    color: #333;
+                                    line-height: 1.4;
+                                }
+                                .product-name {
+                                    font-weight: bold;
+                                    font-size: 16px;
+                                    margin-bottom: 5px;
+                                }
+                                @media print {
+                                    body { padding: 0; }
+                                    .no-print { display: none; }
+                                    .barcode-container { 
+                                        border: none;
+                                        padding: 10px;
+                                    }
+                                }
+                            </style>
+                        </head>
+                        <body>
+                            <div class="barcode-container">
+                                <img src="${barcodeImageUrl}" alt="Código de Barras EAN-13" style="max-width: 100%; height: auto;" />
+                                <div class="barcode-info">
+                                    <div class="product-name">${name}</div>
+                                    <div><strong>Código:</strong> ${barcode}</div>
+                                    <div><strong>SKU:</strong> ${sku}</div>
+                                    <div><strong>Formato:</strong> EAN-13</div>
+                                </div>
+                            </div>
+                            <div class="no-print" style="margin-top: 20px;">
+                                <button onclick="window.print()" style="padding: 10px 20px; margin: 5px; background: #007bff; color: white; border: none; border-radius: 4px; cursor: pointer;">Imprimir</button>
+                                <button onclick="window.close()" style="padding: 10px 20px; margin: 5px; background: #6c757d; color: white; border: none; border-radius: 4px; cursor: pointer;">Cerrar</button>
+                            </div>
+                        </body>
+                    </html>
+                `);
+                printWindow.document.close();
+            }
+        }
+    };
+
     return (
         <div className="bg-white p-4 rounded-lg border border-gray-300">
             <div className="text-center mb-3">
@@ -54,24 +133,36 @@ const BarcodeDisplay = ({ barcode, sku, name }: { barcode: string, sku: string, 
             </div>
 
             <div className="bg-white p-4 border-2 border-gray-400 rounded">
-                <div className="flex justify-center items-center space-x-1 mb-2">
-                    {/* Renderizado de barras simplificado */}
-                    {Array.from({ length: 13 }).map((_, index) => (
-                        <div
-                            key={index}
-                            className={`h-12 w-1 ${index % 2 === 0 ? 'bg-black' : 'bg-white'} border border-gray-300`}
+                {/* Imagen del código de barras generado por TEC-IT */}
+                {barcodeImageUrl ? (
+                    <div className="mb-3">
+                        <img 
+                            src={barcodeImageUrl} 
+                            alt="Código de Barras EAN-13" 
+                            className="mx-auto max-w-full h-auto border border-gray-300 rounded"
+                            style={{ maxHeight: '80px' }}
                         />
-                    ))}
-                </div>
+                    </div>
+                ) : (
+                    <div className="flex justify-center items-center space-x-1 mb-2">
+                        {/* Representación de barras simplificada como fallback */}
+                        {Array.from({ length: 13 }).map((_, index) => (
+                            <div
+                                key={index}
+                                className={`h-12 w-1 ${index % 2 === 0 ? 'bg-black' : 'bg-white'} border border-gray-300`}
+                            />
+                        ))}
+                    </div>
+                )}
 
                 <div className="text-center font-mono text-sm tracking-widest bg-white py-2">
                     {barcode}
                 </div>
 
                 <div className="text-center text-xs text-gray-600 mt-2 space-y-1">
-                    <div>SKU: **{sku}**</div>
-                    <div>Producto: {name}</div>
-                    <div>Formato: EAN-13 (Principal)</div>
+                    <div><strong>SKU:</strong> {sku}</div>
+                    <div><strong>Producto:</strong> {name}</div>
+                    <div><strong>Formato:</strong> EAN-13 (Principal)</div>
                 </div>
             </div>
 
@@ -87,16 +178,69 @@ const BarcodeDisplay = ({ barcode, sku, name }: { barcode: string, sku: string, 
                 </button>
                 <button
                     className="flex-1 bg-gray-600 text-white py-2 px-3 rounded text-sm hover:bg-gray-700 transition-colors flex items-center justify-center gap-1"
-                    onClick={() => window.print()}
+                    onClick={printBarcode}
                 >
                     <span>Imprimir</span>
                 </button>
             </div>
+
+            {barcodeImageUrl && (
+                <div className="mt-3 text-xs text-gray-500 text-center">
+                    <p>
+                        Generado con{' '}
+                        <a 
+                            href="https://www.tec-it.com" 
+                            target="_blank" 
+                            rel="noopener noreferrer" 
+                            className="text-blue-600 hover:underline"
+                        >
+                            TEC-IT Barcode Generator
+                        </a>
+                    </p>
+                </div>
+            )}
         </div>
     );
 };
 
+// Componente para mostrar la imagen del producto
+const ProductImage = ({ imagen, nombre, className = "" }: { imagen: string, nombre: string, className?: string }) => {
+  const [imageError, setImageError] = useState(false);
+  
+  // Si no hay imagen o hay error, mostrar placeholder
+  if (!imagen || imageError) {
+    return (
+      <div className={`bg-blue-50 rounded-lg flex flex-col items-center justify-center text-blue-400 ${className}`}>
+        <IoIosImage className="w-8 h-8 mb-2" />
+        <span className="text-xs text-blue-600">Sin imagen</span>
+      </div>
+    );
+  }
 
+  // Construir la URL completa de la imagen INCLUYENDO /api
+  const getImageUrl = (imagePath: string) => {
+    if (imagePath.startsWith('http')) {
+      return imagePath;
+    }
+    // Si la ruta ya incluye /api, usarla directamente
+    if (imagePath.startsWith('/api/')) {
+      return `http://localhost:8080${imagePath}`;
+    }
+    // Si no incluye /api, agregarlo
+    const cleanPath = imagePath.startsWith('/') ? imagePath : `/${imagePath}`;
+    return `http://localhost:8080/api${cleanPath}`;
+  };
+
+  return (
+    <img
+      src={getImageUrl(imagen)}
+      alt={nombre}
+      className={`object-cover rounded-lg ${className}`}
+      onError={() => setImageError(true)}
+      onLoad={() => setImageError(false)}
+    />
+  );
+};
 export default function Inventory() {
     const [searchTerm, setSearchTerm] = useState('');
     const [filterCategory, setFilterCategory] = useState('all');
@@ -130,6 +274,7 @@ export default function Inventory() {
                 stockActual: p.stockActual,
                 stockMinimo: p.stockMinimo,
                 stockMaximo: p.stockMaximo,
+                imagen: p.imagen || '', // AGREGADO: Campo de imagen
                 pesoKg: parseFloat(p.pesoKg),
                 unidadMedida: p.unidadMedida,
                 ubicacionPrincipal: p.ubicacionPrincipal,
@@ -190,14 +335,15 @@ export default function Inventory() {
         <div className="p-4 sm:p-6">
             <h1 className="text-xl sm:text-2xl font-bold mb-4 sm:mb-6 text-center">INVENTARIO</h1>
 
+            {/* Modal de Código de Barras */}
             {showBarcodeModal && selectedProduct && (
                 <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-                    <div className="bg-white rounded-lg max-w-md w-full">
-                        <div className="p-4 border-b border-gray-200 flex justify-between items-center">
+                    <div className="bg-white rounded-lg max-w-md w-full max-h-[90vh] overflow-y-auto">
+                        <div className="p-4 border-b border-gray-200 flex justify-between items-center sticky top-0 bg-white">
                             <h3 className="text-lg font-semibold">Código de Barras - {selectedProduct.nombre}</h3>
                             <button
                                 onClick={() => setShowBarcodeModal(false)}
-                                className="text-gray-500 hover:text-gray-700"
+                                className="text-gray-500 hover:text-gray-700 text-xl"
                             >
                                 ✕
                             </button>
@@ -208,10 +354,12 @@ export default function Inventory() {
                                 sku={selectedProduct.sku} 
                                 name={selectedProduct.nombre}
                             />
-                            <div className="mt-4 text-sm text-gray-600">
+                            <div className="mt-4 text-sm text-gray-600 space-y-2">
                                 <p><strong>Producto:</strong> {selectedProduct.nombre}</p>
                                 <p><strong>SKU:</strong> {selectedProduct.sku}</p>
                                 <p><strong>Categoría:</strong> {selectedProduct.categoriaNombre}</p>
+                                <p><strong>Precio:</strong> S/{selectedProduct.precioVenta.toFixed(2)}</p>
+                                <p><strong>Stock Actual:</strong> {selectedProduct.stockActual} {selectedProduct.unidadMedida}</p>
                             </div>
                         </div>
                     </div>
@@ -221,7 +369,7 @@ export default function Inventory() {
             {/* 1. SECCIÓN DE ESTADÍSTICAS Y FILTROS */}
             <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
 
-                {/* Cards de Estadísticas: Se convierten en 2 columnas en móvil y 4 en desktop */}
+                {/* Cards de Estadísticas */}
                 <div className="bg-white rounded-lg p-4 sm:p-6 shadow-sm border border-gray-200">
                     <div className="text-xl sm:text-2xl font-bold text-gray-900">{products.length}</div>
                     <div className="flex items-center gap-2 text-sm sm:text-base">
@@ -254,9 +402,8 @@ export default function Inventory() {
                     </div>
                 </div>
 
-                {/* Filtros y Acciones (ocupa toda la fila debajo de las cards en md y arriba) */}
+                {/* Filtros y Acciones */}
                 <div className="bg-white rounded-lg p-4 shadow-sm border border-gray-200 col-span-2 md:col-span-4">
-                    {/* CRÍTICO: La barra de filtros y botones se apila en móvil (flex-col) */}
                     <div className="flex flex-col lg:flex-row gap-3 sm:gap-4 justify-between items-start lg:items-center">
                         
                         {/* Búsqueda */}
@@ -283,7 +430,7 @@ export default function Inventory() {
                             ))}
                         </select>
 
-                        {/* Botones de Acción (se apilan en el lado derecho de la fila) */}
+                        {/* Botones de Acción */}
                         <div className="flex flex-col sm:flex-row gap-2 w-full lg:w-auto">
                             <Link
                                 to="/inventario/almacenes"
@@ -306,7 +453,6 @@ export default function Inventory() {
             </div>
 
             {/* 2. GRILLA DE PRODUCTOS */}
-            {/* CRÍTICO: Grid se adapta de 1 columna en móvil, 2 en tablet (md), 3 en desktop (xl) */}
             <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
                 {filteredProducts.map((product) => {
                     const margin = (product.precioVenta - product.precioCompra) / product.precioCompra;
@@ -320,24 +466,30 @@ export default function Inventory() {
                     return (
                         <div key={product.id} className="bg-white rounded-lg shadow-sm border border-gray-200 p-4">
                             
-                            {/* Header del Producto (Imagen Placeholder / Estado) */}
-                            <div className="h-24 bg-gray-100 rounded-lg relative flex items-center justify-center">
-                                <div className="absolute top-2 left-2">
+                            {/* Header del Producto CON IMAGEN */}
+                            <div className="h-48 bg-gray-100 rounded-lg relative flex items-center justify-center overflow-hidden">
+                                <div className="absolute top-2 left-2 z-10">
                                     <span className="text-xs font-medium text-gray-700 bg-white/90 px-2 py-1 rounded border">
                                         {product.categoriaNombre}
                                     </span>
                                 </div>
-                                <div className={`absolute top-2 right-2 flex items-center gap-1 ${statusColor} px-2 py-1 rounded-full text-xs font-medium`}>
+                                <div className={`absolute top-2 right-2 z-10 flex items-center gap-1 ${statusColor} px-2 py-1 rounded-full text-xs font-medium`}>
                                     <IoMdCheckmarkCircle className="w-4 h-4" />
                                     {statusText}
                                 </div>
-                                <span className="text-gray-400 text-xs">SIN IMAGEN</span>
+                                
+                                {/* Imagen del producto */}
+                                <ProductImage 
+                                    imagen={product.imagen} 
+                                    nombre={product.nombre}
+                                    className="w-full h-full"
+                                />
                             </div>
 
                             {/* Información Básica */}
                             <div className="mt-4">
                                 <h3 className="font-bold text-gray-900">{product.nombre}</h3>
-                                <p className="text-sm text-gray-600">{product.descripcion}</p>
+                                <p className="text-sm text-gray-600 line-clamp-2">{product.descripcion}</p>
                             </div>
 
                             {/* Precios y SKUs */}
@@ -371,7 +523,7 @@ export default function Inventory() {
                                 </div>
                             </div>
 
-                            {/* Métricas de Stock (3 columnas) */}
+                            {/* Métricas de Stock */}
                             <div className="grid grid-cols-3 gap-2 mt-4">
                                 <div className="bg-blue-50 p-3 rounded text-center">
                                     <div className="text-lg sm:text-xl font-bold text-blue-700">{product.stockActual}</div>
@@ -387,7 +539,7 @@ export default function Inventory() {
                                 </div>
                             </div>
                             
-                            {/* Detalles de Ubicación y Margen (RESTAURADO y RESPONSIVO) */}
+                            {/* Detalles de Ubicación y Margen */}
                             <div className="space-y-2 text-sm text-gray-600 mt-4">
                                 
                                 {/* Peso/Unidad */}
@@ -429,8 +581,7 @@ export default function Inventory() {
                                 </div>
                             </div>
 
-
-                            {/* Métricas de Movimiento (3 columnas) */}
+                            {/* Métricas de Movimiento */}
                             <div className="grid grid-cols-3 gap-2 mt-4">
                                 <div className="bg-purple-50 p-2 rounded text-center">
                                     <IoIosCart className="w-5 h-5 mx-auto text-purple-600 mb-1" />

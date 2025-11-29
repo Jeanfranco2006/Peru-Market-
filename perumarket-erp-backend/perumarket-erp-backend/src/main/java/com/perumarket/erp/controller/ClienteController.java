@@ -5,6 +5,8 @@ import java.util.List;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
+import jakarta.validation.Valid;
+
 import com.perumarket.erp.models.dto.ClienteDTO;
 import com.perumarket.erp.models.entity.Cliente.TipoCliente;
 import com.perumarket.erp.service.ClienteService;
@@ -63,5 +65,12 @@ public class ClienteController {
     public ResponseEntity<Void> eliminar(@PathVariable Long id) {
         clienteService.deleteById(id);
         return ResponseEntity.noContent().build();
+    }
+
+    @PutMapping("/{id}")
+    public ResponseEntity<ClienteDTO> actualizar(@PathVariable Long id, @Valid @RequestBody ClienteDTO clienteDTO) {
+        return clienteService.update(id, clienteDTO)
+                .map(ResponseEntity::ok)
+                .orElse(ResponseEntity.notFound().build());
     }
 }

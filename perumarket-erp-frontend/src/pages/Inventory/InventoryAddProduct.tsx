@@ -63,6 +63,7 @@ export default function InventoryAddProduct() {
   const [notificationType, setNotificationType] = useState<'success' | 'error'>('success');
   const [showCancelModal, setShowCancelModal] = useState(false);
   const [validationErrors, setValidationErrors] = useState<Record<string, string>>({});
+  const [uploadedImageFile, setUploadedImageFile] = useState<File | null>(null);
 
   // Lista de unidades de medida (coincide con el Enum UnidadMedida en Java)
   const unidadesMedida = ['UNIDAD', 'CAJA', 'PAQUETE', 'KG', 'LITRO'];
@@ -71,7 +72,10 @@ export default function InventoryAddProduct() {
   const selectedAlmacenName = almacenes.find(a => a.id === formData.almacenId)?.nombre || 'Por seleccionar';
   const selectedProveedorName = proveedores.find(p => p.id === formData.proveedorId)?.nombre || 'Por seleccionar';
 
-  // --- Funciones de Carga de Opciones (CORREGIDA LA LÓGICA ASÍNCRONA) ---
+  // URL del código de barras generado
+  const [barcodeImageUrl, setBarcodeImageUrl] = useState<string>('');
+
+  // --- Funciones de Carga de Opciones ---
   const fetchOptions = useCallback(async () => {
     setLoadingOptions(true);
     try {
@@ -81,12 +85,10 @@ export default function InventoryAddProduct() {
         fetch(`${API_BASE}/proveedores`)
       ]);
 
-      // 1. Resolver los cuerpos JSON
       const catData = catRes.ok ? await catRes.json() : [];
       const almData = almRes.ok ? await almRes.json() : [];
       const provRawData = provRes.ok ? await provRes.json() : [];
 
-      // 2. MAPEO CORRECTO DE PROVEEDORES (razonSocial -> nombre)
       const provData = provRawData.map((p: any) => ({
         id: p.id,
         nombre: p.razonSocial
@@ -109,6 +111,47 @@ export default function InventoryAddProduct() {
   useEffect(() => {
     fetchOptions();
   }, [fetchOptions]);
+
+  // --- Generar SKU automáticamente basado en el nombre ---
+  const generateSKU = (productName: string): string => {
+    if (!productName.trim()) return '';
+    
+    // Limpiar y formatear el nombre
+    const cleanName = productName
+      .normalize("NFD")
+      .replace(/[\u0300-\u036f]/g, "") // Remover acentos
+      .toUpperCase()
+      .replace(/[^A-Z0-9\s]/g, "") // Remover caracteres especiales
+      .trim();
+    
+    // Tomar las primeras 3-4 letras de cada palabra (máximo 3 palabras)
+    const words = cleanName.split(/\s+/).slice(0, 3);
+    const skuParts = words.map(word => word.substring(0, 4));
+    
+    // Unir con guiones y agregar timestamp para unicidad
+    const baseSKU = skuParts.join('-');
+    const timestamp = Date.now().toString().slice(-4);
+    
+    return `${baseSKU}-${timestamp}`;
+  };
+
+  // --- Actualizar SKU cuando cambie el nombre ---
+  useEffect(() => {
+    if (formData.nombre && !formData.sku) {
+      const newSKU = generateSKU(formData.nombre);
+      setFormData(prev => ({ ...prev, sku: newSKU }));
+    }
+  }, [formData.nombre]);
+
+  // --- Actualizar imagen del código de barras cuando cambie el código ---
+  useEffect(() => {
+    if (formData.codigoBarras && formData.codigoBarras.length >= 12) {
+      const barcodeUrl = `https://barcode.tec-it.com/barcode.ashx?data=${encodeURIComponent(formData.codigoBarras)}&code=EAN13&translate-esc=on&dpi=96`;
+      setBarcodeImageUrl(barcodeUrl);
+    } else {
+      setBarcodeImageUrl('');
+    }
+  }, [formData.codigoBarras]);
 
   // --- Handlers de Formulario ---
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
@@ -133,36 +176,127 @@ export default function InventoryAddProduct() {
     });
   };
 
-  const handleImageUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
+  // --- Función para guardar la imagen en la carpeta pública ---
+// --- Función para guardar la imagen en la carpeta pública ---
+const saveImageToPublicFolder = async (file: File): Promise<string> => {
+  return new Promise((resolve, reject) => {
+    const formData = new FormData();
+    formData.append('image', file);
+    
+    // Generar un nombre único para la imagen
+    const timestamp = Date.now();
+    const randomString = Math.random().toString(36).substring(2, 8);
+    const fileExtension = file.name.split('.').pop() || 'jpg';
+    const fileName = `producto_${timestamp}_${randomString}.${fileExtension}`;
+    formData.append('fileName', fileName);
+
+    console.log('Enviando imagen al backend:', fileName);
+
+    fetch(`${API_BASE}/productos/upload-image`, {
+      method: 'POST',
+      body: formData,
+    })
+    .then(async response => {
+      if (!response.ok) {
+        const errorText = await response.text();
+        throw new Error(`Error ${response.status}: ${errorText}`);
+      }
+      return response.json();
+    })
+    .then(data => {
+      console.log('Imagen subida exitosamente:', data);
+      // El backend devuelve la ruta relativa, por ejemplo: "/img/productos/producto_123456_abc123.jpg"
+      resolve(data.imagePath);
+    })
+    .catch(error => {
+      console.error('Error al guardar imagen:', error);
+      reject(error);
+    });
+  });
+};
+  const handleImageUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (!file || !file.type.startsWith('image/') || file.size > 5 * 1024 * 1024) {
       alert('Archivo inválido o muy grande (máx 5MB).');
       return;
     }
 
+    // Guardar el archivo para enviarlo después con el formulario
+    setUploadedImageFile(file);
+
+    // Mostrar preview inmediatamente
     const reader = new FileReader();
     reader.onload = (e) => {
       setImagePreview(e.target?.result as string);
-      setFormData(prev => ({ ...prev, imagen: 'URL_TEMPORAL_DEL_PRODUCTO' }));
     };
     reader.readAsDataURL(file);
   };
 
+  // Generador de código de barras Code-128 (formato numérico simple para scanners)
   const generateBarcode = () => {
-    const base = Math.floor(100000000000 + Math.random() * 900000000000).toString();
-    let sum = 0;
-    for (let i = 0; i < 12; i++) {
-      sum += parseInt(base[i]) * (i % 2 === 0 ? 1 : 3);
-    }
-    const checksum = (10 - (sum % 10)) % 10;
-    const newBarcode = base + checksum;
-    setFormData(prev => ({ ...prev, codigoBarras: newBarcode }));
+    // Generar código numérico de 12 dígitos (compatible con EAN-13)
+    const timestamp = Date.now().toString().slice(-8);
+    const random = Math.floor(Math.random() * 10000).toString().padStart(4, '0');
+    const baseCode = timestamp + random;
+    
+    setFormData(prev => ({ ...prev, codigoBarras: baseCode }));
   };
 
   const copyBarcode = () => {
     if (formData.codigoBarras) {
       navigator.clipboard.writeText(formData.codigoBarras);
       alert('Código de barras copiado al portapapeles');
+    }
+  };
+
+  const printBarcode = () => {
+    if (barcodeImageUrl) {
+      const printWindow = window.open('', '_blank');
+      if (printWindow) {
+        printWindow.document.write(`
+          <html>
+            <head>
+              <title>Imprimir Código de Barras</title>
+              <style>
+                body { 
+                  margin: 0; 
+                  padding: 20px; 
+                  font-family: Arial, sans-serif; 
+                  text-align: center;
+                }
+                .barcode-container { 
+                  margin: 20px auto; 
+                  max-width: 400px;
+                }
+                .barcode-info {
+                  margin-top: 10px;
+                  font-size: 14px;
+                  color: #333;
+                }
+                @media print {
+                  body { padding: 0; }
+                  .no-print { display: none; }
+                }
+              </style>
+            </head>
+            <body>
+              <div class="barcode-container">
+                <img src="${barcodeImageUrl}" alt="Código de Barras" style="max-width: 100%; height: auto;" />
+                <div class="barcode-info">
+                  <strong>${formData.nombre || 'Producto'}</strong><br/>
+                  Código: ${formData.codigoBarras}<br/>
+                  SKU: ${formData.sku || 'N/A'}
+                </div>
+              </div>
+              <div class="no-print" style="margin-top: 20px;">
+                <button onclick="window.print()">Imprimir</button>
+                <button onclick="window.close()">Cerrar</button>
+              </div>
+            </body>
+          </html>
+        `);
+        printWindow.document.close();
+      }
     }
   };
 
@@ -175,6 +309,19 @@ export default function InventoryAddProduct() {
     setValidationErrors({});
 
     try {
+      // Primero subir la imagen si existe
+      let imagenPath = '';
+      if (uploadedImageFile) {
+        try {
+          imagenPath = await saveImageToPublicFolder(uploadedImageFile);
+        } catch (error) {
+          console.error('Error al subir imagen:', error);
+          setNotificationMessage("Error al subir la imagen. El producto se guardará sin imagen.");
+          setNotificationType('error');
+          setShowNotification(true);
+        }
+      }
+
       const requestData: any = {
         ...formData,
         categoriaId: formData.categoriaId || undefined,
@@ -186,6 +333,7 @@ export default function InventoryAddProduct() {
         precioCompra: formData.precioCompra || 0.0,
         precioVenta: formData.precioVenta || 0.0,
         pesoKg: formData.pesoKg || 0.0,
+        imagen: imagenPath || '', // Usar la ruta de la imagen guardada
       };
 
       const response = await fetch(`${API_BASE}/productos`, {
@@ -226,7 +374,6 @@ export default function InventoryAddProduct() {
       setShowNotification(true);
     }
   };
-
 
   const renderError = (fieldName: keyof ProductoFormData) => (
     validationErrors[fieldName] ? (
@@ -314,7 +461,11 @@ export default function InventoryAddProduct() {
                     />
                     <button
                       type="button"
-                      onClick={() => { setImagePreview(null); setFormData(prev => ({ ...prev, imagen: '' })); }}
+                      onClick={() => { 
+                        setImagePreview(null); 
+                        setUploadedImageFile(null);
+                        setFormData(prev => ({ ...prev, imagen: '' })); 
+                      }}
                       className="absolute top-0 right-0 bg-red-500 text-white rounded-full p-1 hover:bg-red-600 transition-colors transform translate-x-1/2 -translate-y-1/2"
                     >
                       <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -405,7 +556,19 @@ export default function InventoryAddProduct() {
                   {renderError('categoriaId')}
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">SKU *</label>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    SKU *
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const newSKU = generateSKU(formData.nombre);
+                        setFormData(prev => ({ ...prev, sku: newSKU }));
+                      }}
+                      className="ml-2 text-xs bg-gray-200 hover:bg-gray-300 px-2 py-1 rounded transition-colors"
+                    >
+                      Regenerar
+                    </button>
+                  </label>
                   <input
                     type="text"
                     name="sku"
@@ -415,6 +578,7 @@ export default function InventoryAddProduct() {
                     className={`w-full border rounded-lg px-3 py-2 focus:ring-2 ${validationErrors.sku ? 'border-red-500' : 'border-gray-300 focus:border-blue-500 focus:ring-blue-500'}`}
                   />
                   {renderError('sku')}
+                  <p className="text-xs text-gray-500 mt-1">SKU generado automáticamente desde el nombre</p>
                 </div>
                 {/* Proveedor (Dropdown) */}
                 <div>
@@ -424,15 +588,14 @@ export default function InventoryAddProduct() {
                     required
                     value={formData.proveedorId || ''}
                     onChange={handleChange}
-                    // AGREGAR CLASE text-gray-900 AQUÍ TAMBIÉN:
-                    className={`w-full border rounded-lg px-3 py-2 text-black focus:ring-2 ${validationErrors.proveedorId ? 'border-red-500' : 'border-gray-300 focus:border-blue-500 focus:ring-blue-500'}`}                  >
+                    className={`w-full border rounded-lg px-3 py-2 text-black focus:ring-2 ${validationErrors.proveedorId ? 'border-red-500' : 'border-gray-300 focus:border-blue-500 focus:ring-blue-500'}`}
+                  >
                     <option value="">Seleccionar proveedor</option>
                     {proveedores.map(prov => (
-                      // CLASE FUERTE EN EL OPTION
                       <option
                         key={prov.id}
                         value={prov.id}
-                        className="text-black " // <-- Asegura que el texto y fondo sean visibles
+                        className="text-black"
                       >
                         {prov.nombre}
                       </option>
@@ -474,7 +637,7 @@ export default function InventoryAddProduct() {
                     className={`w-full border rounded-lg px-3 py-2 focus:ring-2 ${validationErrors.codigoBarras ? 'border-red-500' : 'border-gray-300 focus:border-blue-500 focus:ring-blue-500'}`}
                   />
                   {renderError('codigoBarras')}
-                  <p className="text-xs text-gray-500 mt-1">Ingrese el código de barras EAN-13 (será el principal)</p>
+                  <p className="text-xs text-gray-500 mt-1">Ingrese el código de barras EAN-13 (12-13 dígitos)</p>
                 </div>
                 <div className="flex items-end">
                   <button
@@ -490,16 +653,21 @@ export default function InventoryAddProduct() {
               {formData.codigoBarras && (
                 <div className="mt-4 p-4 bg-gray-50 rounded-lg border border-gray-200">
                   <div className="text-center">
-                    <div className="flex justify-center items-center space-x-1 mb-2">
-                      {/* Representación visual simple del código de barras */}
-                      {Array.from({ length: 13 }).map((_, index) => (
-                        <div key={index} className={`h-8 w-1 bg-black border border-gray-300`} />
-                      ))}
-                    </div>
-                    <div className="text-sm text-gray-600 font-mono tracking-widest">
+                    {/* Imagen del código de barras generado por TEC-IT */}
+                    {barcodeImageUrl && (
+                      <div className="mb-4">
+                        <img 
+                          src={barcodeImageUrl} 
+                          alt="Código de Barras EAN-13" 
+                          className="mx-auto max-w-full h-auto border border-gray-300 rounded"
+                          style={{ maxHeight: '100px' }}
+                        />
+                      </div>
+                    )}
+                    <div className="text-sm text-gray-600 font-mono tracking-widest mb-2">
                       {formData.codigoBarras}
                     </div>
-                    <p className="text-xs text-gray-500 mt-2">Vista previa del código de barras</p>
+                    <p className="text-xs text-gray-500 mb-4">Código de barras EAN-13 generado</p>
                   </div>
                   <div className="flex gap-2 mt-3">
                     <button
@@ -511,11 +679,14 @@ export default function InventoryAddProduct() {
                     </button>
                     <button
                       type="button"
-                      onClick={() => window.print()}
+                      onClick={printBarcode}
                       className="flex-1 bg-gray-600 text-white py-2 px-3 rounded text-sm hover:bg-gray-700 transition-colors"
                     >
                       Imprimir
                     </button>
+                  </div>
+                  <div className="mt-3 text-xs text-gray-500 text-center">
+                    <p>Generado con <a href="https://www.tec-it.com" target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline">TEC-IT Barcode Generator</a></p>
                   </div>
                 </div>
               )}
