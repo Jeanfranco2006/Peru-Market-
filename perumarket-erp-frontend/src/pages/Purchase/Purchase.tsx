@@ -468,7 +468,7 @@ export default function NewPurchase() {
   }, [productosEnCompra, almacen]);
 
   const subtotalBruto = productosEnCompra.reduce((sum, p) => sum + (p.precio_unitario * p.cantidad), 0);
-  const descuentoTotal = productosEnCompra.reduce((sum, p) => sum + p.descuento, 0);
+  const descuentoTotal = productosEnCompra.reduce((sum, p) => sum + (p.precio_unitario * p.cantidad * 0.18), 0);
   const subtotalNeto = subtotalBruto - descuentoTotal;
   const igvRate = 0.18;
   const igv = subtotalNeto * igvRate;

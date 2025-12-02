@@ -269,9 +269,10 @@ const VentasList: React.FC = () => {
       if (carrito.length === 0) return alert("Agrega productos al carrito primero");
 
       // 1️⃣ Totales
-      const subtotal = carrito.reduce((sum, item) => sum + item.subtotal, 0);
-      const igv = subtotal * 0.18;
-      const total = subtotal + igv;
+      const subtotal = carrito.reduce((sum, item) => sum + item.subtotal - (item.subtotal * 0.18), 0);
+      const subtotalproduct = carrito.reduce((sum, item) => sum + item.subtotal, 0);
+      const igv = subtotalproduct * 0.18;
+      const total =  subtotal+ igv;
 
       // 2️⃣ Obtener usuario logueado y almacén seleccionado
       const idUsuario = Number(localStorage.getItem("usuarioId")); // o desde tu estado global
@@ -359,8 +360,9 @@ const VentasList: React.FC = () => {
     producto.categoria.nombre.toLowerCase().includes(busquedaProducto.toLowerCase())
   );
 
-  const subtotal = carrito.reduce((sum, item) => sum + item.subtotal, 0);
-  const igv = subtotal * 0.18;
+  const subtotal = carrito.reduce((sum, item) => sum + item.subtotal - (item.subtotal * 0.18), 0);
+  const subtotalproduct = carrito.reduce((sum, item) => sum + item.subtotal, 0);
+  const igv = subtotalproduct * 0.18;
   const total = subtotal + igv;
 
   return (

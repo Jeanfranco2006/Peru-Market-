@@ -1,19 +1,9 @@
-import { Link, useNavigate } from "react-router-dom";
+import { Link, useNavigate, useLocation } from "react-router-dom";
 import { useState, useEffect, useRef } from "react";
 import {
-  FiHome,
-  FiUsers,
-  FiMenu,
-  FiUserCheck,
-  FiUser,
-  FiBox,
-  FiShoppingCart,
-  FiClipboard,
-  FiTruck,
-  FiArchive,
-  FiBarChart2,
-  FiLogOut,
-  FiX
+  FiHome, FiUsers, FiMenu, FiUserCheck, FiUser, FiBox,
+  FiShoppingCart, FiClipboard, FiTruck, FiArchive, FiBarChart2,
+  FiLogOut, FiX, FiSearch, FiSettings, FiChevronRight, FiChevronLeft
 } from "react-icons/fi";
 import type { AuthData, Module } from "../types/auth";
 import ModalConfirmarLogout from "./modals/ModalConfirmarLogout";
@@ -22,15 +12,15 @@ import PeruMarketERPLogo from "../resources/img/PeruMarketERPLogo.png";
 export default function Sidebar() {
   const [open, setOpen] = useState(true);
   const [mobileOpen, setMobileOpen] = useState(false);
-  const [touchStart, setTouchStart] = useState<number | null>(null);
-  const [touchEnd, setTouchEnd] = useState<number | null>(null);
   const [modules, setModules] = useState<Module[]>([]);
   const [loading, setLoading] = useState(true);
   const [showLogoutModal, setShowLogoutModal] = useState(false);
-  const sidebarRef = useRef<HTMLDivElement>(null);
+  
   const navigate = useNavigate();
+  const location = useLocation();
+  const sidebarRef = useRef<HTMLDivElement>(null);
 
-  // Cargar módulos permitidos del usuario
+  // --- Carga de Módulos ---
   useEffect(() => {
     const loadUserModules = () => {
       try {
@@ -38,132 +28,41 @@ export default function Sidebar() {
         const authData = localStorage.getItem('auth');
         if (authData) {
           const parsedData: AuthData = JSON.parse(authData);
-          // Los módulos están en el objeto principal
           if (parsedData.modules && Array.isArray(parsedData.modules)) {
             setModules(parsedData.modules);
-            console.log('✅ Módulos cargados:', parsedData.modules);
           } else {
-            console.warn('⚠️ No se encontraron módulos en authData');
             setModules([]);
           }
-        } else {
-          console.warn('⚠️ No se encontró authData en localStorage');
-          setModules([]);
         }
       } catch (error) {
         console.error('❌ Error cargando módulos:', error);
-        setModules([]);
       } finally {
         setLoading(false);
       }
     };
-
     loadUserModules();
   }, []);
 
-  // Configuración de touch para deslizar
-  const minSwipeDistance = 50;
-
-  const onTouchStart = (e: React.TouchEvent) => {
-    setTouchEnd(null);
-    setTouchStart(e.targetTouches[0].clientX);
-  };
-
-  const onTouchMove = (e: React.TouchEvent) => {
-    setTouchEnd(e.targetTouches[0].clientX);
-  };
-
-  const onTouchEnd = () => {
-    if (!touchStart || !touchEnd) return;
-    const distance = touchStart - touchEnd;
-    const isLeftSwipe = distance > minSwipeDistance;
-    const isRightSwipe = distance < -minSwipeDistance;
-
-    if (isLeftSwipe && mobileOpen) {
-      setMobileOpen(false);
-    }
-    if (isRightSwipe && !mobileOpen) {
-      setMobileOpen(true);
-    }
-  };
-
-  // Cerrar sidebar móvil al hacer click fuera
+  // --- Lógica Mobile ---
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent | TouchEvent) => {
       if (mobileOpen && sidebarRef.current && !sidebarRef.current.contains(event.target as Node)) {
         setMobileOpen(false);
       }
     };
-
     document.addEventListener("mousedown", handleClickOutside);
     document.addEventListener("touchstart", handleClickOutside);
-
     return () => {
       document.removeEventListener("mousedown", handleClickOutside);
       document.removeEventListener("touchstart", handleClickOutside);
     };
   }, [mobileOpen]);
 
-  // Cerrar sidebar móvil al cambiar de ruta
   useEffect(() => {
     setMobileOpen(false);
   }, [navigate]);
 
-  // Agregar event listener para gestos en toda la pantalla
-  useEffect(() => {
-    const handleGlobalTouchStart = (e: TouchEvent) => {
-      if (!mobileOpen) {
-        setTouchEnd(null);
-        setTouchStart(e.touches[0].clientX);
-      }
-    };
-
-    const handleGlobalTouchMove = (e: TouchEvent) => {
-      if (!mobileOpen) {
-        setTouchEnd(e.touches[0].clientX);
-      }
-    };
-
-    const handleGlobalTouchEnd = () => {
-      if (!mobileOpen && touchStart && touchEnd) {
-        const distance = touchStart - touchEnd;
-        const isRightSwipe = distance < -minSwipeDistance;
-        
-        if (isRightSwipe) {
-          setMobileOpen(true);
-        }
-      }
-    };
-
-    document.addEventListener('touchstart', handleGlobalTouchStart);
-    document.addEventListener('touchmove', handleGlobalTouchMove);
-    document.addEventListener('touchend', handleGlobalTouchEnd);
-
-    return () => {
-      document.removeEventListener('touchstart', handleGlobalTouchStart);
-      document.removeEventListener('touchmove', handleGlobalTouchMove);
-      document.removeEventListener('touchend', handleGlobalTouchEnd);
-    };
-  }, [mobileOpen, touchStart, touchEnd]);
-
-  const handleLogout = () => {
-    setShowLogoutModal(true);
-  };
-
-  const confirmLogout = () => {
-    localStorage.removeItem("auth");
-    localStorage.removeItem("logged");
-    localStorage.removeItem("username");
-    localStorage.removeItem("userRole");
-    setShowLogoutModal(false);
-    navigate("/login");
-  };
-
-  const cancelLogout = () => {
-    setShowLogoutModal(false);
-  };
-
-  // Mapeo de nombres de módulos a iconos y rutas
+  // --- Configuración de Iconos ---
   const getModuleConfig = (moduleName: string) => {
     const configMap: { [key: string]: { icon: any; route: string } } = {
       'Dashboard': { icon: FiHome, route: '/dashboard' },
@@ -178,210 +77,212 @@ export default function Sidebar() {
       'Envios': { icon: FiTruck, route: '/envios' },
       'Reportes': { icon: FiBarChart2, route: '/reportes' },
     };
-
     return configMap[moduleName] || { icon: FiBox, route: `/${moduleName.toLowerCase().replace(/\s+/g, '-')}` };
   };
 
-  // Si está cargando, mostrar skeleton
-  if (loading) {
-    return (
-      <div className="hidden lg:block">
-        <div className="bg-black text-white h-screen p-4 w-64">
-          <div className="animate-pulse">
-            <div className="h-6 bg-gray-700 rounded mb-6"></div>
-            <div className="flex items-center justify-center mb-10">
-              <div className="w-20 h-20 bg-gray-700 rounded-full"></div>
-            </div>
-            {[...Array(8)].map((_, i) => (
-              <div key={i} className="h-10 bg-gray-700 rounded mb-2"></div>
-            ))}
-          </div>
-        </div>
-      </div>
-    );
-  }
+  const handleLogout = () => setShowLogoutModal(true);
+  
+  const confirmLogout = () => {
+    localStorage.removeItem("auth");
+    localStorage.removeItem("logged");
+    localStorage.removeItem("username");
+    localStorage.removeItem("userRole");
+    setShowLogoutModal(false);
+    navigate("/login");
+  };
 
-  // Si no hay módulos, mostrar mensaje
-  if (modules.length === 0 && !loading) {
+  // --- COMPONENTE DE ITEM DE MENÚ ---
+  const MenuItem = ({ name, icon: Icon, route, isMobile = false }: { name: string, icon: any, route: string, isMobile?: boolean }) => {
+    const isActive = location.pathname.startsWith(route);
+    
+    // Estilos Base
+    const baseClasses = "flex items-center gap-3 p-3 rounded-xl transition-all duration-200 group mb-1.5 font-medium text-sm border";
+    
+    // ESTILO CLAVE: Fondo gris base -> Activo se vuelve BLANCO (Estilo "Card")
+    // Active: Fondo blanco, sombra suave, texto oscuro fuerte. Parece "elevado".
+    const activeClasses = "bg-white border-gray-200 text-gray-900 shadow-[0_2px_8px_rgba(0,0,0,0.04)]";
+    
+    // Inactive: Transparente (se ve el gris de fondo), texto gris medio.
+    const inactiveClasses = "border-transparent text-gray-500 hover:bg-white/60 hover:text-gray-900";
+
     return (
-      <div className="hidden lg:block">
-        <div className="bg-black text-white h-screen p-4 w-64 flex flex-col">
-          <div className="flex items-center justify-center mb-10">
-            <img src={PeruMarketERPLogo} className="w-20 h-20 rounded-full object-cover" alt="Logo Peru Market" />
-          </div>
-          <div className="flex-1 flex items-center justify-center">
-            <div className="text-center text-gray-400">
-              <FiBox className="w-12 h-12 mx-auto mb-2" />
-              <p className="text-sm">No tiene módulos asignados</p>
-            </div>
-          </div>
-          <button
-            onClick={handleLogout}
-            className="flex items-center gap-3 p-3 w-full hover:bg-red-600 bg-red-500 rounded-lg transition-colors"
-          >
-            <FiLogOut size={20} className="flex-shrink-0" />
-            <span>Cerrar sesión</span>
-          </button>
+      <Link
+        to={route}
+        className={`${baseClasses} ${isActive ? activeClasses : inactiveClasses} ${!open && !isMobile ? 'justify-center px-0' : ''}`}
+      >
+        <div className={`flex items-center justify-center transition-colors ${!open && !isMobile ? 'w-full' : ''}`}>
+           <Icon 
+            size={20} 
+            className={`flex-shrink-0 transition-colors ${isActive ? "text-amber-500" : "text-gray-400 group-hover:text-gray-600"}`} 
+          />
         </div>
-      </div>
+        
+        {(open || isMobile) && (
+          <span className="truncate flex-1">{name}</span>
+        )}
+
+        {(open || isMobile) && isActive && (
+          <div className="w-1.5 h-1.5 rounded-full bg-amber-500 mr-1"></div>
+        )}
+      </Link>
     );
-  }
+  };
+
+  if (loading) return <div className="w-64 h-screen bg-gray-50 animate-pulse hidden lg:block border-r border-gray-200" />;
 
   return (
     <>
-      {/* Overlay para móvil */}
+      {/* Overlay Móvil */}
       {mobileOpen && (
-        <div 
-          className="fixed inset-0 bg-black bg-opacity-50 z-40 lg:hidden"
-          onClick={() => setMobileOpen(false)}
-        />
+        <div className="fixed inset-0 bg-gray-900/20 backdrop-blur-[2px] z-40 lg:hidden transition-opacity" onClick={() => setMobileOpen(false)} />
       )}
 
-      {/* Sidebar para desktop */}
-      <div className="hidden lg:block">
+      {/* --- SIDEBAR DESKTOP (FONDO GRIS) --- */}
+      <div 
+        className={`hidden lg:flex flex-col h-screen bg-[#F5F7FA] transition-all duration-300 relative z-30 
+        border-r border-gray-200/80 
+        ${open ? "w-72" : "w-20"}`}
+      >
+        
+        {/* Toggle Button */}
+        <button
+          onClick={() => setOpen(!open)}
+          className="absolute -right-3 top-9 bg-white border border-gray-200 text-gray-400 hover:text-amber-600 p-1.5 rounded-full shadow-sm hover:shadow-md z-50 transition-all duration-200 transform hover:scale-110"
+        >
+          {open ? <FiChevronLeft size={14} /> : <FiChevronRight size={14} />}
+        </button>
+
+        {/* 1. Header & Logo */}
+        <div className="p-6 pb-2 flex items-center justify-center">
+          <div className={`flex items-center gap-3 transition-all duration-300 ${!open && 'justify-center'}`}>
+            <img 
+              src={PeruMarketERPLogo} 
+              className={`rounded-xl object-cover transition-all duration-300 shadow-sm ${open ? "w-10 h-10" : "w-9 h-9"}`} 
+              alt="Logo" 
+            />
+            {open && (
+              <div className="flex flex-col animate-fadeIn">
+                <span className="font-bold text-gray-800 text-lg leading-tight tracking-tight">PeruMarket</span>
+                <span className="text-[10px] text-gray-400 font-bold tracking-widest uppercase">Workspace</span>
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* 2. Search Bar (Estilo Input Blanco sobre Fondo Gris) */}
+        <div className={`px-5 py-4 transition-all duration-300 ${!open ? 'opacity-0 pointer-events-none hidden' : 'opacity-100'}`}>
+          <div className="relative group">
+            <FiSearch className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 group-focus-within:text-amber-500 transition-colors" />
+            <input 
+              type="text" 
+              placeholder="Buscar..." 
+              className="w-full bg-white text-gray-600 text-sm rounded-xl py-2.5 pl-10 pr-4 outline-none border border-gray-200 shadow-sm focus:border-amber-300 focus:ring-4 focus:ring-amber-500/10 transition-all placeholder-gray-400"
+            />
+          </div>
+        </div>
+
+        {/* 3. Navigation List */}
+        <div className="flex-1 overflow-y-auto px-4 py-2 [&::-webkit-scrollbar]:hidden [-ms-overflow-style:'none'] [scrollbar-width:'none']">
+          {open && <p className="text-[11px] font-bold text-gray-400 uppercase tracking-widest mb-2 px-2">Main Menu</p>}
+          
+          <nav>
+            {modules.map((module) => {
+              const config = getModuleConfig(module.nombre);
+              return <MenuItem key={module.id} name={module.nombre} icon={config.icon} route={config.route} />;
+            })}
+          </nav>
+
+          {/* Configuración al final de la lista o separada */}
+          {open && modules.length > 0 && (
+             <div className="mt-6 pt-4 border-t border-gray-200/60">
+                <p className="text-[11px] font-bold text-gray-400 uppercase tracking-widest mb-2 px-2">Cuenta</p>
+                <MenuItem name="Configuración" icon={FiSettings} route="/settings" />
+             </div>
+          )}
+           {!open && (
+            <div className="mt-4 border-t border-gray-200 pt-4">
+              <MenuItem name="Settings" icon={FiSettings} route="/settings" />
+            </div>
+          )}
+        </div>
+
+        {/* 4. Footer */}
+        <div className="p-4 border-t border-gray-200 bg-gray-100/50">
+          <button
+            onClick={handleLogout}
+            className={`flex items-center gap-3 w-full p-2.5 rounded-xl text-gray-500 hover:bg-white hover:text-red-600 hover:shadow-sm hover:border-gray-200 border border-transparent transition-all duration-200 group ${!open ? 'justify-center' : ''}`}
+          >
+            <FiLogOut size={20} className="flex-shrink-0 group-hover:scale-110 transition-transform" />
+            {open && <span className="text-sm font-medium">Cerrar sesión</span>}
+          </button>
+        </div>
+      </div>
+
+      {/* --- SIDEBAR MÓVIL --- */}
+      <div className="lg:hidden">
+        <button
+          onClick={() => setMobileOpen(true)}
+          className="fixed top-4 left-4 z-30 bg-white text-gray-700 p-2.5 rounded-xl shadow-[0_4px_20px_rgba(0,0,0,0.1)] border border-gray-100 active:scale-95 transition-all"
+        >
+          <FiMenu size={22} />
+        </button>
+
+        {/* Drawer Móvil (Fondo gris también) */}
         <div
-          className={`bg-black text-white h-screen p-4 flex flex-col justify-between transition-all duration-300 ${
-            open ? "w-64" : "w-20"
+          ref={sidebarRef}
+          className={`fixed top-0 left-0 h-full bg-[#F5F7FA] w-[280px] z-50 shadow-[4px_0_30px_rgba(0,0,0,0.15)] transform transition-transform duration-300 flex flex-col ${
+            mobileOpen ? "translate-x-0" : "-translate-x-full"
           }`}
         >
-          {/* ----- TOP SECTION ----- */}
-          <div>
-            <button
-              onClick={() => setOpen(!open)}
-              className="text-white mb-6 text-xl hover:bg-gray-800 p-2 rounded-lg transition-colors"
-            >
-              <FiMenu />
+          <div className="p-5 flex items-center justify-between border-b border-gray-200">
+            <div className="flex items-center gap-3">
+              <img src={PeruMarketERPLogo} className="w-8 h-8 rounded-lg" alt="Logo" />
+              <span className="font-bold text-gray-800">PeruMarket</span>
+            </div>
+            <button onClick={() => setMobileOpen(false)} className="text-gray-400 hover:text-gray-600 p-1">
+              <FiX size={20} />
             </button>
+          </div>
 
-            {/* Logo centrado - MÁS GRANDE */}
-            <div className="flex justify-center mb-10">
-              <img 
-                src={PeruMarketERPLogo} 
-                className={`rounded-full object-cover transition-all duration-300 ${
-                  open ? "w-24 h-24" : "w-16 h-16"
-                }`} 
-                alt="Logo Peru Market" 
+          <div className="p-4 flex-1 overflow-y-auto [&::-webkit-scrollbar]:hidden">
+            <div className="relative mb-6">
+              <FiSearch className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+              <input 
+                type="text" 
+                placeholder="Buscar..." 
+                className="w-full bg-white text-gray-700 text-sm rounded-xl py-2.5 pl-10 pr-4 outline-none border border-gray-200 shadow-sm focus:ring-2 focus:ring-amber-500/20"
               />
             </div>
 
-            <nav className="space-y-2">
+            <p className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-2">Menu</p>
+            <div>
               {modules.map((module) => {
-                const { icon: Icon, route } = getModuleConfig(module.nombre);
-                return (
-                  <Link 
-                    key={module.id}
-                    to={route} 
-                    className="flex items-center gap-3 p-3 hover:bg-gray-800 rounded-lg transition-colors group"
-                  >
-                    <Icon size={20} className="flex-shrink-0" />
-                    {open && <span className="group-hover:text-gray-200">{module.nombre}</span>}
-                  </Link>
-                );
+                const config = getModuleConfig(module.nombre);
+                return <MenuItem key={module.id} name={module.nombre} icon={config.icon} route={config.route} isMobile={true} />;
               })}
-            </nav>
+            </div>
+            
+            <div className="border-t border-gray-200 my-4 pt-4">
+              <MenuItem name="Configuración" icon={FiSettings} route="/settings" isMobile={true} />
+            </div>
           </div>
 
-          {/* ----- LOGOUT BOTTOM SECTION ----- */}
-          <div className="mt-8">
+          <div className="p-4 border-t border-gray-200 bg-gray-100">
             <button
               onClick={handleLogout}
-              className="flex items-center gap-3 p-3 w-full hover:bg-red-600 bg-red-500 rounded-lg transition-colors group"
+              className="flex items-center justify-center gap-3 w-full p-3 rounded-xl bg-white border border-gray-200 text-red-500 font-medium hover:bg-red-50 hover:border-red-100 transition-all shadow-sm"
             >
-              <FiLogOut size={20} className="flex-shrink-0" />
-              {open && <span className="group-hover:text-white">Cerrar sesión</span>}
+              <FiLogOut size={18} />
+              <span>Cerrar sesión</span>
             </button>
           </div>
         </div>
       </div>
 
-      {/* Sidebar para móvil */}
-      <div className="lg:hidden">
-        {/* Botón flotante para abrir sidebar en móvil */}
-        <button
-          onClick={() => setMobileOpen(true)}
-          className="fixed top-4 left-4 z-30 bg-black text-white p-3 rounded-full shadow-lg lg:hidden"
-        >
-          <FiMenu size={20} />
-        </button>
-
-        {/* Sidebar móvil */}
-        <div
-          ref={sidebarRef}
-          className={`fixed top-0 left-0 h-full bg-black text-white z-50 flex flex-col justify-between transition-transform duration-300 ${
-            mobileOpen ? "translate-x-0" : "-translate-x-full"
-          } w-64`}
-          onTouchStart={onTouchStart}
-          onTouchMove={onTouchMove}
-          onTouchEnd={onTouchEnd}
-        >
-          <div className="flex flex-col h-full">
-            {/* ----- TOP SECTION ----- */}
-            <div className="flex-1 overflow-y-auto">
-              <div className="p-4">
-                {/* Header móvil con logo centrado - MÁS GRANDE */}
-                <div className="flex flex-col items-center mb-8">
-                  <div className="flex items-center justify-between w-full mb-6">
-                    <div className="w-6"></div> {/* Espacio para balancear */}
-                    <button
-                      onClick={() => setMobileOpen(false)}
-                      className="text-white p-2 hover:bg-gray-800 rounded-lg transition-colors"
-                    >
-                      <FiX size={18} />
-                    </button>
-                  </div>
-                  <img 
-                    src={PeruMarketERPLogo} 
-                    className="w-24 h-24 rounded-full object-cover mb-4" 
-                    alt="Logo Peru Market" 
-                  />
-                </div>
-
-                {/* Menú móvil */}
-                <nav className="space-y-1">
-                  {modules.map((module) => {
-                    const { icon: Icon, route } = getModuleConfig(module.nombre);
-                    return (
-                      <Link 
-                        key={module.id}
-                        to={route} 
-                        className="flex items-center gap-3 p-3 hover:bg-gray-800 rounded-lg transition-colors group"
-                        onClick={() => setMobileOpen(false)}
-                      >
-                        <Icon size={18} className="flex-shrink-0" />
-                        <span className="group-hover:text-gray-200 text-sm">{module.nombre}</span>
-                      </Link>
-                    );
-                  })}
-                </nav>
-              </div>
-            </div>
-
-            {/* ----- LOGOUT BOTTOM SECTION ----- */}
-            <div className="p-4 border-t border-gray-700">
-              <button
-                onClick={handleLogout}
-                className="flex items-center justify-center gap-3 p-3 w-full hover:bg-red-600 bg-red-500 rounded-lg transition-colors group"
-              >
-                <FiLogOut size={18} className="flex-shrink-0" />
-                <span className="group-hover:text-white text-sm">Cerrar sesión</span>
-              </button>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      {/* Indicador de swipe para móvil - Solo mostrar cuando el menú está cerrado */}
-      {!mobileOpen && (
-        <div className="lg:hidden fixed bottom-4 left-1/2 transform -translate-x-1/2 bg-black bg-opacity-80 text-white px-4 py-2 rounded-full text-xs">
-          ← Desliza desde el borde para abrir →
-        </div>
-      )}
-
-      {/* Modal de confirmación de logout */}
       <ModalConfirmarLogout
         isOpen={showLogoutModal}
         onConfirm={confirmLogout}
-        onCancel={cancelLogout}
+        onCancel={() => setShowLogoutModal(false)}
       />
     </>
   );
