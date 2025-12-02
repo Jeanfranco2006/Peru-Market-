@@ -1,43 +1,11 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { FaTimes, FaShoppingCart, FaTrash, FaMinus, FaPlus, FaSearch, FaUserPlus } from 'react-icons/fa';
 import ModalCliente from './ModalCliente';
 import ModalPago from './ModalPago';
 import type { Cliente } from '../../types/Client';
-
-
-
-interface categoria {
-  id: number;
-  nombre: string;
-}
-interface Producto {
-  id: number;
-  nombre: string;
-  precio: number;
-  imagen?: string;
-  stock: number;
-  categoria: categoria;
-}
-
-interface ProductoVenta {
-  producto: Producto;
-  cantidad: number;
-  subtotal: number;
-}
-
-interface MetodoPago {
-  id: number;
-  nombre: string;
-  descripcion: string;
-  estado: string;
-}
-
-interface DetallePago {
-  id_metodo_pago: number;
-  monto: number;
-  referencia: string;
-}
+import type { DetallePago, MetodoPago, Producto, ProductoVenta } from '../../types/ventas';
+import { ventaService } from '../../services/ventaService';
 
 const VentasList: React.FC = () => {
   const navigate = useNavigate();
@@ -51,7 +19,8 @@ const VentasList: React.FC = () => {
   const [clientes, setClientes] = useState<Cliente[]>([]);
   const [clientesFiltrados, setClientesFiltrados] = useState<Cliente[]>([]);
   const [metodosPago, setMetodosPago] = useState<MetodoPago[]>([]);
-  const [almacenes, setAlmacenes] = useState([]);
+  const [almacenes, setAlmacenes] = useState<any[]>([]);
+  const [loading, setLoading] = useState(false);
 
   // Estados de modales
   const [mostrarModalCliente, setMostrarModalCliente] = useState(false);
@@ -59,70 +28,29 @@ const VentasList: React.FC = () => {
 
   // Inicializar datos
   useEffect(() => {
-
-    cargarMetodosPago();
-    fetchClientes();
-    fetchProductos();
-    fetchAlmacenes();
+    cargarDatosIniciales();
   }, []);
 
-
-  const fetchProductos = async () => {
+  const cargarDatosIniciales = async () => {
     try {
-      const response = await fetch("http://localhost:8080/api/productos");
-      const data = await response.json();
-
-      // ADAPTAR datos reales a tu modelo
-      const productosAdaptados: Producto[] = data.map((p: any) => ({
-        id: p.id,
-        nombre: p.nombre,
-        precio: p.precioVenta,      // <<--- aquí el precio real
-        imagen: p.imagen ?? "",
-        stock: p.stockActual,       // <<--- aquí el stock real
-        categoria: {
-          id: p.categoriaId ?? 0,
-          nombre: p.categoriaNombre ?? "Sin categoría"
-        }
-      }));
-
-      setProductos(productosAdaptados);
+      setLoading(true);
+      const [metodos, clientesData, productosData, almacenesData] = await Promise.all([
+        ventaService.cargarMetodosPago(),
+        ventaService.fetchClientes(),
+        ventaService.fetchProductos(),
+        ventaService.fetchAlmacenes()
+      ]);
+      
+      setMetodosPago(metodos);
+      setClientes(clientesData);
+      setProductos(productosData);
+      setAlmacenes(almacenesData);
     } catch (error) {
-      console.error("Error cargando productos:", error);
+      console.error('Error cargando datos iniciales:', error);
+      alert('Error al cargar los datos iniciales');
+    } finally {
+      setLoading(false);
     }
-  };
-
-  const fetchAlmacenes = async () => {
-    try {
-      const response = await fetch("http://localhost:8080/api/almacenes");
-      const data = await response.json();
-      setAlmacenes(data);
-    } catch (error) {
-      console.error("Error cargando almacenes:", error);
-    }
-  };
-
-
-  // Cargar clientes desde BD
-  const fetchClientes = async () => {
-    try {
-      const response = await fetch('http://localhost:8080/api/clientes'); // tu endpoint real
-      const data: Cliente[] = await response.json();
-      setClientes(data);
-    } catch (error) {
-      console.error('Error al cargar clientes:', error);
-    }
-  };
-
-  // Cargar métodos de pago
-  const cargarMetodosPago = () => {
-    const metodosEjemplo: MetodoPago[] = [
-      { id: 1, nombre: 'Efectivo', descripcion: 'Pago en efectivo', estado: 'activo' },
-      { id: 2, nombre: 'Tarjeta Débito', descripcion: 'Pago con tarjeta de débito', estado: 'activo' },
-      { id: 3, nombre: 'Tarjeta Crédito', descripcion: 'Pago con tarjeta de crédito', estado: 'activo' },
-      { id: 4, nombre: 'Transferencia', descripcion: 'Transferencia bancaria', estado: 'activo' },
-      { id: 5, nombre: 'Yape', descripcion: 'Pago con Yape', estado: 'activo' }
-    ];
-    setMetodosPago(metodosEjemplo);
   };
 
   // Filtrar clientes
@@ -141,43 +69,35 @@ const VentasList: React.FC = () => {
   }, [busquedaCliente, clientes]);
 
   // Funciones del carrito
-  const limpiarCarrito = () => {
-    // 1. Devolver el stock al inventario visual
+  const limpiarCarrito = useCallback(() => {
+    if (carrito.length === 0) return;
+    
+    if (!confirm('¿Estás seguro de limpiar el carrito?')) return;
+
     const productosActualizados = productos.map(p => {
       const itemCarrito = carrito.find(item => item.producto.id === p.id);
-
       if (!itemCarrito) return p;
-
-      return {
-        ...p,
-        stock: p.stock + itemCarrito.cantidad
-      };
+      return { ...p, stock: p.stock + itemCarrito.cantidad };
     });
 
     setProductos(productosActualizados);
-
-    // 2. Limpiar carrito
     setCarrito([]);
-  };
+  }, [carrito, productos]);
 
-  const agregarAlCarrito = (producto: Producto) => {
-    // 1. Evitar agregar si no hay stock
+  const agregarAlCarrito = useCallback((producto: Producto) => {
     if (producto.stock <= 0) {
       alert('❌ No hay stock disponible');
       return;
     }
 
-    // 2. Verificar si ya está en el carrito
     const existe = carrito.find(item => item.producto.id === producto.id);
 
     if (existe) {
-      // Si existe pero ya no hay más stock para aumentar
       if (producto.stock - 1 < 0) {
         alert('❌ No hay más unidades disponibles');
         return;
       }
 
-      // 3. Aumentar cantidad en carrito
       setCarrito(carrito.map(item =>
         item.producto.id === producto.id
           ? {
@@ -188,36 +108,30 @@ const VentasList: React.FC = () => {
           : item
       ));
     } else {
-      // 4. Agregar nuevo producto al carrito
       setCarrito([...carrito, { producto, cantidad: 1, subtotal: producto.precio }]);
     }
 
-    // 5. Descontar stock en la lista de productos
     setProductos(productos.map(p =>
       p.id === producto.id
         ? { ...p, stock: p.stock - 1 }
         : p
     ));
-  };
+  }, [carrito, productos]);
 
-  const actualizarCantidad = (id: number, cantidad: number) => {
+  const actualizarCantidad = useCallback((id: number, cantidad: number) => {
     const item = carrito.find(i => i.producto.id === id);
     if (!item) return;
 
-    const diferencia = cantidad - item.cantidad; // positivo = aumenta, negativo = disminuye
+    const diferencia = cantidad - item.cantidad;
 
-    // Si diferencia es positiva → el usuario quiere añadir más
     if (diferencia > 0) {
       const producto = productos.find(p => p.id === id);
-      if (!producto) return;
-
-      if (producto.stock < diferencia) {
+      if (!producto || producto.stock < diferencia) {
         alert('❌ No hay stock suficiente para aumentar la cantidad');
         return;
       }
     }
 
-    // 1. Actualizar carrito
     if (cantidad === 0) {
       setCarrito(carrito.filter(item => item.producto.id !== id));
     } else {
@@ -228,24 +142,17 @@ const VentasList: React.FC = () => {
       ));
     }
 
-    // 2. Actualizar stock visual
     setProductos(productos.map(p =>
       p.id === id
         ? { ...p, stock: p.stock - diferencia }
         : p
     ));
-  };
+  }, [carrito, productos]);
 
-
-  // Registrar cliente (POST a BD)
-  const handleRegistrarCliente = async (clienteData: Omit<Cliente, 'id'>) => {
+  // Registrar cliente - CORREGIDO: Usa 'clienteid' en lugar de 'id'
+  const handleRegistrarCliente = async (clienteData: Omit<Cliente, 'clienteid'>) => {
     try {
-      const response = await fetch('http://localhost:8080/api/clientes', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(clienteData)
-      });
-      const nuevoCliente: Cliente = await response.json();
+      const nuevoCliente = await ventaService.registrarCliente(clienteData);
       setClientes([...clientes, nuevoCliente]);
       setClienteSeleccionado(nuevoCliente);
       setBusquedaCliente('');
@@ -257,96 +164,93 @@ const VentasList: React.FC = () => {
     }
   };
 
-  // Procesar venta, cancelar venta, filtrado de productos y cálculo de totales
+  // Procesar venta
   const abrirModalPago = () => {
     if (carrito.length === 0) return alert('Agrega productos al carrito primero');
     if (!clienteSeleccionado) return alert('Selecciona un cliente primero');
     setMostrarModalPago(true);
   };
+
+  // Procesar venta - CORREGIDO
   const procesarVenta = async (detallesPago: DetallePago[]) => {
     try {
-      if (!clienteSeleccionado) return alert("Selecciona un cliente primero");
-      if (carrito.length === 0) return alert("Agrega productos al carrito primero");
-
-      // 1️⃣ Totales
-      const subtotal = carrito.reduce((sum, item) => sum + item.subtotal - (item.subtotal * 0.18), 0);
-      const subtotalproduct = carrito.reduce((sum, item) => sum + item.subtotal, 0);
-      const igv = subtotalproduct * 0.18;
-      const total =  subtotal+ igv;
-
-      // 2️⃣ Obtener usuario logueado y almacén seleccionado
-      const idUsuario = Number(localStorage.getItem("usuarioId")); // o desde tu estado global
-      const idAlmacen = Number(localStorage.getItem("almacenId")) || 1; // fallback 1 si no hay seleccionado
-      if (!idUsuario || idUsuario <= 0) {
-        return alert("❌ Usuario no válido. Por favor, inicia sesión de nuevo.");
+      if (!clienteSeleccionado || !clienteSeleccionado.clienteid) {
+        alert("⚠️ Selecciona un cliente válido primero");
+        return;
+      }
+      
+      if (carrito.length === 0) {
+        alert("⚠️ Agrega productos al carrito primero");
+        return;
       }
 
-      if (!idAlmacen || idAlmacen <= 0) {
-        return alert("❌ Almacén no válido. Selecciona un almacén.");
+      // Validar que los pagos sumen el total
+      const totalPagos = detallesPago.reduce((sum, pago) => sum + pago.monto, 0);
+      const { total } = ventaService.calcularTotales(carrito);
+      
+      if (Math.abs(totalPagos - total) > 0.01) {
+        alert(`⚠️ El total de los pagos (S/ ${totalPagos.toFixed(2)}) no coincide con el total de la venta (S/ ${total.toFixed(2)})`);
+        return;
       }
-      // 3️⃣ Preparar body para backend
+
+      const { idUsuario, idAlmacen } = ventaService.obtenerDatosSesion();
+      const { subtotal, igv, total: totalVenta } = ventaService.calcularTotales(carrito);
+
+      // Preparar datos de la venta
       const ventaBody = {
-        idCliente: clienteSeleccionado?.clienteid, // o clienteId según tu DTO
+        idCliente: clienteSeleccionado.clienteid,
         idUsuario,
         idAlmacen,
         subtotal,
         igv,
-        total,
+        total: totalVenta,
         detalles: carrito.map(item => ({
           idProducto: item.producto.id,
           cantidad: item.cantidad,
           precioUnitario: item.producto.precio,
           subtotal: item.subtotal
         })),
-        pagos: detallesPago
+        pagos: detallesPago.map(pago => ({
+          id_metodo_pago: pago.id_metodo_pago,
+          monto: pago.monto,
+          referencia: pago.referencia || ''
+        }))
       };
 
-      // 4️⃣ Registrar venta en backend
-      const ventaResponse = await fetch("http://localhost:8080/api/ventas", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(ventaBody)
-      });
+      console.log('Venta body preparado:', ventaBody);
 
-      if (!ventaResponse.ok) {
-        const errorText = await ventaResponse.text();
-        console.error("ERROR BACKEND:", errorText);
-        throw new Error("❌ Error al registrar la venta");
-      }
+      // Registrar venta
+      const resultado = await ventaService.procesarVenta(ventaBody);
 
-      // 5️⃣ Actualizar stock en backend para cada producto
-      for (const item of carrito) {
-        const nuevoStock = item.producto.stock; // stock visual ya descontado
+      // Actualizar stock de cada producto
+      await Promise.all(
+        carrito.map(item => 
+          ventaService.actualizarStock(item.producto.id, item.producto.stock)
+        )
+      );
 
-        await fetch(`http://localhost:8080/api/productos/${item.producto.id}/stock`, {
-          method: "PUT",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ stock: nuevoStock })
-        });
-      }
+      alert(`✅ Venta #${resultado.id || resultado.numeroComprobante || '000'} procesada correctamente. Total: S/ ${totalVenta.toFixed(2)}`);
 
-      // 6️⃣ Confirmación
-      alert(`✅ Venta procesada correctamente. Total S/ ${total.toFixed(2)}`);
-
-      // 7️⃣ Reset del carrito y cliente
+      // Reset del estado
       setCarrito([]);
       setClienteSeleccionado(null);
       setBusquedaCliente('');
       setMostrarModalPago(false);
 
+      // Recargar productos para actualizar stock
+      await ventaService.fetchProductos().then(setProductos);
+
       navigate('/ventas');
 
-    } catch (error) {
-      console.error(error);
-      alert("❌ Ocurrió un error al procesar la venta");
+    } catch (error: any) {
+      console.error('Error en procesarVenta:', error);
+      alert(error.message || "❌ Ocurrió un error al procesar la venta");
     }
   };
 
-
-
   const cancelarVenta = () => {
     if (carrito.length > 0 && confirm('¿Seguro que quieres cancelar la venta?')) {
-      setCarrito([]);
+      limpiarCarrito();
       setClienteSeleccionado(null);
       setBusquedaCliente('');
     } else {
@@ -355,15 +259,24 @@ const VentasList: React.FC = () => {
   };
 
   // Filtrar productos
-  const productosFiltrados = productos.filter(producto =>
-    producto.nombre.toLowerCase().includes(busquedaProducto.toLowerCase()) ||
-    producto.categoria.nombre.toLowerCase().includes(busquedaProducto.toLowerCase())
-  );
+  const productosFiltrados = useMemo(() => 
+    productos.filter(producto =>
+      producto.nombre.toLowerCase().includes(busquedaProducto.toLowerCase()) ||
+      producto.categoria.nombre.toLowerCase().includes(busquedaProducto.toLowerCase())
+    ), [productos, busquedaProducto]);
 
-  const subtotal = carrito.reduce((sum, item) => sum + item.subtotal - (item.subtotal * 0.18), 0);
-  const subtotalproduct = carrito.reduce((sum, item) => sum + item.subtotal, 0);
-  const igv = subtotalproduct * 0.18;
-  const total = subtotal + igv;
+  const { subtotal, igv, total } = ventaService.calcularTotales(carrito);
+
+  if (loading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gray-100">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto"></div>
+          <p className="mt-4 text-gray-600">Cargando datos...</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-gray-100 p-4 sm:p-6">
@@ -381,7 +294,8 @@ const VentasList: React.FC = () => {
             </button>
             <button
               onClick={abrirModalPago}
-              className="flex items-center justify-center bg-blue-600 text-white px-4 sm:px-6 py-2 rounded-lg hover:bg-blue-700 transition-colors"
+              disabled={carrito.length === 0 || !clienteSeleccionado}
+              className="flex items-center justify-center bg-blue-600 text-white px-4 sm:px-6 py-2 rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
             >
               <FaShoppingCart className="mr-2" />
               <span className="text-sm sm:text-base">Procesar Venta</span>
@@ -415,9 +329,12 @@ const VentasList: React.FC = () => {
                 >
                   <div className="p-3 sm:p-4">
                     <img
-                      src={producto.imagen}
+                      src={producto.imagen || "/default-product.png"}
                       alt={producto.nombre}
                       className="w-full h-24 sm:h-32 object-cover rounded-md mb-2 sm:mb-3"
+                      onError={(e) => {
+                        (e.target as HTMLImageElement).src = "/default-product.png";
+                      }}
                     />
                     <h3 className="font-semibold text-gray-800 mb-1 text-sm sm:text-base line-clamp-2">{producto.nombre}</h3>
                     <p className="text-xs sm:text-sm text-gray-600 mb-2">{producto.categoria.nombre}</p>
@@ -427,16 +344,19 @@ const VentasList: React.FC = () => {
                       </span>
                       <span className={`text-xs sm:text-sm px-2 py-1 rounded-full ${producto.stock > 10
                         ? 'bg-green-100 text-green-800'
-                        : 'bg-yellow-100 text-yellow-800'
+                        : producto.stock > 0
+                        ? 'bg-yellow-100 text-yellow-800'
+                        : 'bg-red-100 text-red-800'
                         }`}>
                         Stock: {producto.stock}
                       </span>
                     </div>
                     <button
                       onClick={() => agregarAlCarrito(producto)}
-                      className="w-full bg-green-600 text-white py-2 rounded-lg hover:bg-green-700 transition-colors font-medium text-sm sm:text-base"
+                      disabled={producto.stock <= 0}
+                      className="w-full bg-green-600 text-white py-2 rounded-lg hover:bg-green-700 transition-colors font-medium text-sm sm:text-base disabled:opacity-50 disabled:cursor-not-allowed"
                     >
-                      Agregar al Carrito
+                      {producto.stock > 0 ? 'Agregar al Carrito' : 'Sin Stock'}
                     </button>
                   </div>
                 </div>
@@ -556,7 +476,6 @@ const VentasList: React.FC = () => {
                     key={item.producto.id}
                     className="flex items-center justify-between p-2 sm:p-3 border rounded-lg"
                   >
-                    {/* --- INFORMACIÓN DEL PRODUCTO ---- */}
                     <div className="flex-1 min-w-0">
                       <p className="font-medium text-xs sm:text-sm truncate">
                         {item.producto.nombre}
@@ -566,10 +485,7 @@ const VentasList: React.FC = () => {
                       </p>
                     </div>
 
-                    {/* --- CONTROLES DE CANTIDAD ---- */}
                     <div className="flex items-center gap-1 sm:gap-2 ml-2">
-
-                      {/* Botón - */}
                       <button
                         onClick={(e) => {
                           e.stopPropagation();
@@ -580,7 +496,6 @@ const VentasList: React.FC = () => {
                         <FaMinus size={8} />
                       </button>
 
-                      {/* Input de cantidad */}
                       <input
                         type="number"
                         value={item.cantidad}
@@ -590,9 +505,9 @@ const VentasList: React.FC = () => {
                         }}
                         onClick={(e) => e.stopPropagation()}
                         className="w-10 sm:w-12 text-center text-xs sm:text-sm border rounded-md no-spinner"
+                        min="1"
                       />
 
-                      {/* Botón + */}
                       <button
                         onClick={(e) => {
                           e.stopPropagation();
@@ -604,7 +519,6 @@ const VentasList: React.FC = () => {
                       </button>
                     </div>
 
-                    {/* Subtotal */}
                     <span className="font-semibold w-14 sm:w-20 text-right text-xs sm:text-sm">
                       S/ {item.subtotal.toFixed(2)}
                     </span>
@@ -612,7 +526,6 @@ const VentasList: React.FC = () => {
                 ))
               )}
             </div>
-
 
             {/* Resumen de compra */}
             <div className="border-t pt-3 sm:pt-4">

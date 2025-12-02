@@ -1,0 +1,56 @@
+ export interface categoria {
+  id: number;
+  nombre: string;
+}
+ export interface Producto {
+  id: number;
+  nombre: string;
+  precio: number;
+  imagen?: string;
+  stock: number;
+  categoria: categoria;
+}
+
+ export interface ProductoVenta {
+  producto: Producto;
+  cantidad: number;
+  subtotal: number;
+}
+
+ export interface MetodoPago {
+  id: number;
+  nombre: string;
+  descripcion: string;
+  estado: string;
+}
+
+ export interface DetallePago {
+  id_metodo_pago: number;
+  monto: number;
+  referencia: string;
+}
+
+
+
+export interface VentaRequest {
+  idCliente: number;
+  idUsuario: number;
+  idAlmacen: number;
+  subtotal: number;
+  igv: number;
+  total: number;
+  detalles: Array<{
+    idProducto: number;
+    cantidad: number;
+    precioUnitario: number;
+    subtotal: number;
+  }>;
+  pagos: DetallePago[];
+}
+
+export interface MetodoPago {
+  id: number;
+  nombre: string;
+  descripcion: string;
+  estado: string;
+}
