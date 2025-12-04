@@ -1,4 +1,3 @@
-import { useState, useMemo, useEffect, useCallback } from 'react';
 import { Link } from 'react-router-dom';
 import {
     IoMdArrowRoundBack,
@@ -7,179 +6,40 @@ import {
     IoIosPeople,
     IoIosCube,
     IoIosStats,
-    IoMdCreate, // Icono para editar
-    IoIosSave, // Icono para guardar
-    IoIosWarning, // Icono para advertencias
-    IoIosCheckmarkCircle // Icono para éxito
+    IoMdCreate,
+    IoIosSave,
+    IoIosWarning,
+    IoIosCheckmarkCircle
 } from 'react-icons/io';
 
-// Interfaz para los datos de productos que vienen del backend
-interface Product {
-    id: number;
-    almacenNombre: string; // Corregido: Usamos el nombre del almacén, que sí viene en los datos
-    stockMaximo: number; // Necesitamos el stock máximo para calcular la capacidad total en unidades
-    stockActual: number;
-    pesoKg: number; // Asumo que usaremos el peso para un cálculo de capacidad
-}
+import { useWarehouseList } from '../../hooks/inventario/useWarehouseList';
+import { useWarehouseEdit } from '../../hooks/inventario/useWarehouseEdit';
 
-// Interfaz adaptada al DTO del backend (AlmacenDTO)
-interface Warehouse {
-    id: number;
-    nombre: string;
-    codigo: string;
-    estado: 'ACTIVO' | 'INACTIVO' | string; // Coincide con el Enum del backend
-    direccion: string;
-    responsable: string;
-    capacidadM3: number; // Capacidad Total (BigDecimal en backend, number aquí)
-    
-    // Propiedades simuladas para la visualización (ya que el módulo de Inventario aún no está completo)
-    productsCount: number; 
-    capacityUsed: number; // Stock actual total en el almacén
-    capacityTotalUnits: number; // Capacidad total en unidades en el almacén
-}
-
-const API_ALMACENES_URL = 'http://localhost:8080/api/almacenes';
-const API_PRODUCTOS_URL = 'http://localhost:8080/api/productos';
-
-// Renombrado de WarehouseManagement a InventoryAlmacenes (como solicitaste)
 export default function InventoryAlmacenes() {
-    const [searchTerm, setSearchTerm] = useState('');
-    const [warehouses, setWarehouses] = useState<Warehouse[]>([]);
-    const [loading, setLoading] = useState(true);
-    const [error, setError] = useState<string | null>(null);
-    const [totalProductTypes, setTotalProductTypes] = useState(0);
+    // 1. Hook de Lista y Datos
+    const {
+        warehouses,
+        setWarehouses,
+        loading,
+        error,
+        totalProductTypes,
+        activeWarehouses,
+        totalProductUnits,
+        searchTerm,
+        setSearchTerm,
+        filteredWarehouses
+    } = useWarehouseList();
 
-    // Estados para el modal de edición
-    const [showEditModal, setShowEditModal] = useState(false);
-    const [selectedWarehouse, setSelectedWarehouse] = useState<Warehouse | null>(null);
-    const [notification, setNotification] = useState<{ message: string; type: 'success' | 'error' } | null>(null);
-
-
-    const fetchWarehouses = useCallback(async () => {
-        setLoading(true);
-        setError(null);
-        try {
-            // 1. Obtener los almacenes y los productos en paralelo
-            const [almacenesResponse, productosResponse] = await Promise.all([
-                fetch(API_ALMACENES_URL),
-                fetch(API_PRODUCTOS_URL)
-            ]);
-
-            if (!almacenesResponse.ok) {
-                throw new Error(`Error ${almacenesResponse.status}: No se pudieron cargar los almacenes`);
-            }
-            if (!productosResponse.ok) {
-                throw new Error(`Error ${productosResponse.status}: No se pudieron cargar los productos`);
-            }
-
-            const almacenesData = await almacenesResponse.json();
-            const productosData: Product[] = await productosResponse.json();
-
-            // 3. Contar el número total de tipos de productos únicos
-            setTotalProductTypes(productosData.length);
-
-            // 2. Calcular los datos reales para cada almacén
-            const warehousesWithRealData = almacenesData.map((w: any) => {
-                // Corregido: Filtramos por nombre del almacén en lugar de un ID inexistente
-                const productsInWarehouse = productosData.filter(p => p.almacenNombre === w.nombre);
-                const productsCount = productsInWarehouse.length;
-                
-                // El stock actual total en este almacén
-                const stockActualTotal = productsInWarehouse.reduce((sum, p) => sum + p.stockActual, 0);
-                // La capacidad máxima en unidades es la suma del stock máximo de cada producto en este almacén
-                const stockMaximoTotal = productsInWarehouse.reduce((sum, p) => sum + (p.stockMaximo || 0), 0);
-
-                return {
-                    ...w,
-                    productsCount,
-                    capacityUsed: stockActualTotal,
-                    capacityTotalUnits: stockMaximoTotal,
-                };
-            });
-
-            setWarehouses(warehousesWithRealData);
-        } catch (err: any) {
-            console.error('Error fetching data:', err);
-            setError(`Error al cargar la lista de almacenes: ${err.message}`);
-        } finally {
-            setLoading(false);
-        }
-    }, []);
-
-    useEffect(() => {
-        fetchWarehouses();
-    }, [fetchWarehouses]);
-
-    // Cálculos basados en los datos cargados
-    const totalCapacity = warehouses.reduce((sum, w) => sum + w.capacidadM3, 0);
-    const totalProductUnits = warehouses.reduce((sum, warehouse) => sum + warehouse.capacityUsed, 0);
-    const activeWarehouses = warehouses.filter(w => w.estado === 'ACTIVO').length;
-
-
-    const filteredWarehouses = useMemo(() => {
-        return warehouses.filter(warehouse =>
-            warehouse.nombre.toLowerCase().includes(searchTerm.toLowerCase()) ||
-            warehouse.codigo.toLowerCase().includes(searchTerm.toLowerCase())
-        );
-    }, [searchTerm, warehouses]);
-
-    // --- Funciones para el Modal de Edición ---
-
-    const handleOpenEditModal = (warehouse: Warehouse) => {
-        setSelectedWarehouse(warehouse);
-        setShowEditModal(true);
-    };
-
-    const handleCloseEditModal = () => {
-        setShowEditModal(false);
-        setSelectedWarehouse(null);
-    };
-
-    const handleFormChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
-        if (selectedWarehouse) {
-            const { name, value } = e.target;
-            setSelectedWarehouse({
-                ...selectedWarehouse,
-                [name]: name === 'capacidadM3' ? parseFloat(value) : value,
-            });
-        }
-    };
-
-    const handleUpdateWarehouse = async (e: React.FormEvent) => {
-        e.preventDefault();
-        if (!selectedWarehouse) return;
-
-        try {
-            const response = await fetch(`${API_ALMACENES_URL}/${selectedWarehouse.id}`, {
-                method: 'PUT',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    nombre: selectedWarehouse.nombre,
-                    codigo: selectedWarehouse.codigo,
-                    direccion: selectedWarehouse.direccion,
-                    responsable: selectedWarehouse.responsable,
-                    capacidadM3: selectedWarehouse.capacidadM3,
-                    estado: selectedWarehouse.estado,
-                }),
-            });
-
-            if (!response.ok) {
-                const errorData = await response.json();
-                throw new Error(errorData.message || 'Error al actualizar el almacén');
-            }
-
-            // Actualizar la lista de almacenes en el estado
-            setWarehouses(warehouses.map(w => w.id === selectedWarehouse.id ? selectedWarehouse : w));
-            setNotification({ message: 'Almacén actualizado correctamente', type: 'success' });
-            handleCloseEditModal();
-
-        } catch (err: any) {
-            setNotification({ message: err.message, type: 'error' });
-        } finally {
-            setTimeout(() => setNotification(null), 3000);
-        }
-    };
-
+    // 2. Hook de Edición (necesita acceso a warehouses y setWarehouses para actualizar la lista)
+    const {
+        showEditModal,
+        selectedWarehouse,
+        notification,
+        handleOpenEditModal,
+        handleCloseEditModal,
+        handleFormChange,
+        handleUpdateWarehouse
+    } = useWarehouseEdit(warehouses, setWarehouses);
 
     if (loading) return <div className="p-6 text-center text-gray-500">Cargando almacenes...</div>;
     if (error) return <div className="p-6 text-center text-red-600 border border-red-300 bg-red-50 rounded-lg">Error: {error}</div>;
@@ -256,13 +116,11 @@ export default function InventoryAlmacenes() {
             {/* Lista de Almacenes */}
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                 {filteredWarehouses.map((warehouse) => {
-                    // Cálculo del porcentaje basado en unidades de stock
                     const capacityPercentage = warehouse.capacityTotalUnits > 0 
                         ? Math.round((warehouse.capacityUsed / warehouse.capacityTotalUnits) * 100) 
                         : 0;
                     const progressBarColor = capacityPercentage > 80 ? 'bg-red-500' : capacityPercentage > 50 ? 'bg-yellow-500' : 'bg-green-500';
                     
-                    // Simulación de la capacidad usada en m³
                     const capacityUsedM3 = warehouse.capacityTotalUnits > 0
                         ? (warehouse.capacityUsed / warehouse.capacityTotalUnits) * warehouse.capacidadM3
                         : 0;
@@ -271,7 +129,6 @@ export default function InventoryAlmacenes() {
                         <div key={warehouse.id} className="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden hover:shadow-md transition-shadow">
                             <div className="p-4 border-b border-gray-200 bg-gray-50 flex justify-between items-start">
                                 <div>
-                                    {/* Mapeo del frontend a nombre/codigo del DTO */}
                                     <h3 className="font-semibold text-gray-900 text-lg">{warehouse.nombre}</h3>
                                     <p className="text-sm text-gray-600">Código: {warehouse.codigo}</p>
                                 </div>
@@ -326,7 +183,6 @@ export default function InventoryAlmacenes() {
                         </div>
                     );
                 })}
-
             </div>
 
             {/* Modal de Edición */}

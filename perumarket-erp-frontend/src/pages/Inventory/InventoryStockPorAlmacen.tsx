@@ -1,5 +1,4 @@
-import React, { useState, useMemo, useEffect, useCallback } from 'react';
-import { Link, useParams } from 'react-router-dom';
+import { Link } from 'react-router-dom';
 import {
   IoMdArrowRoundBack,
   IoIosPin,
@@ -8,109 +7,28 @@ import {
   IoIosSearch
 } from 'react-icons/io'; 
 
-// Interfaces que coinciden con los datos de la API
-interface Product {
-  id: number;
-  nombre: string;
-  sku: string;
-  categoria: string;
-  stockActual: number;
-  stockMinimo: number;
-  stockMaximo: number;
-  precioVenta: number;
-  almacenNombre: string;
-  unidad: string;
-  // Asumimos que la ubicación puede no venir de la API, la dejamos opcional
-  ubicacion?: string;
-}
+import { useStockByWarehouse } from '../../hooks/inventario/useStockByWarehouse';
+import type { StockStatusResult } from '../../types/inventario/stock.types';
 
-interface Warehouse {
-  id: number;
-  nombre: string;
-  codigo: string;
-  estado: 'ACTIVO' | 'INACTIVO';
-  direccion: string;
-}
-
-const API_ALMACENES_URL = 'http://localhost:8080/api/almacenes';
-const API_PRODUCTOS_URL = 'http://localhost:8080/api/productos';
+// Función auxiliar de UI (Pura)
+const getStatusClasses = (stock: number, minStock: number): StockStatusResult => {
+  if (stock === 0) return { text: 'Sin Stock', color: 'bg-red-100 text-red-800' };
+  if (stock <= minStock) return { text: 'Stock Bajo', color: 'bg-yellow-100 text-yellow-800' };
+  return { text: 'Disponible', color: 'bg-green-100 text-green-800' };
+};
 
 export default function InventoryStockPorAlmacen() {
-  const { id: warehouseIdParam } = useParams<{ id: string }>();
-  
-  // Estados para manejar los datos de la API
-  const [allProducts, setAllProducts] = useState<Product[]>([]);
-  const [allWarehouses, setAllWarehouses] = useState<Warehouse[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-  
-  const [searchTerm, setSearchTerm] = useState('');
-  const [selectedWarehouse, setSelectedWarehouse] = useState<Warehouse | null>(null);
-
-  const filteredProducts = useMemo(() => {
-    if (!selectedWarehouse) return [];
-    
-    return allProducts.filter(product => {
-      const matchesWarehouse = product.almacenNombre === selectedWarehouse.nombre;
-      const matchesSearch = product.nombre.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        product.sku.toLowerCase().includes(searchTerm.toLowerCase());
-
-      return matchesWarehouse && matchesSearch;
-    });
-  }, [searchTerm, selectedWarehouse, allProducts]);
-
-  const totalStock = filteredProducts.reduce((sum, p) => sum + p.stockActual, 0);
-  const totalValue = filteredProducts.reduce((sum, p) => sum + p.stockActual * p.precioVenta, 0);
-
-  const getStatusClasses = (stock: number, minStock: number): { text: string; color: string; } => {
-    if (stock === 0) return { text: 'Sin Stock', color: 'bg-red-100 text-red-800' };
-    if (stock <= minStock) return { text: 'Stock Bajo', color: 'bg-yellow-100 text-yellow-800' };
-    return { text: 'Disponible', color: 'bg-green-100 text-green-800' };
-  };
-
-  const handleWarehouseChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
-    const selectedId = parseInt(e.target.value);
-    const newWarehouse = allWarehouses.find(w => w.id === selectedId);
-    if (newWarehouse) {
-      setSelectedWarehouse(newWarehouse);
-    }
-  };
-
-  const fetchData = useCallback(async () => {
-    setLoading(true);
-    setError(null);
-    try {
-      const [almacenesResponse, productosResponse] = await Promise.all([
-        fetch(API_ALMACENES_URL),
-        fetch(API_PRODUCTOS_URL)
-      ]);
-
-      if (!almacenesResponse.ok) throw new Error('No se pudieron cargar los almacenes.');
-      if (!productosResponse.ok) throw new Error('No se pudieron cargar los productos.');
-
-      const almacenesData: Warehouse[] = await almacenesResponse.json();
-      const productosData: Product[] = await productosResponse.json();
-
-      setAllWarehouses(almacenesData);
-      setAllProducts(productosData);
-
-      // Establecer el almacén inicial basado en el parámetro de la URL
-      const initialId = warehouseIdParam ? parseInt(warehouseIdParam) : (almacenesData[0]?.id || null);
-      if (initialId) {
-        const initialWarehouse = almacenesData.find(w => w.id === initialId);
-        setSelectedWarehouse(initialWarehouse || almacenesData[0] || null);
-      }
-
-    } catch (err: any) {
-      setError(err.message);
-    } finally {
-      setLoading(false);
-    }
-  }, [warehouseIdParam]);
-
-  useEffect(() => {
-    fetchData();
-  }, [fetchData]);
+  const {
+    allWarehouses,
+    selectedWarehouse,
+    filteredProducts,
+    loading,
+    error,
+    searchTerm,
+    setSearchTerm,
+    handleWarehouseChange,
+    stats
+  } = useStockByWarehouse();
 
   if (loading) return <div className="p-6 text-center text-gray-500">Cargando datos del inventario...</div>;
   if (error) return <div className="p-6 text-center text-red-600 border border-red-300 bg-red-50 rounded-lg">Error: {error}</div>;
@@ -131,6 +49,7 @@ export default function InventoryStockPorAlmacen() {
           </div>
         </div>
       </div>
+      
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
         <div className="bg-white rounded-lg p-6 shadow-sm border border-gray-200">
           <div className="text-2xl font-bold text-gray-900">{filteredProducts.length}</div>
@@ -140,14 +59,14 @@ export default function InventoryStockPorAlmacen() {
           </div>
         </div>
         <div className="bg-white rounded-lg p-6 shadow-sm border border-gray-200">
-          <div className="text-2xl font-bold text-gray-900">{totalStock}</div>
+          <div className="text-2xl font-bold text-gray-900">{stats.totalStock}</div>
           <div className="flex items-center gap-2 text-sm text-gray-600">
             <IoIosStats className="w-5 h-5 text-indigo-600" />
             <span>Unidades Totales</span>
           </div>
         </div>
         <div className="bg-white rounded-lg p-6 shadow-sm border border-gray-200">
-          <div className="text-2xl font-bold text-gray-900">S/{totalValue.toFixed(2)}</div>
+          <div className="text-2xl font-bold text-gray-900">S/{stats.totalValue.toFixed(2)}</div>
           <div className="flex items-center gap-2 text-sm text-gray-600">
             <IoIosStats className="w-5 h-5 text-blue-600" />
             <span>Valor Total de Stock</span>
@@ -159,9 +78,9 @@ export default function InventoryStockPorAlmacen() {
             <IoIosPin className="w-5 h-5 text-red-500" />
             <p className="text-xs text-gray-500 mt-1">{selectedWarehouse?.direccion || 'Sin dirección registrada'}</p>
           </div>
-         
         </div>
       </div>
+
       <div className="bg-white rounded-lg p-4 shadow-sm border border-gray-200 mb-6">
         <div className="flex flex-col lg:flex-row gap-4 justify-between items-start lg:items-center">
           <div className="flex items-center gap-3">

@@ -1,111 +1,117 @@
 import React, { useState, useRef, useEffect } from "react";
-import type { ChangeEvent, DragEvent, FormEvent } from "react"; 
+import type { ChangeEvent, DragEvent, FormEvent } from "react";
 import { Link, useParams, useNavigate } from "react-router-dom";
-import { api } from "../../services/api"; 
+import { api } from "../../services/api";
 import {
-    IoMdArrowRoundBack, IoIosSave, IoIosCube, IoIosClock, IoIosCash, 
-    IoIosArchive, IoIosBarcode, IoIosCloudUpload, IoIosCheckmarkCircle, 
+    IoMdArrowRoundBack, IoIosSave, IoIosCube, IoIosClock, IoIosCash,
+    IoIosArchive, IoIosBarcode, IoIosCloudUpload, IoIosCheckmarkCircle,
     IoIosWarning, IoIosImage
 } from "react-icons/io";
 
 // Definición del endpoint de categorías
 const API_BASE = 'http://localhost:8080/api';
-const API_CATEGORIAS = '/categorias'; 
+const API_CATEGORIAS = '/categorias';
 
 // --- INTERFACES DE TIPADO ---
 interface CategoriaOption { id: number; nombre: string; }
 interface Movimiento {
-    id: number; tipoMovimiento: 'ENTRADA' | 'SALIDA' | string; cantidad: number; 
-    stockAnterior: number; stockNuevo: number; motivo: string; 
+    id: number; tipoMovimiento: 'ENTRADA' | 'SALIDA' | string; cantidad: number;
+    stockAnterior: number; stockNuevo: number; motivo: string;
     nombreAlmacen: string; fechaMovimiento: string; idUsuario: number;
 }
 interface ProductState {
-    id: number | null; nombre: string; descripcion: string; sku: string; 
-    precioVenta: number; precioCompra: number; unidadMedida: string; 
-    pesoKg: number; imagen: string; estado: string; 
-    stockActual: number; stockMinimo: number; stockMaximo: number; 
-    ubicacionPrincipal: string; codigoBarrasPrincipal: string; 
+    id: number | null; nombre: string; descripcion: string; sku: string;
+    precioVenta: number; precioCompra: number; unidadMedida: string;
+    pesoKg: number; imagen: string; estado: string;
+    stockActual: number; stockMinimo: number; stockMaximo: number;
+    ubicacionPrincipal: string; codigoBarrasPrincipal: string;
     categoriaNombre: string; almacenNombre: string; proveedorRazonSocial: string;
     fechaActualizacion: string | null;
-    categoriaId: string | null; almacenId: number; proveedorId: number; requiereCodigoBarras: boolean; 
+    categoriaId: string | null; almacenId: number; proveedorId: number; requiereCodigoBarras: boolean;
 }
 const initialProductState: ProductState = {
-    id: null, nombre: '', descripcion: '', sku: '', 
-    precioVenta: 0.00, precioCompra: 0.00, unidadMedida: 'UNIDAD', 
-    pesoKg: 0.000, imagen: '', estado: 'ACTIVO', 
-    stockActual: 0, stockMinimo: 10, stockMaximo: 1000, 
-    ubicacionPrincipal: '', codigoBarrasPrincipal: '', 
+    id: null, nombre: '', descripcion: '', sku: '',
+    precioVenta: 0.00, precioCompra: 0.00, unidadMedida: 'UNIDAD',
+    pesoKg: 0.000, imagen: '', estado: 'ACTIVO',
+    stockActual: 0, stockMinimo: 10, stockMaximo: 1000,
+    ubicacionPrincipal: '', codigoBarrasPrincipal: '',
     categoriaNombre: '', almacenNombre: '', proveedorRazonSocial: '',
     fechaActualizacion: null,
-    categoriaId: null, almacenId: 1, proveedorId: 1, requiereCodigoBarras: true, 
+    categoriaId: "", // INICIALIZADO COMO VACIO PARA EL SELECT
+    almacenId: 1, proveedorId: 1, requiereCodigoBarras: true,
 };
 
 const initialOptions = { categorias: [] as CategoriaOption[], }
 
 // Componente para mostrar la imagen del producto
 const ProductImage = ({ imagen, nombre, className = "" }: { imagen: string, nombre: string, className?: string }) => {
-  const [imageError, setImageError] = useState(false);
-  
-  // Si no hay imagen o hay error, mostrar placeholder
-  if (!imagen || imageError) {
+    const [imageError, setImageError] = useState(false);
+
+    // Si no hay imagen o hay error, mostrar placeholder
+    if (!imagen || imageError) {
+        return (
+            <div className={`bg-blue-50 rounded-lg flex flex-col items-center justify-center text-blue-400 ${className}`}>
+                <IoIosImage className="w-8 h-8 mb-2" />
+                <span className="text-xs text-blue-600">Sin imagen</span>
+            </div>
+        );
+    }
+
+    // Construir la URL completa de la imagen INCLUYENDO /api
+    const getImageUrl = (imagePath: string) => {
+        // --- CORRECCIÓN 1: Soporte para Base64 (Vista previa) ---
+        if (imagePath.startsWith('data:')) {
+            return imagePath;
+        }
+        // --------------------------------------------------------
+        if (imagePath.startsWith('http')) {
+            return imagePath;
+        }
+        // Si la ruta ya incluye /api, usarla directamente
+        if (imagePath.startsWith('/api/')) {
+            return `http://localhost:8080${imagePath}`;
+        }
+        // Si no incluye /api, agregarlo
+        const cleanPath = imagePath.startsWith('/') ? imagePath : `/${imagePath}`;
+        return `http://localhost:8080/api${cleanPath}`;
+    };
+
     return (
-      <div className={`bg-blue-50 rounded-lg flex flex-col items-center justify-center text-blue-400 ${className}`}>
-        <IoIosImage className="w-8 h-8 mb-2" />
-        <span className="text-xs text-blue-600">Sin imagen</span>
-      </div>
+        <img
+            src={getImageUrl(imagen)}
+            alt={nombre}
+            className={`object-cover rounded-lg ${className}`}
+            onError={() => setImageError(true)}
+            onLoad={() => setImageError(false)}
+        />
     );
-  }
-
-  // Construir la URL completa de la imagen INCLUYENDO /api
-  const getImageUrl = (imagePath: string) => {
-    if (imagePath.startsWith('http')) {
-      return imagePath;
-    }
-    // Si la ruta ya incluye /api, usarla directamente
-    if (imagePath.startsWith('/api/')) {
-      return `http://localhost:8080${imagePath}`;
-    }
-    // Si no incluye /api, agregarlo
-    const cleanPath = imagePath.startsWith('/') ? imagePath : `/${imagePath}`;
-    return `http://localhost:8080/api${cleanPath}`;
-  };
-
-  return (
-    <img
-      src={getImageUrl(imagen)}
-      alt={nombre}
-      className={`object-cover rounded-lg ${className}`}
-      onError={() => setImageError(true)}
-      onLoad={() => setImageError(false)}
-    />
-  );
 };
 
 const InventoryEditProduct: React.FC = () => {
     const { id } = useParams();
-    const productId = Number(id); 
+    const productId = Number(id);
     const navigate = useNavigate();
 
     const [product, setProduct] = useState<ProductState>(initialProductState);
     const [options, setOptions] = useState(initialOptions);
     const [historial, setHistorial] = useState<Movimiento[]>([]);
     const [loading, setLoading] = useState(true);
-    const [error, setError] = useState<string | null>(null); 
-    const [imagePreview, setImagePreview] = useState<string | null>(null); 
+    const [error, setError] = useState<string | null>(null);
+    const [imagePreview, setImagePreview] = useState<string | null>(null);
     const [uploadedImageFile, setUploadedImageFile] = useState<File | null>(null);
     const [barcodeImageUrl, setBarcodeImageUrl] = useState<string>('');
-    
+
     const [showNotification, setShowNotification] = useState(false);
     const [showDeactivateModal, setShowDeactivateModal] = useState(false);
     const [showCancelModal, setShowCancelModal] = useState(false);
-    const fileInputRef = useRef<HTMLInputElement>(null); 
+    const fileInputRef = useRef<HTMLInputElement>(null);
 
     // --- Función para guardar la imagen en el backend ---
     const saveImageToPublicFolder = async (file: File): Promise<string> => {
         return new Promise((resolve, reject) => {
             const formData = new FormData();
             formData.append('image', file);
-            
+
             // Generar un nombre único para la imagen
             const timestamp = Date.now();
             const randomString = Math.random().toString(36).substring(2, 8);
@@ -119,21 +125,21 @@ const InventoryEditProduct: React.FC = () => {
                 method: 'POST',
                 body: formData,
             })
-            .then(async response => {
-                if (!response.ok) {
-                    const errorText = await response.text();
-                    throw new Error(`Error ${response.status}: ${errorText}`);
-                }
-                return response.json();
-            })
-            .then(data => {
-                console.log('Imagen subida exitosamente:', data);
-                resolve(data.imagePath);
-            })
-            .catch(error => {
-                console.error('Error al guardar imagen:', error);
-                reject(error);
-            });
+                .then(async response => {
+                    if (!response.ok) {
+                        const errorText = await response.text();
+                        throw new Error(`Error ${response.status}: ${errorText}`);
+                    }
+                    return response.json();
+                })
+                .then(data => {
+                    console.log('Imagen subida exitosamente:', data);
+                    resolve(data.imagePath);
+                })
+                .catch(error => {
+                    console.error('Error al guardar imagen:', error);
+                    reject(error);
+                });
         });
     };
 
@@ -150,7 +156,7 @@ const InventoryEditProduct: React.FC = () => {
     // --- LÓGICA DE CARGA INICIAL (GET) ---
     useEffect(() => {
         if (isNaN(productId) || productId === 0) {
-            setError('ID de producto no válido.'); 
+            setError('ID de producto no válido.');
             setLoading(false);
             return;
         }
@@ -160,12 +166,25 @@ const InventoryEditProduct: React.FC = () => {
                 // 1. CARGA REAL DE CATEGORÍAS
                 const categoriasResponse = await api.get(API_CATEGORIAS);
                 const categoriaData: CategoriaOption[] = categoriasResponse.data;
-                setOptions(prev => ({...prev, categorias: categoriaData}));
-                
+                setOptions(prev => ({ ...prev, categorias: categoriaData }));
+
                 // 2. Obtener Producto por ID
                 const productResponse = await api.get(`/productos/${productId}`);
                 const data = productResponse.data;
-                
+
+                // --- CORRECCIÓN 2: Detección Robusta de Categoría ---
+                let categoriaIdDetectado = "";
+                if (data.categoriaId) {
+                    categoriaIdDetectado = String(data.categoriaId);
+                } else if (data.categoria && data.categoria.id) {
+                    categoriaIdDetectado = String(data.categoria.id);
+                } else if (data.categoriaNombre) {
+                    // Intento de rescate por nombre
+                    const found = categoriaData.find(c => c.nombre === data.categoriaNombre);
+                    if (found) categoriaIdDetectado = String(found.id);
+                }
+                // ---------------------------------------------------
+
                 setProduct(prev => ({
                     ...prev, ...data,
                     id: data.id,
@@ -176,31 +195,31 @@ const InventoryEditProduct: React.FC = () => {
                     stockMaximo: data.stockMaximo || 0,
                     stockActual: data.stockActual || 0,
                     imagen: data.imagen || '',
-                    almacenId: 1, proveedorId: 1, 
-                    
-                    // SOLUCIÓN: Convertimos el ID a STRING para que el selector mantenga el valor
-                    categoriaId: data.categoriaId ? String(data.categoriaId) : null, 
+                    almacenId: 1, proveedorId: 1,
+
+                    // Asignamos el ID corregido
+                    categoriaId: categoriaIdDetectado,
                 }));
-                
+
                 // Configurar preview de imagen
                 if (data.imagen) {
-                    const imageUrl = data.imagen.startsWith('/api/') 
+                    const imageUrl = data.imagen.startsWith('/api/')
                         ? `http://localhost:8080${data.imagen}`
                         : `http://localhost:8080/api${data.imagen.startsWith('/') ? '' : '/'}${data.imagen}`;
                     setImagePreview(imageUrl);
                 } else {
                     setImagePreview(null);
                 }
-                
+
                 // Configurar código de barras
                 if (data.codigoBarrasPrincipal) {
                     const barcodeUrl = `https://barcode.tec-it.com/barcode.ashx?data=${encodeURIComponent(data.codigoBarrasPrincipal)}&code=EAN13&translate-esc=on&dpi=96`;
                     setBarcodeImageUrl(barcodeUrl);
                 }
-                
+
                 fetchHistorial(productId);
 
-            } catch (err: any) { 
+            } catch (err: any) {
                 console.error("Error al cargar datos:", err.response?.data || err);
                 const message = err.response?.data?.message || 'Error al conectar con la API para cargar el producto.';
                 setError(message);
@@ -210,16 +229,16 @@ const InventoryEditProduct: React.FC = () => {
         };
         fetchDependenciesAndProduct();
     }, [productId]);
-    
+
     // Manejador de cambios en el formulario
-    const handleChange = (e: ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => { 
+    const handleChange = (e: ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
         const { name, value } = e.target;
-        
+
         const isCheckbox = (e.target as HTMLInputElement).type === 'checkbox';
         const checked = isCheckbox ? (e.target as HTMLInputElement).checked : undefined;
-        
-        const isCategoryId = name === 'categoriaId'; 
-        
+
+        const isCategoryId = name === 'categoriaId';
+
         let parsedValue: any;
 
         if (isCategoryId) {
@@ -241,18 +260,14 @@ const InventoryEditProduct: React.FC = () => {
     // --- LÓGICA DE EDICIÓN (BOTÓN GUARDAR) ---
     const handleSubmit = async (event: FormEvent) => {
         event.preventDefault();
-        
-        if (product.categoriaId === null) {
+
+        // Validación ajustada para string vacío
+        if (!product.categoriaId) {
             alert("Por favor, selecciona una categoría.");
             return;
         }
 
-        const categoriaIdToSend = product.categoriaId ? Number(product.categoriaId) : null;
-
-        if (categoriaIdToSend === null) {
-            alert("Error interno de categoría.");
-            return;
-        }
+        const categoriaIdToSend = Number(product.categoriaId);
 
         try {
             // Primero subir la imagen si existe
@@ -267,27 +282,27 @@ const InventoryEditProduct: React.FC = () => {
             }
 
             const productRequestData = {
-                nombre: product.nombre, 
-                descripcion: product.descripcion, 
+                nombre: product.nombre,
+                descripcion: product.descripcion,
                 sku: product.sku,
-                precioVenta: product.precioVenta, 
-                precioCompra: product.precioCompra, 
-                unidadMedida: product.unidadMedida, 
-                pesoKg: product.pesoKg, 
-                imagen: imagenPath, 
+                precioVenta: product.precioVenta,
+                precioCompra: product.precioCompra,
+                unidadMedida: product.unidadMedida,
+                pesoKg: product.pesoKg,
+                imagen: imagenPath,
                 requiereCodigoBarras: product.requiereCodigoBarras,
-                categoriaId: categoriaIdToSend, 
-                almacenId: product.almacenId, 
+                categoriaId: categoriaIdToSend,
+                almacenId: product.almacenId,
                 proveedorId: product.proveedorId,
-                stockInicial: product.stockActual, 
-                stockMinimo: product.stockMinimo, 
-                stockMaximo: product.stockMaximo, 
-                ubicacion: product.ubicacionPrincipal, 
+                stockInicial: product.stockActual,
+                stockMinimo: product.stockMinimo,
+                stockMaximo: product.stockMaximo,
+                ubicacion: product.ubicacionPrincipal,
                 codigoBarras: product.codigoBarrasPrincipal,
             };
-            
+
             await api.put(`/productos/${productId}`, productRequestData);
-            
+
             const productResponse = await api.get(`/productos/${productId}`);
             setProduct(prev => ({ ...prev, ...productResponse.data }));
             fetchHistorial(productId);
@@ -296,9 +311,9 @@ const InventoryEditProduct: React.FC = () => {
             setTimeout(() => {
                 setShowNotification(false);
                 navigate('/inventario');
-            }, 1500); 
+            }, 1500);
 
-        } catch (err: any) { 
+        } catch (err: any) {
             const errorMessage = err.response?.data?.message || 'Error desconocido al guardar. Revise el backend.';
             console.error('Error al guardar:', err.response?.data || err);
             alert(`Error al guardar: ${errorMessage}`);
@@ -309,20 +324,20 @@ const InventoryEditProduct: React.FC = () => {
     const handleToggleProductState = async (newState: 'ACTIVO' | 'INACTIVO') => {
         try {
             const response = await api.patch(`/productos/${productId}/estado`, newState, {
-                headers: { 'Content-Type': 'text/plain' } 
-            }); 
+                headers: { 'Content-Type': 'text/plain' }
+            });
 
             setShowDeactivateModal(false);
             alert(`Producto ${newState === 'ACTIVO' ? 'activado' : 'desactivado'} exitosamente.`);
 
             setProduct(prev => ({ ...prev, ...response.data }));
             fetchHistorial(productId);
-            
+
             if (newState === 'INACTIVO') {
                 navigate('/inventario');
             }
 
-        } catch (err: any) { 
+        } catch (err: any) {
             const errorMessage = err.response?.data?.message || 'Error al cambiar el estado.';
             console.error('Error al cambiar estado:', err.response?.data || err);
             alert(`Error: ${errorMessage}`);
@@ -335,7 +350,7 @@ const InventoryEditProduct: React.FC = () => {
     };
 
     const handleCancel = () => { navigate('/inventario'); };
-    
+
     // FUNCIONES AUXILIARES DE IMAGEN Y DRAG/DROP
     const handleImageUpload = async (event: ChangeEvent<HTMLInputElement>) => {
         const file = event.target.files?.[0];
@@ -360,19 +375,19 @@ const InventoryEditProduct: React.FC = () => {
         };
         reader.readAsDataURL(file);
     };
-    
+
     const handleDrop = (event: DragEvent<HTMLDivElement>) => {
         event.preventDefault();
         const file = event.dataTransfer.files[0];
-        const input = fileInputRef.current; 
-        
-        if (file && input) { 
+        const input = fileInputRef.current;
+
+        if (file && input) {
             const dataTransfer = new DataTransfer();
             dataTransfer.items.add(file);
-            input.files = dataTransfer.files; 
-            
+            input.files = dataTransfer.files;
+
             const changeEvent = new Event('change', { bubbles: true });
-            input.dispatchEvent(changeEvent); 
+            input.dispatchEvent(changeEvent);
         }
     };
 
@@ -464,7 +479,7 @@ const InventoryEditProduct: React.FC = () => {
     // --- RENDERIZADO DEL COMPONENTE ---
     return (
         <div className="min-h-screen bg-gray-50 p-4 sm:p-6">
-            
+
             {/* Notificación de éxito */}
             {showNotification && (
                 <div className="fixed top-4 right-4 bg-green-500 text-white px-6 py-3 rounded-lg shadow-lg flex items-center gap-2 z-50 animate-fade-in">
@@ -472,13 +487,13 @@ const InventoryEditProduct: React.FC = () => {
                     <span>¡Producto actualizado exitosamente!</span>
                 </div>
             )}
-            
+
             {/* Modal de Cancelar */}
             {showCancelModal && (
                 <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
                     <div className="bg-white rounded-lg max-w-md w-full">
                         <div className="p-6">
-                             <div className="flex items-center gap-3 mb-4">
+                            <div className="flex items-center gap-3 mb-4">
                                 <div className="bg-yellow-100 p-2 rounded-full">
                                     <IoIosWarning className="w-6 h-6 text-yellow-600" />
                                 </div>
@@ -486,8 +501,8 @@ const InventoryEditProduct: React.FC = () => {
                                     <h3 className="text-lg font-semibold text-gray-900">Cancelar Edición</h3>
                                     <p className="text-sm text-gray-600">¿Estás seguro de que quieres cancelar? Se perderán todos los cambios no guardados.</p>
                                 </div>
-                             </div>
-                             <div className="flex gap-3 justify-end">
+                            </div>
+                            <div className="flex gap-3 justify-end">
                                 <button
                                     onClick={() => setShowCancelModal(false)}
                                     className="px-4 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 transition-colors"
@@ -501,12 +516,12 @@ const InventoryEditProduct: React.FC = () => {
                                     <IoIosWarning className="w-4 h-4" />
                                     Sí, Cancelar
                                 </button>
-                             </div>
+                            </div>
                         </div>
                     </div>
                 </div>
             )}
-            
+
             {/* Modal de Desactivar / Activar */}
             {showDeactivateModal && (
                 <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
@@ -568,13 +583,14 @@ const InventoryEditProduct: React.FC = () => {
                     <div className="lg:col-span-1 space-y-6 sm:order-last lg:order-first">
                         <div className="bg-white rounded-lg p-6 shadow-sm border border-gray-200">
                             <h3 className="text-lg font-semibold mb-4 flex items-center gap-2"><IoIosCube className="h-5 w-5" />Vista Previa</h3>
-                            
+
                             {/* CONTENIDO DE IMAGEN Y PREVIEW */}
                             <div className="text-center mb-4">
                                 {imagePreview ? (
                                     <div className="relative">
-                                        <ProductImage 
-                                            imagen={product.imagen} 
+                                        <ProductImage
+                                            // --- CORRECCIÓN 3: Usar imagePreview ---
+                                            imagen={imagePreview || ''}
                                             nombre={product.nombre}
                                             className="w-32 h-32 rounded-lg mx-auto mb-3 object-cover border-2 border-gray-300"
                                         />
@@ -647,7 +663,7 @@ const InventoryEditProduct: React.FC = () => {
 
                         {/* Bloque de Historial de Cambios */}
                         <div className="bg-white rounded-lg p-6 shadow-sm border border-gray-200">
-                             <h3 className="text-lg font-semibold mb-4 flex items-center gap-2">
+                            <h3 className="text-lg font-semibold mb-4 flex items-center gap-2">
                                 <IoIosClock className="h-5 w-5" />
                                 Historial de Cambios
                             </h3>
@@ -691,10 +707,11 @@ const InventoryEditProduct: React.FC = () => {
                                 {/* Categoría ID */}
                                 <div>
                                     <label className="block text-sm font-medium text-gray-700 mb-1">Categoría</label>
-                                    <select 
-                                        className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500" 
-                                        name="categoriaId" 
-                                        value={product.categoriaId ?? ''} 
+                                    <select
+                                        className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500"
+                                        name="categoriaId"
+                                        // --- CORRECCIÓN 4: Value seguro ---
+                                        value={product.categoriaId || ""}
                                         onChange={handleChange}
                                     >
                                         <option value="" disabled>Seleccionar categoría</option>
@@ -706,23 +723,29 @@ const InventoryEditProduct: React.FC = () => {
                                 {/* SKU */}
                                 <div>
                                     <label className="block text-sm font-medium text-gray-700 mb-1">SKU</label>
-                                    <input className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500" type="text" value={product.sku || ''} onChange={handleChange} name="sku" />
+                                    <input
+                                        className="w-full border border-gray-300 rounded-lg px-3 py-2 bg-gray-50 cursor-default text-gray-700 mb-1"
+                                        type="text"
+                                        value={product.sku || ''}
+                                        readOnly
+                                        name="sku"
+                                    />
                                 </div>
                                 {/* Código de Barras (SOLO LECTURA) */}
                                 <div>
                                     <label className="block text-sm font-medium text-gray-700 mb-1">Código de Barras</label>
                                     <div className="flex gap-2">
-                                        <input 
-                                            className="w-full border border-gray-300 rounded-lg px-3 py-2 bg-gray-50 cursor-default" 
-                                            type="text" 
-                                            value={product.codigoBarrasPrincipal} 
-                                            readOnly 
-                                            name="codigoBarrasPrincipal" 
+                                        <input
+                                            className="w-full border border-gray-300 rounded-lg px-3 py-2 bg-gray-50 cursor-default"
+                                            type="text"
+                                            value={product.codigoBarrasPrincipal}
+                                            readOnly
+                                            name="codigoBarrasPrincipal"
                                         />
                                     </div>
                                 </div>
                             </div>
-                            
+
                             {/* Vista Previa del Código de Barras */}
                             <div className="bg-gray-50 p-4 rounded-lg border border-gray-200 mb-6">
                                 <h4 className="text-sm font-semibold text-gray-700 mb-3 flex items-center gap-2"><IoIosBarcode className="w-4 h-4" />Vista Previa del Código de Barras</h4>
@@ -730,9 +753,9 @@ const InventoryEditProduct: React.FC = () => {
                                     {/* Imagen del código de barras generado por TEC-IT */}
                                     {barcodeImageUrl ? (
                                         <div className="mb-3">
-                                            <img 
-                                                src={barcodeImageUrl} 
-                                                alt="Código de Barras EAN-13" 
+                                            <img
+                                                src={barcodeImageUrl}
+                                                alt="Código de Barras EAN-13"
                                                 className="mx-auto max-w-full h-auto border border-gray-300 rounded"
                                                 style={{ maxHeight: '80px' }}
                                             />
@@ -753,29 +776,29 @@ const InventoryEditProduct: React.FC = () => {
                                     </div>
                                 </div>
                                 <div className="flex gap-2 mt-3">
-                                    <button 
-                                        type="button" 
-                                        onClick={() => navigator.clipboard.writeText(product.codigoBarrasPrincipal)} 
+                                    <button
+                                        type="button"
+                                        onClick={() => navigator.clipboard.writeText(product.codigoBarrasPrincipal)}
                                         className="flex-1 bg-blue-600 text-white py-2 px-3 rounded text-sm hover:bg-blue-700 transition-colors"
                                     >
                                         Copiar Código
                                     </button>
-                                    <button 
-                                        type="button" 
-                                        onClick={printBarcode} 
+                                    <button
+                                        type="button"
+                                        onClick={printBarcode}
                                         className="flex-1 bg-gray-600 text-white py-2 px-3 rounded text-sm hover:bg-gray-700 transition-colors"
                                     >
                                         Imprimir
                                     </button>
                                 </div>
                             </div>
-                            
+
                             {/* 🚀 CAMPO DE DESCRIPCIÓN */}
-                            <div className="mb-6"> 
+                            <div className="mb-6">
                                 <label className="block text-sm font-medium text-gray-700 mb-1">Descripción del Producto</label>
                                 <textarea
                                     name="descripcion"
-                                    value={product.descripcion || ''} 
+                                    value={product.descripcion || ''}
                                     onChange={handleChange as any}
                                     rows={3}
                                     placeholder="Ingrese detalles, especificaciones o notas sobre el producto."
@@ -801,10 +824,10 @@ const InventoryEditProduct: React.FC = () => {
                                 {/* Unidad de Medida */}
                                 <div>
                                     <label className="block text-sm font-medium text-gray-700 mb-1">Unidad de Medida</label>
-                                    <select 
-                                        className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500" 
-                                        name="unidadMedida" 
-                                        value={product.unidadMedida ?? ''} 
+                                    <select
+                                        className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500"
+                                        name="unidadMedida"
+                                        value={product.unidadMedida ?? ''}
                                         onChange={handleChange}
                                     >
                                         <option value="UNIDAD">Unidad</option><option value="CAJA">Caja</option><option value="PAQUETE">Paquete</option><option value="KG">Kg (Kilogramo)</option><option value="LITRO">Litro</option>
@@ -823,10 +846,10 @@ const InventoryEditProduct: React.FC = () => {
                         <div className="flex flex-col sm:flex-row justify-between items-center sm:items-end gap-3 mt-6">
                             <button
                                 type="button"
-                                onClick={handleOpenToggleModal} 
+                                onClick={handleOpenToggleModal}
                                 className={`w-full sm:w-auto font-medium flex items-center justify-center gap-2 px-4 py-2 border rounded-lg transition-colors 
-                                    ${product.estado === 'ACTIVO' 
-                                        ? 'text-red-600 hover:text-red-700 border-red-200 hover:bg-red-50' 
+                                    ${product.estado === 'ACTIVO'
+                                        ? 'text-red-600 hover:text-red-700 border-red-200 hover:bg-red-50'
                                         : 'text-green-600 hover:text-green-700 border-green-200 hover:bg-green-50'}`}
                             >
                                 <IoIosWarning className="w-4 h-4" />

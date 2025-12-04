@@ -1,5 +1,5 @@
-import { Link, useNavigate } from 'react-router-dom';
-import { useState, useRef, useEffect, useCallback } from 'react';
+import { Link } from 'react-router-dom';
+import {useCallback } from 'react'; // IMPORTANTE: useCallback añadido
 import {
   IoMdArrowBack,
   IoIosCloudUpload,
@@ -11,801 +11,216 @@ import {
   IoIosSave
 } from 'react-icons/io';
 
-const API_BASE = 'http://localhost:8080/api';
-
-// --- Interfaces de Datos ---
-interface Option {
-  id: number;
-  nombre: string;
-}
-
-interface ProductoFormData {
-  nombre: string;
-  descripcion: string;
-  sku: string;
-  precioVenta: number;
-  precioCompra: number;
-  categoriaId: number | null;
-  unidadMedida: string;
-  pesoKg: number;
-  almacenId: number | null;
-  stockInicial: number;
-  stockMinimo: number;
-  stockMaximo: number;
-  ubicacion: string;
-  proveedorId: number | null;
-  codigoBarras: string;
-  imagen: string;
-}
+import { useProductForm } from '../../hooks/inventario/useProductForm';
+import { useProductOptions } from '../../hooks/inventario/useProductOptions';
+import type { ProductoFormData } from '../../types/inventario/product.types';
 
 export default function InventoryAddProduct() {
-  const navigate = useNavigate();
-  const fileInputRef = useRef<HTMLInputElement>(null);
+  // 1. Hook del Formulario
+  const {
+    formData,
+    setFormData,
+    handleChange,
+    handleSubmit,
+    handleImageUpload,
+    clearImage,
+    fileInputRef,
+    imagePreview,
+    validationErrors,
+    barcodeImageUrl,
+    generateBarcode,
+    generateSKU,
+    notification,
+    setNotification,
+    showCancelModal,
+    setShowCancelModal,
+  } = useProductForm();
 
-  // --- Estados de Datos ---
-  const [formData, setFormData] = useState<ProductoFormData>({
-    nombre: '', descripcion: '', sku: '', precioVenta: 0.0, precioCompra: 0.0,
-    categoriaId: null, unidadMedida: 'UNIDAD', pesoKg: 0.0,
-    almacenId: null, stockInicial: 0, stockMinimo: 10, stockMaximo: 1000, ubicacion: '',
-    proveedorId: null, codigoBarras: '', imagen: ''
-  });
+  // 2. CORRECCIÓN DEL PARPADEO:
+  // Memorizamos la función de error con useCallback para que no se recree en cada render
+  const handleLoadError = useCallback((message: string) => {
+    setNotification({ show: true, message, type: 'error' });
+  }, [setNotification]);
 
-  // --- Estados de Opciones y Carga ---
-  const [categorias, setCategorias] = useState<Option[]>([]);
-  const [almacenes, setAlmacenes] = useState<Option[]>([]);
-  const [proveedores, setProveedores] = useState<Option[]>([]);
-  const [loadingOptions, setLoadingOptions] = useState(true);
+  // 3. Hook de Opciones (Pasamos la función memorizada)
+  const { categorias, almacenes, proveedores, loadingOptions } = useProductOptions(handleLoadError);
 
-  // --- Estados de UI y Notificación ---
-  const [imagePreview, setImagePreview] = useState<string | null>(null);
-  const [showNotification, setShowNotification] = useState(false);
-  const [notificationMessage, setNotificationMessage] = useState('');
-  const [notificationType, setNotificationType] = useState<'success' | 'error'>('success');
-  const [showCancelModal, setShowCancelModal] = useState(false);
-  const [validationErrors, setValidationErrors] = useState<Record<string, string>>({});
-  const [uploadedImageFile, setUploadedImageFile] = useState<File | null>(null);
-
-  // Lista de unidades de medida (coincide con el Enum UnidadMedida en Java)
+  // --- Constantes UI ---
   const unidadesMedida = ['UNIDAD', 'CAJA', 'PAQUETE', 'KG', 'LITRO'];
-
-  // Nombres para la vista previa
   const selectedAlmacenName = almacenes.find(a => a.id === formData.almacenId)?.nombre || 'Por seleccionar';
   const selectedProveedorName = proveedores.find(p => p.id === formData.proveedorId)?.nombre || 'Por seleccionar';
 
-  // URL del código de barras generado
-  const [barcodeImageUrl, setBarcodeImageUrl] = useState<string>('');
-
-  // --- Funciones de Carga de Opciones ---
-  const fetchOptions = useCallback(async () => {
-    setLoadingOptions(true);
-    try {
-      const [catRes, almRes, provRes] = await Promise.all([
-        fetch(`${API_BASE}/categorias`),
-        fetch(`${API_BASE}/almacenes`),
-        fetch(`${API_BASE}/proveedores`)
-      ]);
-
-      const catData = catRes.ok ? await catRes.json() : [];
-      const almData = almRes.ok ? await almRes.json() : [];
-      const provRawData = provRes.ok ? await provRes.json() : [];
-
-      console.log("Datos de proveedores recibidos:", provRawData); // <--- Agregamos este log para depurar
-
-      const provData = provRawData.map((p: any) => ({
-        id: p.id,
-        // CORRECCIÓN AQUÍ: Intentamos leer varias propiedades por si acaso
-        nombre: p.razonSocial || p.nombre || p.razon_social || p.name || "Sin Nombre"
-      }));
-
-      setCategorias(catData);
-      setAlmacenes(almData);
-      setProveedores(provData);
-
-    } catch (error) {
-      console.error('Error al cargar opciones:', error);
-      setNotificationMessage('Error al cargar opciones iniciales.');
-      setNotificationType('error');
-      setShowNotification(true);
-    } finally {
-      setLoadingOptions(false);
-    }
-  }, []);
-
-  useEffect(() => {
-    fetchOptions();
-  }, [fetchOptions]);
-
-  // --- Generar SKU automáticamente basado en el nombre ---
-  const generateSKU = (productName: string): string => {
-    if (!productName.trim()) return '';
-    
-    // Limpiar y formatear el nombre
-    const cleanName = productName
-      .normalize("NFD")
-      .replace(/[\u0300-\u036f]/g, "") // Remover acentos
-      .toUpperCase()
-      .replace(/[^A-Z0-9\s]/g, "") // Remover caracteres especiales
-      .trim();
-    
-    // Tomar las primeras 3-4 letras de cada palabra (máximo 3 palabras)
-    const words = cleanName.split(/\s+/).slice(0, 3);
-    const skuParts = words.map(word => word.substring(0, 4));
-    
-    // Unir con guiones y agregar timestamp para unicidad
-    const baseSKU = skuParts.join('-');
-    const timestamp = Date.now().toString().slice(-4);
-    
-    return `${baseSKU}-${timestamp}`;
-  };
-
-  // --- Actualizar SKU cuando cambie el nombre ---
-  useEffect(() => {
-    if (formData.nombre && !formData.sku) {
-      const newSKU = generateSKU(formData.nombre);
-      setFormData(prev => ({ ...prev, sku: newSKU }));
-    }
-  }, [formData.nombre]);
-
-  // --- Actualizar imagen del código de barras cuando cambie el código ---
-  useEffect(() => {
-    if (formData.codigoBarras && formData.codigoBarras.length >= 12) {
-      const barcodeUrl = `https://barcode.tec-it.com/barcode.ashx?data=${encodeURIComponent(formData.codigoBarras)}&code=EAN13&translate-esc=on&dpi=96`;
-      setBarcodeImageUrl(barcodeUrl);
-    } else {
-      setBarcodeImageUrl('');
-    }
-  }, [formData.codigoBarras]);
-
-  // --- Handlers de Formulario ---
-  const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
-    const { name, value } = e.target;
-
-    let newValue: string | number | null = value;
-
-    if (e.target.type === 'number' || name.endsWith('Id') || name.startsWith('stock')) {
-      newValue = name.endsWith('Id') ? parseInt(value) || null : parseFloat(value) || 0;
-      if (newValue === 0 && name.endsWith('Id')) newValue = null;
-    }
-
-    setFormData(prev => ({
-      ...prev,
-      [name]: newValue,
-    } as ProductoFormData));
-
-    setValidationErrors(prev => {
-      const newErrors = { ...prev };
-      delete newErrors[name];
-      return newErrors;
-    });
-  };
-
-  // --- Función para guardar la imagen en la carpeta pública ---
-  const saveImageToPublicFolder = async (file: File): Promise<string> => {
-    return new Promise((resolve, reject) => {
-      const formData = new FormData();
-      formData.append('image', file);
-      
-      const timestamp = Date.now();
-      const randomString = Math.random().toString(36).substring(2, 8);
-      const fileExtension = file.name.split('.').pop() || 'jpg';
-      const fileName = `producto_${timestamp}_${randomString}.${fileExtension}`;
-      formData.append('fileName', fileName);
-
-      console.log('Enviando imagen al backend:', fileName);
-
-      fetch(`${API_BASE}/productos/upload-image`, {
-        method: 'POST',
-        body: formData,
-      })
-      .then(async response => {
-        if (!response.ok) {
-          const errorText = await response.text();
-          throw new Error(`Error ${response.status}: ${errorText}`);
-        }
-        return response.json();
-      })
-      .then(data => {
-        console.log('Imagen subida exitosamente:', data);
-        resolve(data.imagePath);
-      })
-      .catch(error => {
-        console.error('Error al guardar imagen:', error);
-        reject(error);
-      });
-    });
-  };
-
-  const handleImageUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0];
-    if (!file || !file.type.startsWith('image/') || file.size > 5 * 1024 * 1024) {
-      alert('Archivo inválido o muy grande (máx 5MB).');
-      return;
-    }
-
-    setUploadedImageFile(file);
-
-    const reader = new FileReader();
-    reader.onload = (e) => {
-      setImagePreview(e.target?.result as string);
-    };
-    reader.readAsDataURL(file);
-  };
-
-  const generateBarcode = () => {
-    const timestamp = Date.now().toString().slice(-8);
-    const random = Math.floor(Math.random() * 10000).toString().padStart(4, '0');
-    const baseCode = timestamp + random;
-    
-    setFormData(prev => ({ ...prev, codigoBarras: baseCode }));
-  };
-
+  // --- Helpers UI ---
+  const handleCancel = () => window.history.back();
   const copyBarcode = () => {
     if (formData.codigoBarras) {
       navigator.clipboard.writeText(formData.codigoBarras);
       alert('Código de barras copiado al portapapeles');
     }
   };
-
   const printBarcode = () => {
     if (barcodeImageUrl) {
-      const printWindow = window.open('', '_blank');
-      if (printWindow) {
-        printWindow.document.write(`
-          <html>
-            <head>
-              <title>Imprimir Código de Barras</title>
-              <style>
-                body { margin: 0; padding: 20px; font-family: Arial, sans-serif; text-align: center; }
-                .barcode-container { margin: 20px auto; max-width: 400px; }
-                .barcode-info { margin-top: 10px; font-size: 14px; color: #333; }
-                @media print { .no-print { display: none; } }
-              </style>
-            </head>
-            <body>
-              <div class="barcode-container">
-                <img src="${barcodeImageUrl}" alt="Código de Barras" style="max-width: 100%; height: auto;" />
-                <div class="barcode-info">
-                  <strong>${formData.nombre || 'Producto'}</strong><br/>
-                  Código: ${formData.codigoBarras}<br/>
-                  SKU: ${formData.sku || 'N/A'}
-                </div>
-              </div>
-              <div class="no-print" style="margin-top: 20px;">
-                <button onclick="window.print()">Imprimir</button>
-                <button onclick="window.close()">Cerrar</button>
-              </div>
-            </body>
-          </html>
-        `);
-        printWindow.document.close();
+      const w = window.open('', '_blank');
+      if (w) {
+        w.document.write(`<html><head><title>Imprimir Código</title><style>body{text-align:center;font-family:sans-serif}.c{margin:20px auto;max-width:400px}img{max-width:100%}@media print{.np{display:none}}</style></head><body><div class="c"><img src="${barcodeImageUrl}"/><br/><strong>${formData.nombre || 'Producto'}</strong><br/>${formData.codigoBarras}</div><div class="np"><button onclick="window.print()">Imprimir</button></div></body></html>`);
+        w.document.close();
       }
     }
   };
 
-  const handleCancel = () => {
-    window.history.back();
-  };
-
-  const handleSubmit = async (event: React.FormEvent) => {
-    event.preventDefault();
-    setValidationErrors({});
-
-    try {
-      let imagenPath = '';
-      if (uploadedImageFile) {
-        try {
-          imagenPath = await saveImageToPublicFolder(uploadedImageFile);
-        } catch (error) {
-          console.error('Error al subir imagen:', error);
-          setNotificationMessage("Error al subir la imagen. El producto se guardará sin imagen.");
-          setNotificationType('error');
-          setShowNotification(true);
-        }
-      }
-
-      const requestData: any = {
-        ...formData,
-        categoriaId: formData.categoriaId || undefined,
-        almacenId: formData.almacenId || undefined,
-        proveedorId: formData.proveedorId || undefined,
-        unidadMedida: formData.unidadMedida.toUpperCase(),
-        stockInicial: formData.stockInicial || 0,
-        stockMinimo: formData.stockMinimo || 0,
-        precioCompra: formData.precioCompra || 0.0,
-        precioVenta: formData.precioVenta || 0.0,
-        pesoKg: formData.pesoKg || 0.0,
-        imagen: imagenPath || '',
-      };
-
-      const response = await fetch(`${API_BASE}/productos`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(requestData),
-      });
-
-      if (!response.ok) {
-        const errorBody = await response.json();
-        if (response.status === 400 && errorBody.errors) {
-          setValidationErrors(errorBody.errors);
-          setNotificationMessage("Error de validación. Revise los campos marcados.");
-        } else {
-          setNotificationMessage(errorBody.message || `Error al guardar: Código de estado ${response.status}`);
-        }
-        setNotificationType('error');
-        setShowNotification(true);
-        return;
-      }
-
-      setNotificationMessage('¡Producto guardado exitosamente!');
-      setNotificationType('success');
-      setShowNotification(true);
-
-      setTimeout(() => {
-        navigate('/inventario');
-      }, 1500);
-
-    } catch (error) {
-      console.error('Error de red:', error);
-      setNotificationMessage("Error de conexión con el servidor.");
-      setNotificationType('error');
-      setShowNotification(true);
-    }
-  };
-
-  const renderError = (fieldName: keyof ProductoFormData) => (
-    validationErrors[fieldName] ? (
-      <p className="text-red-500 text-xs mt-1">{validationErrors[fieldName]}</p>
-    ) : null
-  );
+  const renderError = (f: keyof ProductoFormData) => validationErrors[f] ? <p className="text-red-500 text-xs mt-1">{validationErrors[f]}</p> : null;
 
   if (loadingOptions) return <div className="p-6 text-center text-gray-500">Cargando datos de soporte...</div>;
 
   return (
     <div className="min-h-screen bg-gray-50 p-4 sm:p-6 lg:p-8">
-      
-      {/* Notificaciones */}
-      {showNotification && (
-        <div className={`fixed top-4 right-4 left-4 sm:left-auto text-white px-6 py-3 rounded-lg shadow-lg flex items-center gap-2 z-50 animate-fade-in ${notificationType === 'success' ? 'bg-green-500' : 'bg-red-500'}`}>
-          {/* CORRECCIÓN: shrink-0 en lugar de flex-shrink-0 */}
-          {notificationType === 'success' ? <IoIosCheckmarkCircle className="w-5 h-5 shrink-0" /> : <IoIosWarning className="w-5 h-5 shrink-0" />}
-          <span className="text-sm sm:text-base">{notificationMessage}</span>
+      {notification.show && (
+        <div className={`fixed top-4 right-4 left-4 sm:left-auto text-white px-6 py-3 rounded-lg shadow-lg flex items-center gap-2 z-50 animate-fade-in ${notification.type === 'success' ? 'bg-green-500' : 'bg-red-500'}`}>
+          {notification.type === 'success' ? <IoIosCheckmarkCircle className="w-5 h-5 shrink-0" /> : <IoIosWarning className="w-5 h-5 shrink-0" />}
+          <span className="text-sm sm:text-base">{notification.message}</span>
         </div>
       )}
 
-      {/* Modal de Cancelación */}
       {showCancelModal && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4 overflow-y-auto">
           <div className="bg-white rounded-lg max-w-md w-full m-auto">
             <div className="p-6">
               <div className="flex items-center gap-3 mb-4">
-                <div className="bg-yellow-100 p-2 rounded-full shrink-0">
-                  <IoIosWarning className="w-6 h-6 text-yellow-600" />
-                </div>
-                <div>
-                  <h3 className="text-lg font-semibold text-gray-900">Cancelar Creación</h3>
-                  <p className="text-sm text-gray-600">¿Estás seguro de que quieres cancelar? Se perderán todos los datos no guardados.</p>
-                </div>
+                <div className="bg-yellow-100 p-2 rounded-full shrink-0"><IoIosWarning className="w-6 h-6 text-yellow-600" /></div>
+                <div><h3 className="text-lg font-semibold text-gray-900">Cancelar Creación</h3><p className="text-sm text-gray-600">¿Seguro? Se perderán los datos.</p></div>
               </div>
               <div className="flex flex-col-reverse sm:flex-row gap-3 justify-end">
-                <button
-                  onClick={() => setShowCancelModal(false)}
-                  className="w-full sm:w-auto px-4 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 transition-colors"
-                >
-                  Continuar Editando
-                </button>
-                <button
-                  onClick={handleCancel}
-                  className="w-full sm:w-auto px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors flex items-center justify-center gap-2"
-                >
-                  <IoIosWarning className="w-4 h-4" />
-                  Sí, Cancelar
-                </button>
+                <button onClick={() => setShowCancelModal(false)} className="w-full sm:w-auto px-4 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50">Continuar</button>
+                <button onClick={handleCancel} className="w-full sm:w-auto px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 flex items-center justify-center gap-2"><IoIosWarning className="w-4 h-4" />Cancelar</button>
               </div>
             </div>
           </div>
         </div>
       )}
 
-      {/* Header Responsivo */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between mb-6 gap-4">
         <div className="flex items-center gap-3">
-          <Link to="/inventario">
-            <button className="p-2 hover:bg-gray-100 rounded-lg transition-colors">
-              <IoMdArrowBack className="w-6 h-6 text-gray-700" />
-            </button>
-          </Link>
-          <div>
-            <h1 className="text-xl sm:text-2xl font-bold text-gray-900">Agregar Producto</h1>
-            <p className="text-sm text-gray-600">Complete la información del nuevo producto</p>
-          </div>
+          <Link to="/inventario"><button className="p-2 hover:bg-gray-100 rounded-lg"><IoMdArrowBack className="w-6 h-6 text-gray-700" /></button></Link>
+          <div><h1 className="text-xl sm:text-2xl font-bold text-gray-900">Agregar Producto</h1><p className="text-sm text-gray-600">Complete la información</p></div>
         </div>
       </div>
 
       <form id="product-form" onSubmit={handleSubmit}>
         <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
-          
-          {/* Columna lateral de Previsualización: Primero en móvil, lateral en desktop */}
-          <div className="lg:col-span-1 space-y-6 order-1 lg:order-1">
+          <div className="lg:col-span-1 space-y-6 order-1">
             <div className="bg-white rounded-lg p-4 sm:p-6 shadow-sm border border-gray-200">
-              <h3 className="text-lg font-semibold mb-4 flex items-center gap-2">
-                <IoIosCube className="w-5 h-5" />
-                Vista Previa
-              </h3>
-              
+              <h3 className="text-lg font-semibold mb-4 flex items-center gap-2"><IoIosCube className="w-5 h-5" />Vista Previa</h3>
               <div className="text-center mb-4">
                 {imagePreview ? (
                   <div className="relative inline-block">
-                    <img
-                      src={imagePreview}
-                      alt="Vista previa"
-                      className="w-32 h-32 rounded-lg mx-auto mb-3 object-cover border-2 border-gray-300"
-                    />
-                    <button
-                      type="button"
-                      onClick={() => { 
-                        setImagePreview(null); 
-                        setUploadedImageFile(null);
-                        setFormData(prev => ({ ...prev, imagen: '' })); 
-                      }}
-                      className="absolute top-0 right-0 bg-red-500 text-white rounded-full p-1 hover:bg-red-600 transition-colors transform translate-x-1/2 -translate-y-1/2 shadow-sm"
-                    >
-                      <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                      </svg>
-                    </button>
+                    <img src={imagePreview} alt="Vista previa" className="w-32 h-32 rounded-lg mx-auto mb-3 object-cover border-2 border-gray-300" />
+                    <button type="button" onClick={clearImage} className="absolute top-0 right-0 bg-red-500 text-white rounded-full p-1 hover:bg-red-600 transform translate-x-1/2 -translate-y-1/2 shadow-sm"><svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg></button>
                   </div>
                 ) : (
-                  <div className="w-32 h-32 bg-blue-50 rounded-lg mx-auto mb-3 flex items-center justify-center overflow-hidden border-2 border-dashed border-gray-300">
-                    <IoIosCube className="h-8 w-8 text-blue-400" />
-                  </div>
+                  <div className="w-32 h-32 bg-blue-50 rounded-lg mx-auto mb-3 flex items-center justify-center overflow-hidden border-2 border-dashed border-gray-300"><IoIosCube className="h-8 w-8 text-blue-400" /></div>
                 )}
-                <p className="text-xs text-gray-500 mt-1">
-                  {imagePreview ? 'Imagen seleccionada' : 'Sin imagen'}
-                </p>
+                <p className="text-xs text-gray-500 mt-1">{imagePreview ? 'Imagen seleccionada' : 'Sin imagen'}</p>
               </div>
-
-              <div
-                className="border-2 border-dashed border-gray-300 rounded-lg p-4 text-center cursor-pointer hover:border-blue-400 transition-colors mb-4 active:bg-gray-50"
-                onClick={() => fileInputRef.current?.click()}
-              >
-                <IoIosCloudUpload className="w-8 h-8 mx-auto text-gray-400 mb-2" />
-                <p className="text-sm text-gray-600 mb-2">Toque para subir imagen</p>
-                <p className="text-xs text-gray-500">PNG, JPG hasta 5MB</p>
-                <input
-                  ref={fileInputRef}
-                  accept="image/*"
-                  className="hidden"
-                  id="imagen-upload"
-                  type="file"
-                  onChange={handleImageUpload}
-                />
+              <div className="border-2 border-dashed border-gray-300 rounded-lg p-4 text-center cursor-pointer hover:border-blue-400 mb-4 active:bg-gray-50" onClick={() => fileInputRef.current?.click()}>
+                <IoIosCloudUpload className="w-8 h-8 mx-auto text-gray-400 mb-2" /><p className="text-sm text-gray-600 mb-2">Toque para subir imagen</p><p className="text-xs text-gray-500">PNG, JPG hasta 5MB</p>
+                <input ref={fileInputRef} accept="image/*" className="hidden" type="file" onChange={handleImageUpload} />
               </div>
-
-              {/* Información Resumen */}
               <div className="space-y-3 bg-gray-50 p-3 rounded-lg">
-                <div>
-                  <h4 className="font-semibold text-gray-900 truncate">{formData.nombre || 'Nuevo Producto'}</h4>
-                  <p className="text-xs text-gray-500">Resumen rápido</p>
-                </div>
-                <div className="flex justify-between items-center">
-                  <span className="text-xl font-bold text-gray-900">S/{formData.precioVenta.toFixed(2)}</span>
-                  <span className="bg-blue-100 text-blue-800 px-2 py-1 rounded-full text-xs font-medium">NUEVO</span>
-                </div>
+                <div><h4 className="font-semibold text-gray-900 truncate">{formData.nombre || 'Nuevo Producto'}</h4><p className="text-xs text-gray-500">Resumen rápido</p></div>
+                <div className="flex justify-between items-center"><span className="text-xl font-bold text-gray-900">S/{formData.precioVenta.toFixed(2)}</span><span className="bg-blue-100 text-blue-800 px-2 py-1 rounded-full text-xs font-medium">NUEVO</span></div>
                 <div className="text-xs text-gray-600 space-y-1 pt-2 border-t border-gray-200">
                   <div className="flex justify-between"><span>Stock:</span> <span className="font-medium">{formData.stockInicial}</span></div>
                   <div className="flex justify-between"><span>SKU:</span> <span className="font-medium truncate max-w-[120px]">{formData.sku || '-'}</span></div>
                   <div className="flex justify-between"><span>Almacén:</span> <span className="font-medium truncate max-w-[120px]">{selectedAlmacenName}</span></div>
-                  {/* CORRECCIÓN: Agregado el proveedor seleccionado para eliminar warning */}
                   <div className="flex justify-between"><span>Prov:</span> <span className="font-medium truncate max-w-[120px]">{selectedProveedorName}</span></div>
                 </div>
               </div>
             </div>
           </div>
 
-          {/* Columna de Formulario Principal */}
-          <div className="lg:col-span-3 space-y-6 order-2 lg:order-2">
-            
-            {/* SECCIÓN: Información Básica */}
+          <div className="lg:col-span-3 space-y-6 order-2">
             <div className="bg-white rounded-lg p-4 sm:p-6 shadow-sm border border-gray-200">
               <h3 className="text-lg font-semibold mb-4">Información General</h3>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div className="md:col-span-2">
                   <label className="block text-sm font-medium text-gray-700 mb-1">Nombre del Producto *</label>
-                  <input
-                    type="text"
-                    name="nombre"
-                    required
-                    value={formData.nombre}
-                    onChange={handleChange}
-                    className={`w-full border rounded-lg px-3 py-2 focus:ring-2 ${validationErrors.nombre ? 'border-red-500' : 'border-gray-300 focus:border-blue-500 focus:ring-blue-500'}`}
-                  />
+                  <input type="text" name="nombre" required value={formData.nombre} onChange={handleChange} className={`w-full border rounded-lg px-3 py-2 focus:ring-2 ${validationErrors.nombre ? 'border-red-500' : 'border-gray-300 focus:border-blue-500'}`} />
                   {renderError('nombre')}
                 </div>
-                
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">Categoría *</label>
-                  <select
-                    name="categoriaId"
-                    required
-                    value={formData.categoriaId || ''}
-                    onChange={handleChange}
-                    className={`w-full border rounded-lg px-3 py-2 focus:ring-2 ${validationErrors.categoriaId ? 'border-red-500' : 'border-gray-300 focus:border-blue-500 focus:ring-blue-500'}`}
-                  >
-                    <option value="">Seleccionar categoría</option>
-                    {categorias.map(cat => (
-                      <option key={cat.id} value={cat.id}>{cat.nombre}</option>
-                    ))}
+                  <select name="categoriaId" required value={formData.categoriaId || ''} onChange={handleChange} className={`w-full border rounded-lg px-3 py-2 focus:ring-2 ${validationErrors.categoriaId ? 'border-red-500' : 'border-gray-300 focus:border-blue-500'}`}>
+                    <option value="">Seleccionar categoría</option>{categorias.map(cat => <option key={cat.id} value={cat.id}>{cat.nombre}</option>)}
                   </select>
                   {renderError('categoriaId')}
                 </div>
-
                 <div>
-                  {/* CORRECCIÓN: Eliminado 'block' que estaba en conflicto con 'flex' */}
-                  <label className="text-sm font-medium text-gray-700 mb-1 flex justify-between items-center">
-                    SKU *
-                    <button
-                      type="button"
-                      onClick={() => {
-                        const newSKU = generateSKU(formData.nombre);
-                        setFormData(prev => ({ ...prev, sku: newSKU }));
-                      }}
-                      className="text-xs text-blue-600 hover:text-blue-800 underline"
-                    >
-                      Regenerar
-                    </button>
-                  </label>
-                  <input
-                    type="text"
-                    name="sku"
-                    required
-                    value={formData.sku}
-                    onChange={handleChange}
-                    className={`w-full border rounded-lg px-3 py-2 focus:ring-2 ${validationErrors.sku ? 'border-red-500' : 'border-gray-300 focus:border-blue-500 focus:ring-blue-500'}`}
-                  />
+                  <label className="text-sm font-medium text-gray-700 mb-1 flex justify-between items-center">SKU *<button type="button" onClick={() => setFormData(prev => ({ ...prev, sku: generateSKU(formData.nombre) }))} className="text-xs text-blue-600 hover:text-blue-800 underline">Regenerar</button></label>
+                  <input type="text" name="sku" required value={formData.sku} onChange={handleChange} className={`w-full border rounded-lg px-3 py-2 focus:ring-2 ${validationErrors.sku ? 'border-red-500' : 'border-gray-300 focus:border-blue-500'}`} />
                   {renderError('sku')}
                 </div>
-
                 <div className="md:col-span-2">
                   <label className="block text-sm font-medium text-gray-700 mb-1">Proveedor *</label>
-                  <select
-                    name="proveedorId"
-                    required
-                    value={formData.proveedorId || ''}
-                    onChange={handleChange}
-                    className={`w-full border rounded-lg px-3 py-2 text-black focus:ring-2 ${validationErrors.proveedorId ? 'border-red-500' : 'border-gray-300 focus:border-blue-500 focus:ring-blue-500'}`}
-                  >
-                    <option value="">Seleccionar proveedor</option>
-                    {proveedores.map(prov => (
-                      <option key={prov.id} value={prov.id} className="text-black">
-                        {prov.nombre}
-                      </option>
-                    ))}
+                  <select name="proveedorId" required value={formData.proveedorId || ''} onChange={handleChange} className={`w-full border rounded-lg px-3 py-2 text-black focus:ring-2 ${validationErrors.proveedorId ? 'border-red-500' : 'border-gray-300 focus:border-blue-500'}`}>
+                    <option value="">Seleccionar proveedor</option>{proveedores.map(prov => <option key={prov.id} value={prov.id} className="text-black">{prov.nombre}</option>)}
                   </select>
                   {renderError('proveedorId')}
                 </div>
-
                 <div className="md:col-span-2">
                   <label className="block text-sm font-medium text-gray-700 mb-1">Descripción</label>
-                  <textarea
-                    name="descripcion"
-                    rows={3}
-                    value={formData.descripcion}
-                    onChange={handleChange}
-                    placeholder="Describe las características del producto..."
-                    className={`w-full border rounded-lg px-3 py-2 focus:ring-2 ${validationErrors.descripcion ? 'border-red-500' : 'border-gray-300 focus:border-blue-500 focus:ring-blue-500'}`}
-                  ></textarea>
+                  <textarea name="descripcion" rows={3} value={formData.descripcion} onChange={handleChange} placeholder="Describe las características..." className={`w-full border rounded-lg px-3 py-2 focus:ring-2 ${validationErrors.descripcion ? 'border-red-500' : 'border-gray-300 focus:border-blue-500'}`}></textarea>
                   {renderError('descripcion')}
                 </div>
               </div>
             </div>
 
-            {/* SECCIÓN: Código de Barras */}
             <div className="bg-white rounded-lg p-4 sm:p-6 shadow-sm border border-gray-200">
-              <h3 className="text-lg font-semibold mb-4 flex items-center gap-2">
-                <IoIosBarcode className="w-5 h-5" />
-                Código de Barras
-              </h3>
+              <h3 className="text-lg font-semibold mb-4 flex items-center gap-2"><IoIosBarcode className="w-5 h-5" />Código de Barras</h3>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">Código *</label>
-                  <input
-                    type="text"
-                    name="codigoBarras"
-                    required
-                    value={formData.codigoBarras}
-                    onChange={handleChange}
-                    placeholder="Ej: 1234567890123"
-                    className={`w-full border rounded-lg px-3 py-2 focus:ring-2 ${validationErrors.codigoBarras ? 'border-red-500' : 'border-gray-300 focus:border-blue-500 focus:ring-blue-500'}`}
-                  />
+                  <input type="text" name="codigoBarras" required value={formData.codigoBarras} onChange={handleChange} placeholder="Ej: 1234567890123" className={`w-full border rounded-lg px-3 py-2 focus:ring-2 ${validationErrors.codigoBarras ? 'border-red-500' : 'border-gray-300 focus:border-blue-500'}`} />
                   {renderError('codigoBarras')}
                 </div>
-                <div className="flex items-end">
-                  <button
-                    type="button"
-                    onClick={generateBarcode}
-                    className="w-full md:w-auto bg-gray-600 text-white px-4 py-2 rounded-lg hover:bg-gray-700 transition-colors text-sm h-[42px]"
-                  >
-                    Generar Automático
-                  </button>
-                </div>
+                <div className="flex items-end"><button type="button" onClick={generateBarcode} className="w-full md:w-auto bg-gray-600 text-white px-4 py-2 rounded-lg hover:bg-gray-700 transition-colors text-sm h-[42px]">Generar Automático</button></div>
               </div>
-
               {formData.codigoBarras && (
                 <div className="mt-4 p-4 bg-gray-50 rounded-lg border border-gray-200">
                   <div className="text-center">
-                    {barcodeImageUrl && (
-                      <div className="mb-4 overflow-hidden">
-                        <img 
-                          src={barcodeImageUrl} 
-                          alt="Código de Barras" 
-                          className="mx-auto max-w-full h-auto border border-gray-300 rounded"
-                          style={{ maxHeight: '80px' }}
-                        />
-                      </div>
-                    )}
-                    <div className="text-sm text-gray-600 font-mono tracking-widest break-all">
-                      {formData.codigoBarras}
-                    </div>
+                    {barcodeImageUrl && <div className="mb-4 overflow-hidden"><img src={barcodeImageUrl} alt="Código de Barras" className="mx-auto max-w-full h-auto border border-gray-300 rounded" style={{ maxHeight: '80px' }} /></div>}
+                    <div className="text-sm text-gray-600 font-mono tracking-widest break-all">{formData.codigoBarras}</div>
                   </div>
                   <div className="flex flex-col sm:flex-row gap-2 mt-3">
-                    <button
-                      type="button"
-                      onClick={copyBarcode}
-                      className="flex-1 bg-blue-600 text-white py-2 px-3 rounded text-sm hover:bg-blue-700 transition-colors"
-                    >
-                      Copiar Código
-                    </button>
-                    <button
-                      type="button"
-                      onClick={printBarcode}
-                      className="flex-1 bg-gray-600 text-white py-2 px-3 rounded text-sm hover:bg-gray-700 transition-colors"
-                    >
-                      Imprimir
-                    </button>
+                    <button type="button" onClick={copyBarcode} className="flex-1 bg-blue-600 text-white py-2 px-3 rounded text-sm hover:bg-blue-700 transition-colors">Copiar Código</button>
+                    <button type="button" onClick={printBarcode} className="flex-1 bg-gray-600 text-white py-2 px-3 rounded text-sm hover:bg-gray-700 transition-colors">Imprimir</button>
                   </div>
                 </div>
               )}
             </div>
 
-            {/* SECCIÓN: Precios y Stock (Grilla mejorada para móvil) */}
             <div className="bg-white rounded-lg p-4 sm:p-6 shadow-sm border border-gray-200">
-              <h3 className="text-lg font-semibold mb-4 flex items-center gap-2">
-                <IoIosCash className="w-5 h-5" />
-                Precios y Stock
-              </h3>
+              <h3 className="text-lg font-semibold mb-4 flex items-center gap-2"><IoIosCash className="w-5 h-5" />Precios y Stock</h3>
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Precio Venta *</label>
-                  <div className="relative">
-                    <span className="absolute left-3 top-2 text-gray-500">S/</span>
-                    <input
-                      type="number" step="0.01" name="precioVenta"
-                      value={formData.precioVenta}
-                      onChange={handleChange}
-                      required
-                      className={`w-full border rounded-lg pl-8 pr-3 py-2 focus:ring-2 ${validationErrors.precioVenta ? 'border-red-500' : 'border-gray-300 focus:border-blue-500 focus:ring-blue-500'}`}
-                    />
-                  </div>
-                  {renderError('precioVenta')}
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Precio Compra</label>
-                  <div className="relative">
-                    <span className="absolute left-3 top-2 text-gray-500">S/</span>
-                    <input
-                      type="number" step="0.01" name="precioCompra"
-                      value={formData.precioCompra}
-                      onChange={handleChange}
-                      className={`w-full border rounded-lg pl-8 pr-3 py-2 focus:ring-2 ${validationErrors.precioCompra ? 'border-red-500' : 'border-gray-300 focus:border-blue-500 focus:ring-blue-500'}`}
-                    />
-                  </div>
-                  {renderError('precioCompra')}
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Stock Inicial *</label>
-                  <input
-                    type="number" name="stockInicial"
-                    value={formData.stockInicial}
-                    onChange={handleChange}
-                    required
-                    className={`w-full border rounded-lg px-3 py-2 focus:ring-2 ${validationErrors.stockInicial ? 'border-red-500' : 'border-gray-300 focus:border-blue-500 focus:ring-blue-500'}`}
-                  />
-                  {renderError('stockInicial')}
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Mínimo / Máximo</label>
-                  <div className="flex gap-2">
-                    <input
-                      type="number" name="stockMinimo" placeholder="Min"
-                      value={formData.stockMinimo}
-                      onChange={handleChange}
-                      required
-                      className="w-1/2 border rounded-lg px-2 py-2 focus:ring-2 border-gray-300 focus:border-blue-500"
-                    />
-                    <input
-                      type="number" name="stockMaximo" placeholder="Max"
-                      value={formData.stockMaximo}
-                      onChange={handleChange}
-                      className="w-1/2 border rounded-lg px-2 py-2 focus:ring-2 border-gray-300 focus:border-blue-500"
-                    />
-                  </div>
-                </div>
+                <div><label className="block text-sm font-medium text-gray-700 mb-1">Precio Venta *</label><div className="relative"><span className="absolute left-3 top-2 text-gray-500">S/</span><input type="number" step="0.01" name="precioVenta" value={formData.precioVenta} onChange={handleChange} required className={`w-full border rounded-lg pl-8 pr-3 py-2 focus:ring-2 ${validationErrors.precioVenta ? 'border-red-500' : 'border-gray-300 focus:border-blue-500'}`} /></div>{renderError('precioVenta')}</div>
+                <div><label className="block text-sm font-medium text-gray-700 mb-1">Precio Compra</label><div className="relative"><span className="absolute left-3 top-2 text-gray-500">S/</span><input type="number" step="0.01" name="precioCompra" value={formData.precioCompra} onChange={handleChange} className={`w-full border rounded-lg pl-8 pr-3 py-2 focus:ring-2 ${validationErrors.precioCompra ? 'border-red-500' : 'border-gray-300 focus:border-blue-500'}`} /></div>{renderError('precioCompra')}</div>
+                <div><label className="block text-sm font-medium text-gray-700 mb-1">Stock Inicial *</label><input type="number" name="stockInicial" value={formData.stockInicial} onChange={handleChange} required className={`w-full border rounded-lg px-3 py-2 focus:ring-2 ${validationErrors.stockInicial ? 'border-red-500' : 'border-gray-300 focus:border-blue-500'}`} />{renderError('stockInicial')}</div>
+                <div><label className="block text-sm font-medium text-gray-700 mb-1">Mínimo / Máximo</label><div className="flex gap-2"><input type="number" name="stockMinimo" placeholder="Min" value={formData.stockMinimo} onChange={handleChange} required className="w-1/2 border rounded-lg px-2 py-2 focus:ring-2 border-gray-300 focus:border-blue-500" /><input type="number" name="stockMaximo" placeholder="Max" value={formData.stockMaximo} onChange={handleChange} className="w-1/2 border rounded-lg px-2 py-2 focus:ring-2 border-gray-300 focus:border-blue-500" /></div></div>
               </div>
             </div>
 
-            {/* SECCIÓN: Especificaciones e Inventario */}
             <div className="bg-white rounded-lg p-4 sm:p-6 shadow-sm border border-gray-200">
-              <h3 className="text-lg font-semibold mb-4 flex items-center gap-2">
-                <IoIosCube className="w-5 h-5" />
-                Almacenamiento
-              </h3>
+              <h3 className="text-lg font-semibold mb-4 flex items-center gap-2"><IoIosCube className="w-5 h-5" />Almacenamiento</h3>
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Unidad</label>
-                  <select
-                    name="unidadMedida"
-                    value={formData.unidadMedida}
-                    onChange={handleChange}
-                    className="w-full border rounded-lg px-3 py-2 focus:ring-2 border-gray-300 focus:border-blue-500"
-                  >
-                    {unidadesMedida.map(u => (
-                      <option key={u} value={u}>{u.charAt(0) + u.slice(1).toLowerCase()}</option>
-                    ))}
-                  </select>
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Peso (kg)</label>
-                  <input
-                    type="number" step="0.001" name="pesoKg"
-                    value={formData.pesoKg}
-                    onChange={handleChange}
-                    className="w-full border rounded-lg px-3 py-2 focus:ring-2 border-gray-300 focus:border-blue-500"
-                  />
-                </div>
-                <div className="sm:col-span-2 lg:col-span-1">
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Almacén *</label>
-                  <select
-                    name="almacenId"
-                    value={formData.almacenId || ''}
-                    onChange={handleChange}
-                    required
-                    className="w-full border rounded-lg px-3 py-2 focus:ring-2 border-gray-300 focus:border-blue-500"
-                  >
-                    <option value="">Seleccionar almacén</option>
-                    {almacenes.map(alm => (
-                      <option key={alm.id} value={alm.id}>{alm.nombre}</option>
-                    ))}
-                  </select>
-                </div>
-                <div className="sm:col-span-2 lg:col-span-3">
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Ubicación Física</label>
-                  <input
-                    type="text" name="ubicacion"
-                    value={formData.ubicacion}
-                    onChange={handleChange}
-                    placeholder="Ej: Pasillo A, Estante 3"
-                    className="w-full border rounded-lg px-3 py-2 focus:ring-2 border-gray-300 focus:border-blue-500"
-                  />
-                </div>
+                <div><label className="block text-sm font-medium text-gray-700 mb-1">Unidad</label><select name="unidadMedida" value={formData.unidadMedida} onChange={handleChange} className="w-full border rounded-lg px-3 py-2 focus:ring-2 border-gray-300 focus:border-blue-500">{unidadesMedida.map(u => <option key={u} value={u}>{u.charAt(0) + u.slice(1).toLowerCase()}</option>)}</select></div>
+                <div><label className="block text-sm font-medium text-gray-700 mb-1">Peso (kg)</label><input type="number" step="0.001" name="pesoKg" value={formData.pesoKg} onChange={handleChange} className="w-full border rounded-lg px-3 py-2 focus:ring-2 border-gray-300 focus:border-blue-500" /></div>
+                <div className="sm:col-span-2 lg:col-span-1"><label className="block text-sm font-medium text-gray-700 mb-1">Almacén *</label><select name="almacenId" value={formData.almacenId || ''} onChange={handleChange} required className="w-full border rounded-lg px-3 py-2 focus:ring-2 border-gray-300 focus:border-blue-500"><option value="">Seleccionar almacén</option>{almacenes.map(alm => <option key={alm.id} value={alm.id}>{alm.nombre}</option>)}</select></div>
+                <div className="sm:col-span-2 lg:col-span-3"><label className="block text-sm font-medium text-gray-700 mb-1">Ubicación Física</label><input type="text" name="ubicacion" value={formData.ubicacion} onChange={handleChange} placeholder="Ej: Pasillo A, Estante 3" className="w-full border rounded-lg px-3 py-2 focus:ring-2 border-gray-300 focus:border-blue-500" /></div>
               </div>
             </div>
 
-            {/* Botones de Acción (Full width en móvil) */}
             <div className="flex flex-col-reverse sm:flex-row justify-end items-center gap-3 pt-6 pb-4">
-              <button
-                type="button"
-                onClick={() => setShowCancelModal(true)}
-                className="w-full sm:w-auto px-6 py-2.5 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 transition-colors font-medium"
-              >
-                Cancelar
-              </button>
-              <button
-                type="submit"
-                className="w-full sm:w-auto bg-blue-600 text-white px-6 py-2.5 rounded-lg flex items-center justify-center gap-2 hover:bg-blue-700 active:bg-blue-800 transition-all font-medium shadow-sm"
-              >
-                <IoIosSave className="w-5 h-5" />
-                Guardar Producto
-              </button>
+              <button type="button" onClick={() => setShowCancelModal(true)} className="w-full sm:w-auto px-6 py-2.5 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 transition-colors font-medium">Cancelar</button>
+              <button type="submit" className="w-full sm:w-auto bg-blue-600 text-white px-6 py-2.5 rounded-lg flex items-center justify-center gap-2 hover:bg-blue-700 active:bg-blue-800 transition-all font-medium shadow-sm"><IoIosSave className="w-5 h-5" />Guardar Producto</button>
             </div>
           </div>
         </div>
