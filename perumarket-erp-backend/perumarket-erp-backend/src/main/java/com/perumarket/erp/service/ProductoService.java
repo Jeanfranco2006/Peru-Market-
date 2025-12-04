@@ -182,6 +182,30 @@ public class ProductoService {
         }).collect(Collectors.toList());
     }
 
+
+    @Transactional
+public ProductoResponse actualizarStock(Integer productoId, Integer nuevoStock) {
+    Inventario inventario = inventarioRepository.findByProductoId(productoId).stream().findFirst()
+            .orElseThrow(() -> new ResourceNotFoundException("Inventario", "productoId", productoId.toString()));
+
+    MovimientoInventario mov = new MovimientoInventario();
+    mov.setInventario(inventario);
+    mov.setProducto(inventario.getProducto());
+    mov.setAlmacen(inventario.getAlmacen());
+    mov.setTipoMovimiento(MovimientoInventario.TipoMovimiento.ENTRADA); // o AJUSTE
+    mov.setCantidad(nuevoStock - inventario.getStockActual());
+    mov.setStockAnterior(inventario.getStockActual());
+    mov.setStockNuevo(nuevoStock);
+    mov.setMotivo("Actualización de stock desde frontend.");
+    mov.setIdUsuario(1); // Simulación
+    movimientoInventarioRepository.save(mov);
+
+    inventario.setStockActual(nuevoStock);
+    inventarioRepository.save(inventario);
+
+    return obtenerProductoPorId(productoId);
+}
+
     /**
      * Mapeo de Entidad Producto y sus relaciones a DTO de Respuesta.
      */

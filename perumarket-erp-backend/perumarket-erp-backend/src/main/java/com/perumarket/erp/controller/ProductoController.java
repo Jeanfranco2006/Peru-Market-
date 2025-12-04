@@ -11,6 +11,7 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 import java.util.List; // NECESARIO PARA LISTAR
+import java.util.Map;
 
 @RestController
 // El path de acceso debe ser el complemento del context-path: /api + /productos
@@ -103,5 +104,19 @@ public class ProductoController {
         }
     }
     
+// 6. ENDPOINT PARA ACTUALIZAR STOCK DE UN PRODUCTO
+@PutMapping("/{id}/stock")
+public ResponseEntity<ProductoResponse> actualizarStockProducto(
+        @PathVariable Integer id,
+        @RequestBody Map<String, Integer> body) { // JSON esperado: { "stock": 50 }
     
+    Integer nuevoStock = body.get("stock");
+    if (nuevoStock == null || nuevoStock < 0) {
+        return ResponseEntity.badRequest().build();
+    }
+
+    ProductoResponse productoActualizado = productoService.actualizarStock(id, nuevoStock);
+    return ResponseEntity.ok(productoActualizado);
+}
+
 }

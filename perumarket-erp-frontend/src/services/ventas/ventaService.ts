@@ -1,46 +1,16 @@
-// services/ventaService.ts
 import type { Cliente } from '../../types/clientes/Client';
-import type { DetallePago, Producto, ProductoVenta } from '../../types/ventas/ventas';
+import type { DetallePago, MetodoPago, Producto, ProductoVenta, VentaRequest } from '../../types/ventas/ventas';
+import { api } from '../api';
 
-const API_URL = 'http://localhost:8080/api';
-
-export interface VentaRequest {
-  idCliente: number;
-  idUsuario: number;
-  idAlmacen: number;
-  subtotal: number;
-  igv: number;
-  total: number;
-  detalles: Array<{
-    idProducto: number;
-    cantidad: number;
-    precioUnitario: number;
-    subtotal: number;
-  }>;
-  pagos: DetallePago[];
-}
-
-export interface MetodoPago {
-  id: number;
-  nombre: string;
-  descripcion: string;
-  estado: string;
-}
-
-// Función helper para limpiar y validar objetos
-const limpiarObjeto = (obj: any): any => {
-  return Object.fromEntries(
-    Object.entries(obj).filter(([_, v]) => v !== undefined && v !== null)
-  );
-};
+// Función helper para limpiar objetos
+const limpiarObjeto = (obj: any): any =>
+  Object.fromEntries(Object.entries(obj).filter(([_, v]) => v !== undefined && v !== null));
 
 export const ventaService = {
   // Productos
   async fetchProductos(): Promise<Producto[]> {
     try {
-      const response = await fetch(`${API_URL}/productos`);
-      const data = await response.json();
-      
+      const { data } = await api.get('/productos');
       return data.map((p: any) => ({
         id: p.id,
         nombre: p.nombre,
@@ -61,8 +31,8 @@ export const ventaService = {
   // Almacenes
   async fetchAlmacenes(): Promise<any[]> {
     try {
-      const response = await fetch(`${API_URL}/almacenes`);
-      return await response.json();
+      const { data } = await api.get('/almacenes');
+      return data;
     } catch (error) {
       console.error("Error cargando almacenes:", error);
       throw error;
@@ -72,8 +42,7 @@ export const ventaService = {
   // Clientes
   async fetchClientes(): Promise<Cliente[]> {
     try {
-      const response = await fetch(`${API_URL}/clientes`);
-      const data = await response.json();
+      const { data } = await api.get('/clientes');
       return data.map((cliente: any) => ({
         clienteid: cliente.clienteid || cliente.id,
         persona: cliente.persona,
@@ -89,12 +58,7 @@ export const ventaService = {
 
   async registrarCliente(clienteData: Omit<Cliente, 'clienteid'>): Promise<Cliente> {
     try {
-      const response = await fetch(`${API_URL}/clientes`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(limpiarObjeto(clienteData))
-      });
-      const data = await response.json();
+      const { data } = await api.post('/clientes', limpiarObjeto(clienteData));
       return {
         clienteid: data.clienteid || data.id,
         persona: data.persona,
@@ -122,21 +86,16 @@ export const ventaService = {
   // Stock
   async actualizarStock(idProducto: number, stock: number): Promise<void> {
     try {
-      await fetch(`${API_URL}/productos/${idProducto}/stock`, {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ stock })
-      });
+      await api.put(`/productos/${idProducto}/stock`, { stock });
     } catch (error) {
       console.error(`Error actualizando stock del producto ${idProducto}:`, error);
       throw error;
     }
   },
 
-  // Venta - CORREGIDO
-  async procesarVenta(ventaData: VentaRequest): Promise<{id: number, numeroComprobante: string}> {
+  // Venta
+  async procesarVenta(ventaData: VentaRequest): Promise<{ id: number; numeroComprobante: string }> {
     try {
-      // 1. Validar y limpiar los datos
       const datosLimpios = {
         idCliente: Number(ventaData.idCliente),
         idUsuario: Number(ventaData.idUsuario),
@@ -157,24 +116,10 @@ export const ventaService = {
         }))
       };
 
-      // 2. Log para depuración
       console.log('Enviando venta:', datosLimpios);
 
-      const response = await fetch(`${API_URL}/ventas`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(datosLimpios)
-      });
-
-      // 3. Manejar respuesta
-      if (!response.ok) {
-        const errorText = await response.text();
-        console.error('Error response:', errorText);
-        throw new Error(`Error al registrar la venta: ${response.status} ${response.statusText}`);
-      }
-
-      const resultado = await response.json();
-      return resultado;
+      const { data } = await api.post('/ventas', datosLimpios);
+      return data;
     } catch (error) {
       console.error("Error procesando venta:", error);
       throw error;
@@ -188,9 +133,9 @@ export const ventaService = {
     const subtotal = subtotalProduct - igv;
     const total = subtotalProduct;
 
-    return { 
-      subtotal: Number(subtotal.toFixed(2)), 
-      igv: Number(igv.toFixed(2)), 
+    return {
+      subtotal: Number(subtotal.toFixed(2)),
+      igv: Number(igv.toFixed(2)),
       total: Number(total.toFixed(2)),
       subtotalProduct: Number(subtotalProduct.toFixed(2))
     };
@@ -200,7 +145,7 @@ export const ventaService = {
   obtenerDatosSesion() {
     const idUsuario = Number(localStorage.getItem("usuarioId"));
     const idAlmacen = Number(localStorage.getItem("almacenId")) || 1;
-    
+
     if (!idUsuario || idUsuario <= 0) {
       throw new Error("Usuario no válido. Por favor, inicia sesión de nuevo.");
     }
