@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import type { AlmacenFormData } from '../../types/inventario/almacen.types';
-import { almacenService } from '../../services/inventario/almacen.service';
+import type { AlmacenFormData } from '../../types/inventario/almacen';
+import { almacenService } from '../../services/inventario/almacen';
 
 export const useAlmacenForm = () => {
     const navigate = useNavigate();

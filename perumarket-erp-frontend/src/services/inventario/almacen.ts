@@ -1,6 +1,6 @@
-import type{ AlmacenFormData } from '../../types/inventario/almacen.types';
+import type{ AlmacenFormData } from '../../types/inventario/almacen';
 
-const API_URL = 'http://localhost:8080/api/almacenes';
+const API_URL = '/almacenes';
 
 export const almacenService = {
     create: async (data: AlmacenFormData): Promise<void> => {

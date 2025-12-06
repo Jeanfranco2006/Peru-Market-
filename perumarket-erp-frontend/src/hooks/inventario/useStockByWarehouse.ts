@@ -1,8 +1,8 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import { useParams } from 'react-router-dom';
 // NOTA: Ajusta la ruta "../.." según donde tengas la carpeta 'types'
-import type { Product, Warehouse } from '../../types/inventario/stock.types';
-import { stockService } from '../../services/inventario/stock.service';
+import type { Product, Warehouse } from '../../types/inventario/stock';
+import { stockService } from '../../services/inventario/stock';
 
 export const useStockByWarehouse = () => {
   const { id: warehouseIdParam } = useParams<{ id: string }>();

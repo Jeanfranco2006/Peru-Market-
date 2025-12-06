@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
-import type { Warehouse } from '../../types/inventario/warehouse.types';
-import { warehouseService } from '../../services/inventario/warehouse.service';
+import type { Warehouse } from '../../types/inventario/warehouse';
+import { warehouseService } from '../../services/inventario/warehouse';
 
 export const useWarehouseList = () => {
   const [warehouses, setWarehouses] = useState<Warehouse[]>([]);

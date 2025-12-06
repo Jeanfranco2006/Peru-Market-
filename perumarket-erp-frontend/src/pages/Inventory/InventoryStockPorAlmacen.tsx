@@ -8,7 +8,7 @@ import {
 } from 'react-icons/io'; 
 
 import { useStockByWarehouse } from '../../hooks/inventario/useStockByWarehouse';
-import type { StockStatusResult } from '../../types/inventario/stock.types';
+import type { StockStatusResult } from '../../types/inventario/stock';
 
 // Función auxiliar de UI (Pura)
 const getStatusClasses = (stock: number, minStock: number): StockStatusResult => {

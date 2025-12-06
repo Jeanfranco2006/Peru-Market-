@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
-import type { Product } from '../../types/inventario/inventory.types';
-import { inventoryService } from '../../services/inventario/inventory.service';
+import type { Product } from '../../types/inventario/inventory';
+import { inventoryService } from '../../services/inventario/inventory';
 
 export const useInventory = () => {
   const [products, setProducts] = useState<Product[]>([]);
