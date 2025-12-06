@@ -13,7 +13,7 @@ import {
 
 import { useProductForm } from '../../hooks/inventario/useProductForm';
 import { useProductOptions } from '../../hooks/inventario/useProductOptions';
-import type { ProductoFormData } from '../../types/inventario/product.types';
+import type { ProductoFormData } from '../../types/inventario/product';
 
 export default function InventoryAddProduct() {
   // 1. Hook del Formulario
@@ -155,7 +155,20 @@ export default function InventoryAddProduct() {
                   {renderError('categoriaId')}
                 </div>
                 <div>
-                  <label className="text-sm font-medium text-gray-700 mb-1 flex justify-between items-center">SKU *<button type="button" onClick={() => setFormData(prev => ({ ...prev, sku: generateSKU(formData.nombre) }))} className="text-xs text-blue-600 hover:text-blue-800 underline">Regenerar</button></label>
+                  
+
+                    <label className="text-sm font-medium text-gray-700 mb-1 flex justify-between items-center">
+                      SKU *
+                      <button 
+                        type="button" 
+                        // AQUÍ ESTÁ EL CAMBIO: Agregamos (prev: ProductoFormData)
+                        onClick={() => setFormData((prev: ProductoFormData) => ({ ...prev, sku: generateSKU(formData.nombre) }))} 
+                        className="text-xs text-blue-600 hover:text-blue-800 underline"
+                      >
+                        Regenerar
+                      </button>
+                    </label>
+
                   <input type="text" name="sku" required value={formData.sku} onChange={handleChange} className={`w-full border rounded-lg px-3 py-2 focus:ring-2 ${validationErrors.sku ? 'border-red-500' : 'border-gray-300 focus:border-blue-500'}`} />
                   {renderError('sku')}
                 </div>

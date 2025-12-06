@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import type { Product } from '../../types/inventario/inventory';
-import { inventoryService } from '../../services/inventario/inventory';
+import { inventoryService } from '../../services/inventario/inventoryService';
 
 export const useInventory = () => {
   const [products, setProducts] = useState<Product[]>([]);
@@ -14,6 +14,10 @@ export const useInventory = () => {
   // Modal de Código de Barras
   const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
   const [showBarcodeModal, setShowBarcodeModal] = useState(false);
+
+  // --- NUEVO: ESTADOS PARA EL MODAL DE ELIMINAR ---
+  const [productToDelete, setProductToDelete] = useState<{ id: number; nombre: string } | null>(null);
+  const [isDeleting, setIsDeleting] = useState(false); // Para mostrar spinner si demora
 
   // --- Carga de Datos ---
   const fetchProducts = useCallback(async () => {
@@ -34,24 +38,37 @@ export const useInventory = () => {
     fetchProducts();
   }, [fetchProducts]);
 
-  // --- Lógica de Negocio (Borrado) ---
-  const handleDelete = async (id: number, nombre: string) => {
-    if (!window.confirm(`PELIGRO: ¿Estás seguro de eliminar "${nombre}" DE FORMA PERMANENTE?\n\nSe borrará:\n- El producto\n- Su stock actual\n- Todo su historial de movimientos`)) {
-        return;
-    }
+  // --- NUEVA LÓGICA DE BORRADO ---
+  
+  // 1. El usuario hace click en el botón de basura (abre modal)
+  const initiateDelete = (id: number, nombre: string) => {
+    setProductToDelete({ id, nombre });
+  };
 
+  // 2. El usuario confirma en el modal (ejecuta borrado)
+  const confirmDelete = async () => {
+    if (!productToDelete) return;
+
+    setIsDeleting(true);
     try {
-        await inventoryService.deleteProduct(id);
-        // Actualización optimista de la UI
-        setProducts(prev => prev.filter(p => p.id !== id));
-        alert('Producto eliminado completamente del sistema.');
+        await inventoryService.deleteProduct(productToDelete.id);
+        // Actualización optimista
+        setProducts(prev => prev.filter(p => p.id !== productToDelete.id));
+        setProductToDelete(null); // Cierra el modal
     } catch (err: any) {
         console.error('Error:', err);
-        alert(`Error: ${err.message}`);
+        alert(`Error al eliminar: ${err.message}`); // Aquí sí dejamos un alert simple por si falla el API
+    } finally {
+        setIsDeleting(false);
     }
   };
 
-  // --- Lógica de Filtrado y Estadísticas ---
+  // 3. El usuario cancela
+  const cancelDelete = () => {
+    setProductToDelete(null);
+  };
+
+  // ... (El resto de lógica de filtros y stats se mantiene igual) ...
   const categories = useMemo(() => {
     const uniqueCategories = Array.from(new Set(products.map(p => p.categoriaNombre)));
     return ['all', ...uniqueCategories];
@@ -63,14 +80,11 @@ export const useInventory = () => {
         product.nombre.toLowerCase().includes(searchTerm.toLowerCase()) ||
         product.sku.toLowerCase().includes(searchTerm.toLowerCase()) ||
         product.codigoBarrasPrincipal?.includes(searchTerm);
-
       const matchesCategory = filterCategory === 'all' || product.categoriaNombre === filterCategory;
-
       return matchesSearch && matchesCategory;
     });
   }, [searchTerm, filterCategory, products]);
 
-  // Stats
   const stats = useMemo(() => ({
     totalProducts: products.length,
     totalValue: products.reduce((sum, p) => sum + p.stockActual * p.precioVenta, 0),
@@ -78,7 +92,7 @@ export const useInventory = () => {
     outOfStockCount: products.filter(p => p.stockActual <= 0).length
   }), [products]);
 
-  // --- Manejo del Modal ---
+  // Modal controls Barcode
   const openBarcodeModal = (product: Product) => {
     setSelectedProduct(product);
     setShowBarcodeModal(true);
@@ -100,8 +114,13 @@ export const useInventory = () => {
     setSearchTerm,
     filterCategory,
     setFilterCategory,
-    handleDelete,
-    // Modal controls
+    // Nuevos retornos para el delete
+    initiateDelete,
+    confirmDelete,
+    cancelDelete,
+    productToDelete,
+    isDeleting,
+    // Modal controls Barcode
     showBarcodeModal,
     selectedProduct,
     openBarcodeModal,

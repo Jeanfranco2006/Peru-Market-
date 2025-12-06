@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
-import type { ProductoFormData, NotificationState } from '../../types/inventario/product.types';
-import { productService } from '../../services/inventario/product';
+import type { ProductoFormData, NotificationState } from '../../types/inventario/product';
+import { productService } from '../../services/inventario/productService';
 
 const INITIAL_FORM_STATE: ProductoFormData = {
   nombre: '', descripcion: '', sku: '', precioVenta: 0.0, precioCompra: 0.0,

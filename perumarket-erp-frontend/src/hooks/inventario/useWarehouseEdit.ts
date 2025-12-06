@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import type { Warehouse, NotificationState } from '../../types/inventario/warehouse';
-import { warehouseService } from '../../services/inventario/warehouse';
+import { warehouseService } from '../../services/inventario/warehouseService';
 
 // Recibe setWarehouses para actualización optimista de la UI
 export const useWarehouseEdit = (

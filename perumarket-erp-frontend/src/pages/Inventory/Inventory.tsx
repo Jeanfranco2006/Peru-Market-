@@ -1,16 +1,17 @@
 import { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import {
-    IoIosCube, IoIosStats, IoIosPulse, IoMdArrowDropdown, IoIosSearch,
+    IoIosCube, IoIosStats, IoIosPulse, IoIosSearch,
     IoMdHome, IoMdAdd, IoMdCheckmarkCircle, IoIosCart, IoMdClipboard,
     IoIosPin, IoIosBuild, IoIosPeople, IoMdCreate, IoMdRefresh, IoMdTrash,
-    IoIosArchive, IoIosBarcode, IoIosImage, IoMdWarning, IoMdClose
+    IoIosArchive, IoIosBarcode, IoIosImage, IoMdWarning, IoMdClose,
+    IoMdAlert // IMPORTANTE: Añadido para el modal
 } from 'react-icons/io';
 
 // Importamos el hook de lógica
 import { useInventory } from '../../hooks/inventario/useInventory';
 
-// --- COMPONENTES UI AUXILIARES ---
+// --- COMPONENTES UI AUXILIARES (SE MANTIENEN IGUAL) ---
 
 // 1. Estado del Stock (Helper para lógica visual)
 const getStockStatusConfig = (stock: number, minStock: number) => {
@@ -129,7 +130,13 @@ export default function Inventory() {
         setSearchTerm,
         filterCategory,
         setFilterCategory,
-        handleDelete,
+        // Nuevas funciones destructuradas del hook para el Modal
+        initiateDelete,
+        confirmDelete,
+        cancelDelete,
+        productToDelete,
+        isDeleting,
+        // Funciones del Modal Barcode
         showBarcodeModal,
         selectedProduct,
         openBarcodeModal,
@@ -158,7 +165,76 @@ export default function Inventory() {
     );
 
     return (
-        <div className="min-h-screen bg-slate-50/50 pb-20">
+        <div className="min-h-screen bg-slate-50/50 pb-20 relative">
+            
+            {/* --- MODAL DE ELIMINAR (PERSONALIZADO) --- */}
+            {productToDelete && (
+                <div className="fixed inset-0 z-[200] flex items-center justify-center p-4">
+                    {/* Backdrop */}
+                    <div 
+                        className="absolute inset-0 bg-slate-900/60 backdrop-blur-sm transition-opacity" 
+                        onClick={!isDeleting ? cancelDelete : undefined}
+                    ></div>
+
+                    {/* Contenedor del Modal */}
+                    <div className="relative bg-white rounded-2xl shadow-2xl max-w-md w-full overflow-hidden animate-in zoom-in-95 duration-200">
+                        {/* Cabecera Roja */}
+                        <div className="bg-red-50 border-b border-red-100 p-6 flex flex-col items-center text-center">
+                            <div className="w-16 h-16 bg-red-100 rounded-full flex items-center justify-center mb-4">
+                                <IoMdWarning className="w-8 h-8 text-red-600" />
+                            </div>
+                            <h3 className="text-xl font-bold text-slate-900">¿Eliminar producto?</h3>
+                            <p className="text-sm text-slate-500 mt-2">
+                                Estás a punto de eliminar <span className="font-bold text-slate-800">"{productToDelete.nombre}"</span>.
+                            </p>
+                        </div>
+
+                        {/* Cuerpo de Advertencia */}
+                        <div className="p-6 space-y-4">
+                            <div className="bg-amber-50 border border-amber-100 rounded-lg p-4 flex gap-3">
+                                <IoMdAlert className="w-5 h-5 text-amber-600 shrink-0 mt-0.5" />
+                                <div className="text-sm text-amber-800">
+                                    <p className="font-semibold mb-1">Acción irreversible</p>
+                                    <ul className="list-disc list-inside space-y-1 opacity-90 text-xs">
+                                        <li>Se eliminará el producto del inventario.</li>
+                                        <li>Se perderá el stock actual.</li>
+                                        <li>Se borrará el historial de movimientos.</li>
+                                    </ul>
+                                </div>
+                            </div>
+                        </div>
+
+                        {/* Botones de Acción */}
+                        <div className="p-6 bg-slate-50 border-t border-slate-100 flex gap-3">
+                            <button 
+                                onClick={cancelDelete}
+                                disabled={isDeleting}
+                                className="flex-1 px-4 py-2.5 bg-white border border-slate-300 text-slate-700 font-medium rounded-lg hover:bg-slate-50 transition-colors disabled:opacity-50"
+                            >
+                                Cancelar
+                            </button>
+                            <button 
+                                onClick={confirmDelete}
+                                disabled={isDeleting}
+                                className="flex-1 px-4 py-2.5 bg-red-600 text-white font-medium rounded-lg hover:bg-red-700 shadow-sm shadow-red-200 transition-all flex items-center justify-center gap-2 disabled:opacity-70"
+                            >
+                                {isDeleting ? (
+                                    <>
+                                        <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
+                                        Eliminando...
+                                    </>
+                                ) : (
+                                    <>
+                                        <IoMdTrash className="w-5 h-5" />
+                                        Sí, eliminar
+                                    </>
+                                )}
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
             <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-8">
                 
                 {/* Header Principal */}
@@ -370,8 +446,9 @@ export default function Inventory() {
                                                 <IoMdCreate className="w-4 h-4 mr-1.5" />
                                                 Editar
                                             </Link>
+                                            {/* BOTON DE ELIMINAR ACTUALIZADO */}
                                             <button 
-                                                onClick={() => handleDelete(product.id, product.nombre)} 
+                                                onClick={() => initiateDelete(product.id, product.nombre)} 
                                                 className="inline-flex items-center justify-center px-3 py-2 bg-white border border-slate-200 text-slate-400 hover:text-red-600 hover:bg-red-50 hover:border-red-200 rounded-lg transition-all"
                                                 title="Eliminar producto"
                                             >

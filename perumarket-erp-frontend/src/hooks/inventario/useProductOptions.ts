@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
-import type { Option } from '../../types/inventario/product.types';
-import { productService } from '../../services/inventario/product';
+import type { Option } from '../../types/inventario/product';
+import { productService } from '../../services/inventario/productService';
 
 export const useProductOptions = (onError: (msg: string) => void) => {
   const [categorias, setCategorias] = useState<Option[]>([]);

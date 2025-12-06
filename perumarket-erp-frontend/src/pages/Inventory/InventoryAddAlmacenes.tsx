@@ -9,7 +9,7 @@ import {
 } from 'react-icons/io';
 
 import { useAlmacenForm } from '../../hooks/inventario/useAlmacenForm';
-import type { AlmacenFormData } from '../../types/inventario/almacen.types';
+import type { AlmacenFormData } from '../../types/inventario/almacen';
 
 export default function InventoryAddAlmacenes() {
     // Usamos el hook para obtener toda la lógica y estado
