@@ -1,5 +1,5 @@
 import { Link } from 'react-router-dom';
-import {useCallback } from 'react'; // IMPORTANTE: useCallback añadido
+import { useCallback, useEffect } from 'react'; // IMPORTANTE: useEffect añadido
 import {
   IoMdArrowBack,
   IoIosCloudUpload,
@@ -45,8 +45,15 @@ export default function InventoryAddProduct() {
   // 3. Hook de Opciones (Pasamos la función memorizada)
   const { categorias, almacenes, proveedores, loadingOptions } = useProductOptions(handleLoadError);
 
+  // --- EFECTO: Forzar Unidad a KG ---
+  useEffect(() => {
+    setFormData(prev => {
+      if (prev.unidadMedida === 'KG') return prev;
+      return { ...prev, unidadMedida: 'KG' };
+    });
+  }, [setFormData]);
+
   // --- Constantes UI ---
-  const unidadesMedida = ['UNIDAD', 'CAJA', 'PAQUETE', 'KG', 'LITRO'];
   const selectedAlmacenName = almacenes.find(a => a.id === formData.almacenId)?.nombre || 'Por seleccionar';
   const selectedProveedorName = proveedores.find(p => p.id === formData.proveedorId)?.nombre || 'Por seleccionar';
 
@@ -155,20 +162,16 @@ export default function InventoryAddProduct() {
                   {renderError('categoriaId')}
                 </div>
                 <div>
-                  
-
-                    <label className="text-sm font-medium text-gray-700 mb-1 flex justify-between items-center">
-                      SKU *
-                      <button 
-                        type="button" 
-                        // AQUÍ ESTÁ EL CAMBIO: Agregamos (prev: ProductoFormData)
-                        onClick={() => setFormData((prev: ProductoFormData) => ({ ...prev, sku: generateSKU(formData.nombre) }))} 
-                        className="text-xs text-blue-600 hover:text-blue-800 underline"
-                      >
-                        Regenerar
-                      </button>
-                    </label>
-
+                  <label className="text-sm font-medium text-gray-700 mb-1 flex justify-between items-center">
+                    SKU *
+                    <button 
+                      type="button" 
+                      onClick={() => setFormData((prev: ProductoFormData) => ({ ...prev, sku: generateSKU(formData.nombre) }))} 
+                      className="text-xs text-blue-600 hover:text-blue-800 underline"
+                    >
+                      Regenerar
+                    </button>
+                  </label>
                   <input type="text" name="sku" required value={formData.sku} onChange={handleChange} className={`w-full border rounded-lg px-3 py-2 focus:ring-2 ${validationErrors.sku ? 'border-red-500' : 'border-gray-300 focus:border-blue-500'}`} />
                   {renderError('sku')}
                 </div>
@@ -224,7 +227,20 @@ export default function InventoryAddProduct() {
             <div className="bg-white rounded-lg p-4 sm:p-6 shadow-sm border border-gray-200">
               <h3 className="text-lg font-semibold mb-4 flex items-center gap-2"><IoIosCube className="w-5 h-5" />Almacenamiento</h3>
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-                <div><label className="block text-sm font-medium text-gray-700 mb-1">Unidad</label><select name="unidadMedida" value={formData.unidadMedida} onChange={handleChange} className="w-full border rounded-lg px-3 py-2 focus:ring-2 border-gray-300 focus:border-blue-500">{unidadesMedida.map(u => <option key={u} value={u}>{u.charAt(0) + u.slice(1).toLowerCase()}</option>)}</select></div>
+                
+                {/* --- SECCIÓN MODIFICADA: UNIDAD FIJA (KG) --- */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Unidad</label>
+                  <input 
+                    type="text" 
+                    name="unidadMedida" 
+                    value="KG" 
+                    readOnly 
+                    className="w-full border rounded-lg px-3 py-2 bg-gray-100 text-gray-500 cursor-not-allowed focus:ring-0 border-gray-300" 
+                  />
+                </div>
+                {/* ------------------------------------------- */}
+
                 <div><label className="block text-sm font-medium text-gray-700 mb-1">Peso (kg)</label><input type="number" step="0.001" name="pesoKg" value={formData.pesoKg} onChange={handleChange} className="w-full border rounded-lg px-3 py-2 focus:ring-2 border-gray-300 focus:border-blue-500" /></div>
                 <div className="sm:col-span-2 lg:col-span-1"><label className="block text-sm font-medium text-gray-700 mb-1">Almacén *</label><select name="almacenId" value={formData.almacenId || ''} onChange={handleChange} required className="w-full border rounded-lg px-3 py-2 focus:ring-2 border-gray-300 focus:border-blue-500"><option value="">Seleccionar almacén</option>{almacenes.map(alm => <option key={alm.id} value={alm.id}>{alm.nombre}</option>)}</select></div>
                 <div className="sm:col-span-2 lg:col-span-3"><label className="block text-sm font-medium text-gray-700 mb-1">Ubicación Física</label><input type="text" name="ubicacion" value={formData.ubicacion} onChange={handleChange} placeholder="Ej: Pasillo A, Estante 3" className="w-full border rounded-lg px-3 py-2 focus:ring-2 border-gray-300 focus:border-blue-500" /></div>
