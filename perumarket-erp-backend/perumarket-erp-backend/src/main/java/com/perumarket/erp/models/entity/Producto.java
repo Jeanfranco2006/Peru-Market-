@@ -39,6 +39,7 @@ public class Producto {
     @Column(name = "peso_kg", precision = 10, scale = 3)
     private BigDecimal pesoKg;
 
+    
     @Column(name = "imagen", length = 255)
     private String imagen; // Ruta o URL de la imagen
 

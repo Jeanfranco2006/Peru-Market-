@@ -97,43 +97,33 @@ export const useProductForm = () => {
     setUploadedImageFile(null);
     setFormData(prev => ({ ...prev, imagen: '' }));
   };
+const handleSubmit = async (event: React.FormEvent) => {
+  event.preventDefault();
+  setValidationErrors({});
 
-  const handleSubmit = async (event: React.FormEvent) => {
-    event.preventDefault();
-    setValidationErrors({});
+  try {
+    // Guardar producto (con imagen opcional)
+    await productService.createProduct(formData, uploadedImageFile || undefined);
 
-    try {
-      // 1. Subir imagen si existe
-      let imagenPath = '';
-      if (uploadedImageFile) {
-        try {
-          imagenPath = await productService.uploadImage(uploadedImageFile);
-        } catch (error) {
-          console.error(error);
-          setNotification({ show: true, message: "Error al subir imagen. Se guardará sin ella.", type: 'error' });
-        }
-      }
+    setNotification({ show: true, message: '¡Producto guardado exitosamente!', type: 'success' });
+    setTimeout(() => navigate('/inventario'), 1500);
 
-      // 2. Guardar producto
-      await productService.createProduct({ ...formData, imagen: imagenPath });
+  } catch (error: any) {
+    console.error('Error al guardar:', error);
 
-      setNotification({ show: true, message: '¡Producto guardado exitosamente!', type: 'success' });
-      setTimeout(() => navigate('/inventario'), 1500);
-
-    } catch (error: any) {
-      console.error('Error al guardar:', error);
-      if (error.status === 400 && error.body?.errors) {
-        setValidationErrors(error.body.errors);
-        setNotification({ show: true, message: "Error de validación. Revise los campos.", type: 'error' });
-      } else {
-        setNotification({ 
-          show: true, 
-          message: error.body?.message || "Error de conexión con el servidor.", 
-          type: 'error' 
-        });
-      }
+    if (error.status === 400 && error.body?.errors) {
+      setValidationErrors(error.body.errors);
+      setNotification({ show: true, message: "Error de validación. Revise los campos.", type: 'error' });
+    } else {
+      setNotification({ 
+        show: true, 
+        message: error.body?.message || "Error de conexión con el servidor.", 
+        type: 'error' 
+      });
     }
-  };
+  }
+};
+
 
   return {
     formData,

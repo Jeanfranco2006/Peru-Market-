@@ -40,7 +40,7 @@ const VentasList: React.FC = () => {
         ventaService.fetchProductos(),
         ventaService.fetchAlmacenes()
       ]);
-      
+
       setMetodosPago(metodos);
       setClientes(clientesData);
       setProductos(productosData);
@@ -71,7 +71,7 @@ const VentasList: React.FC = () => {
   // Funciones del carrito
   const limpiarCarrito = useCallback(() => {
     if (carrito.length === 0) return;
-    
+
     if (!confirm('¿Estás seguro de limpiar el carrito?')) return;
 
     const productosActualizados = productos.map(p => {
@@ -174,11 +174,11 @@ const VentasList: React.FC = () => {
   // Procesar venta - CORREGIDO
   const procesarVenta = async (detallesPago: DetallePago[]) => {
     try {
-      if (!clienteSeleccionado || !clienteSeleccionado.clienteid) {
+      if (!clienteSeleccionado || !clienteSeleccionado.id) {
         alert("⚠️ Selecciona un cliente válido primero");
         return;
       }
-      
+
       if (carrito.length === 0) {
         alert("⚠️ Agrega productos al carrito primero");
         return;
@@ -187,7 +187,7 @@ const VentasList: React.FC = () => {
       // Validar que los pagos sumen el total
       const totalPagos = detallesPago.reduce((sum, pago) => sum + pago.monto, 0);
       const { total } = ventaService.calcularTotales(carrito);
-      
+
       if (Math.abs(totalPagos - total) > 0.01) {
         alert(`⚠️ El total de los pagos (S/ ${totalPagos.toFixed(2)}) no coincide con el total de la venta (S/ ${total.toFixed(2)})`);
         return;
@@ -198,7 +198,7 @@ const VentasList: React.FC = () => {
 
       // Preparar datos de la venta
       const ventaBody = {
-        idCliente: clienteSeleccionado.clienteid,
+        idCliente: clienteSeleccionado.id,
         idUsuario,
         idAlmacen,
         subtotal,
@@ -224,7 +224,7 @@ const VentasList: React.FC = () => {
 
       // Actualizar stock de cada producto
       await Promise.all(
-        carrito.map(item => 
+        carrito.map(item =>
           ventaService.actualizarStock(item.producto.id, item.producto.stock)
         )
       );
@@ -259,7 +259,7 @@ const VentasList: React.FC = () => {
   };
 
   // Filtrar productos
-  const productosFiltrados = useMemo(() => 
+  const productosFiltrados = useMemo(() =>
     productos.filter(producto =>
       producto.nombre.toLowerCase().includes(busquedaProducto.toLowerCase()) ||
       producto.categoria.nombre.toLowerCase().includes(busquedaProducto.toLowerCase())
@@ -331,11 +331,10 @@ const VentasList: React.FC = () => {
                     <img
                       src={producto.imagen || "/default-product.png"}
                       alt={producto.nombre}
-                      className="w-full h-24 sm:h-32 object-cover rounded-md mb-2 sm:mb-3"
-                      onError={(e) => {
-                        (e.target as HTMLImageElement).src = "/default-product.png";
-                      }}
+                      className="w-full h-24 sm:h-32 object-cover rounded"
                     />
+
+
                     <h3 className="font-semibold text-gray-800 mb-1 text-sm sm:text-base line-clamp-2">{producto.nombre}</h3>
                     <p className="text-xs sm:text-sm text-gray-600 mb-2">{producto.categoria.nombre}</p>
                     <div className="flex justify-between items-center mb-2 sm:mb-3">
@@ -345,8 +344,8 @@ const VentasList: React.FC = () => {
                       <span className={`text-xs sm:text-sm px-2 py-1 rounded-full ${producto.stock > 10
                         ? 'bg-green-100 text-green-800'
                         : producto.stock > 0
-                        ? 'bg-yellow-100 text-yellow-800'
-                        : 'bg-red-100 text-red-800'
+                          ? 'bg-yellow-100 text-yellow-800'
+                          : 'bg-red-100 text-red-800'
                         }`}>
                         Stock: {producto.stock}
                       </span>

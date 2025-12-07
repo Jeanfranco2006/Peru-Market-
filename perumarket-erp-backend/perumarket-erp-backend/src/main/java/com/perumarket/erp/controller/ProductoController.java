@@ -10,6 +10,9 @@ import jakarta.validation.Valid;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.web.multipart.MultipartFile;
+
+import java.io.IOException;
 import java.util.List; // NECESARIO PARA LISTAR
 import java.util.Map;
 
@@ -36,11 +39,26 @@ public class ProductoController {
     }
 
     // 2. ENDPOINT PARA CREAR PRODUCTOS (POST)
-    @PostMapping
+@PostMapping(consumes = "multipart/form-data")
+public ResponseEntity<?> crearProducto(
+        @Valid @RequestPart("data") ProductoRequest request,
+        @RequestPart(value = "imagen", required = false) MultipartFile imagen
+) {
+    try {
+        Producto productoCreado = productoService.crearProductoYStockInicial(request, imagen);
+        return new ResponseEntity<>(productoCreado, HttpStatus.CREATED);
+
+    } catch (RuntimeException e) {
+        return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                .body(Map.of("error", e.getMessage()));
+    }
+}
+
+  /*   @PostMapping
     public ResponseEntity<Producto> crearProducto(@Valid @RequestBody ProductoRequest request) {
         Producto productoCreado = productoService.crearProductoYStockInicial(request);
         return new ResponseEntity<>(productoCreado, HttpStatus.CREATED);
-    }
+    } */
 
     // 3. 🆕 ENDPOINT PARA OBTENER UN PRODUCTO POR ID (GET /productos/{id})
     // Necesario para precargar el formulario de edición
@@ -118,5 +136,11 @@ public ResponseEntity<ProductoResponse> actualizarStockProducto(
     ProductoResponse productoActualizado = productoService.actualizarStock(id, nuevoStock);
     return ResponseEntity.ok(productoActualizado);
 }
+@GetMapping("/venta")
+public ResponseEntity<List<ProductoResponse>> obtenerProductosParaVenta() {
+    List<ProductoResponse> productos = productoService.obtenerProductosParaVenta();
+    return ResponseEntity.ok(productos);
+}
+
 
 }

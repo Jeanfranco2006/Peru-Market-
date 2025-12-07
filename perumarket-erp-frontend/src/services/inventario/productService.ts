@@ -23,29 +23,12 @@ export const productService = {
     return { categorias: catData, almacenes: almData, proveedores: provData };
   },
 
-  // Subir imagen
-  uploadImage: async (file: File): Promise<string> => {
+  // Crear producto con imagen (multipart/form-data)
+  createProduct: async (productData: ProductoFormData, file?: File): Promise<void> => {
     const formData = new FormData();
 
-    // Generación de nombre único
-    const timestamp = Date.now();
-    const randomString = Math.random().toString(36).substring(2, 8);
-    const extension = file.name.split('.').pop() || 'jpg';
-    const filename = `producto_${timestamp}_${randomString}.${extension}`;
-
-    formData.append('image', file);
-    formData.append('fileName', filename);
-
-    const response = await api.post('/productos/upload-image', formData, {
-      headers: { 'Content-Type': 'multipart/form-data' }
-    });
-
-    return response.data.imagePath;
-  },
-
-  // Crear producto
-  createProduct: async (productData: ProductoFormData): Promise<void> => {
-    const requestData = {
+    // Convertimos el objeto a JSON y lo añadimos como Blob
+    formData.append('data', new Blob([JSON.stringify({
       ...productData,
       categoriaId: productData.categoriaId || undefined,
       almacenId: productData.almacenId || undefined,
@@ -56,15 +39,25 @@ export const productService = {
       precioCompra: productData.precioCompra || 0.0,
       precioVenta: productData.precioVenta || 0.0,
       pesoKg: productData.pesoKg || 0.0,
-      imagen: productData.imagen || '',
-    };
+    })], { type: 'application/json' }));
+
+    // Si hay imagen, la añadimos con un nombre único
+    if (file) {
+      const timestamp = Date.now();
+      const randomString = Math.random().toString(36).substring(2, 8);
+      const extension = file.name.split('.').pop() || 'jpg';
+      const filename = `producto_${timestamp}_${randomString}.${extension}`;
+      formData.append('imagen', file, filename);
+    }
 
     try {
-      await api.post('/productos', requestData);
+      await api.post('/productos', formData, {
+        headers: { 'Content-Type': 'multipart/form-data' },
+      });
     } catch (error: any) {
       throw {
         status: error.response?.status,
-        body: error.response?.data
+        body: error.response?.data,
       };
     }
   },

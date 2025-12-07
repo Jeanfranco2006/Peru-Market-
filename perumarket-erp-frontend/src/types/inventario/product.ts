@@ -20,6 +20,8 @@ export interface ProductoFormData {
   proveedorId: number | null;
   codigoBarras: string;
   imagen: string;
+
+  
 }
 
 export type NotificationType = 'success' | 'error';

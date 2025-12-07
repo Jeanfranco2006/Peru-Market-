@@ -15,7 +15,8 @@ export const ventaService = {
         id: p.id,
         nombre: p.nombre,
         precio: p.precioVenta,
-        imagen: p.imagen ?? "",
+        imagen: p.imagen ? `${import.meta.env.VITE_API_URL}/uploads/${p.imagen}` : "/img/products/default-product.png",
+
         stock: p.stockActual,
         categoria: {
           id: p.categoriaId ?? 0,
@@ -60,7 +61,7 @@ export const ventaService = {
     try {
       const { data } = await api.post('/clientes', limpiarObjeto(clienteData));
       return {
-        clienteid: data.clienteid || data.id,
+        id: data.id || data.id,
         persona: data.persona,
         tipo: data.tipo || 'NORMAL',
         fechaCreacion: data.fechaCreacion || new Date().toISOString(),

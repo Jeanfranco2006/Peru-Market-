@@ -9,6 +9,7 @@
   imagen?: string;
   stock: number;
   categoria: categoria;
+  
 }
 
  export interface ProductoVenta {
