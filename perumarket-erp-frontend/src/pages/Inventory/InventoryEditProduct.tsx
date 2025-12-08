@@ -29,16 +29,17 @@ interface ProductState {
     fechaActualizacion: string | null;
     categoriaId: string | null; almacenId: number; proveedorId: number; requiereCodigoBarras: boolean;
 }
+
 const initialProductState: ProductState = {
     id: null, nombre: '', descripcion: '', sku: '',
     precioVenta: 0.00, precioCompra: 0.00, 
-    unidadMedida: 'KG', // CAMBIO 1: Inicializado en KG
+    unidadMedida: 'KG',
     pesoKg: 0.000, imagen: '', estado: 'ACTIVO',
     stockActual: 0, stockMinimo: 10, stockMaximo: 1000,
     ubicacionPrincipal: '', codigoBarrasPrincipal: '',
     categoriaNombre: '', almacenNombre: '', proveedorRazonSocial: '',
     fechaActualizacion: null,
-    categoriaId: "", // INICIALIZADO COMO VACIO PARA EL SELECT
+    categoriaId: "",
     almacenId: 1, proveedorId: 1, requiereCodigoBarras: true,
 };
 
@@ -48,7 +49,6 @@ const initialOptions = { categorias: [] as CategoriaOption[], }
 const ProductImage = ({ imagen, nombre, className = "" }: { imagen: string, nombre: string, className?: string }) => {
     const [imageError, setImageError] = useState(false);
 
-    // Si no hay imagen o hay error, mostrar placeholder
     if (!imagen || imageError) {
         return (
             <div className={`bg-blue-50 rounded-lg flex flex-col items-center justify-center text-blue-400 ${className}`}>
@@ -58,23 +58,17 @@ const ProductImage = ({ imagen, nombre, className = "" }: { imagen: string, nomb
         );
     }
 
-    // Construir la URL completa de la imagen INCLUYENDO /api
     const getImageUrl = (imagePath: string) => {
-        // --- CORRECCIÓN 1: Soporte para Base64 (Vista previa) ---
+        // Soporte para Base64 (Vista previa)
         if (imagePath.startsWith('data:')) {
             return imagePath;
         }
-        // --------------------------------------------------------
         if (imagePath.startsWith('http')) {
             return imagePath;
         }
-        // Si la ruta ya incluye /api, usarla directamente
-        if (imagePath.startsWith('/api/')) {
-            return `http://localhost:8080${imagePath}`;
-        }
-        // Si no incluye /api, agregarlo
+        // Si la ruta no incluye /api, construir URL correcta
         const cleanPath = imagePath.startsWith('/') ? imagePath : `/${imagePath}`;
-        return `http://localhost:8080/api${cleanPath}`;
+        return `http://localhost:8080${cleanPath}`;
     };
 
     return (
@@ -107,43 +101,6 @@ const InventoryEditProduct: React.FC = () => {
     const [showCancelModal, setShowCancelModal] = useState(false);
     const fileInputRef = useRef<HTMLInputElement>(null);
 
-    // --- Función para guardar la imagen en el backend ---
-    const saveImageToPublicFolder = async (file: File): Promise<string> => {
-        return new Promise((resolve, reject) => {
-            const formData = new FormData();
-            formData.append('image', file);
-
-            // Generar un nombre único para la imagen
-            const timestamp = Date.now();
-            const randomString = Math.random().toString(36).substring(2, 8);
-            const fileExtension = file.name.split('.').pop() || 'jpg';
-            const fileName = `producto_${timestamp}_${randomString}.${fileExtension}`;
-            formData.append('fileName', fileName);
-
-            console.log('Enviando imagen al backend:', fileName);
-
-            fetch(`${API_BASE}/productos/upload-image`, {
-                method: 'POST',
-                body: formData,
-            })
-                .then(async response => {
-                    if (!response.ok) {
-                        const errorText = await response.text();
-                        throw new Error(`Error ${response.status}: ${errorText}`);
-                    }
-                    return response.json();
-                })
-                .then(data => {
-                    console.log('Imagen subida exitosamente:', data);
-                    resolve(data.imagePath);
-                })
-                .catch(error => {
-                    console.error('Error al guardar imagen:', error);
-                    reject(error);
-                });
-        });
-    };
-
     // Función para cargar el historial de movimientos
     const fetchHistorial = async (pId: number) => {
         try {
@@ -173,18 +130,16 @@ const InventoryEditProduct: React.FC = () => {
                 const productResponse = await api.get(`/productos/${productId}`);
                 const data = productResponse.data;
 
-                // --- CORRECCIÓN 2: Detección Robusta de Categoría ---
+                // Detección Robusta de Categoría
                 let categoriaIdDetectado = "";
                 if (data.categoriaId) {
                     categoriaIdDetectado = String(data.categoriaId);
                 } else if (data.categoria && data.categoria.id) {
                     categoriaIdDetectado = String(data.categoria.id);
                 } else if (data.categoriaNombre) {
-                    // Intento de rescate por nombre
                     const found = categoriaData.find(c => c.nombre === data.categoriaNombre);
                     if (found) categoriaIdDetectado = String(found.id);
                 }
-                // ---------------------------------------------------
 
                 setProduct(prev => ({
                     ...prev, ...data,
@@ -197,18 +152,15 @@ const InventoryEditProduct: React.FC = () => {
                     stockActual: data.stockActual || 0,
                     imagen: data.imagen || '',
                     almacenId: 1, proveedorId: 1,
-
                     unidadMedida: 'KG',
-
-                    // Asignamos el ID corregido
                     categoriaId: categoriaIdDetectado,
                 }));
 
                 // Configurar preview de imagen
                 if (data.imagen) {
-                    const imageUrl = data.imagen.startsWith('/api/')
-                        ? `http://localhost:8080${data.imagen}`
-                        : `http://localhost:8080/api${data.imagen.startsWith('/') ? '' : '/'}${data.imagen}`;
+                    const imageUrl = data.imagen.startsWith('http')
+                        ? data.imagen
+                        : `http://localhost:8080${data.imagen}`;
                     setImagePreview(imageUrl);
                 } else {
                     setImagePreview(null);
@@ -260,58 +212,46 @@ const InventoryEditProduct: React.FC = () => {
         }));
     };
 
-    // --- LÓGICA DE EDICIÓN (BOTÓN GUARDAR) ---
+    // --- LÓGICA DE EDICIÓN (BOTÓN GUARDAR) CON MULTIPART ---
     const handleSubmit = async (event: FormEvent) => {
         event.preventDefault();
 
-        // Validación ajustada para string vacío
-        if (!product.categoriaId) {
-            alert("Por favor, selecciona una categoría.");
-            return;
-        }
-
-        const categoriaIdToSend = Number(product.categoriaId);
-
         try {
-            // Primero subir la imagen si existe
-            let imagenPath = product.imagen;
-            if (uploadedImageFile) {
-                try {
-                    imagenPath = await saveImageToPublicFolder(uploadedImageFile);
-                } catch (error) {
-                    console.error('Error al subir imagen:', error);
-                    alert("Error al subir la imagen. El producto se guardará con la imagen anterior.");
-                }
-            }
+            // Construir FormData para enviar multipart/form-data
+            const formData = new FormData();
 
-            const productRequestData = {
+            // Agregar los datos del producto como JSON
+            formData.append('data', new Blob([JSON.stringify({
                 nombre: product.nombre,
                 descripcion: product.descripcion,
                 sku: product.sku,
                 precioVenta: product.precioVenta,
                 precioCompra: product.precioCompra,
-                
-                // CAMBIO 3: Asegurar que se envíe KG al guardar
+                categoriaId: product.categoriaId ? parseInt(product.categoriaId) : null,
                 unidadMedida: 'KG',
-                
                 pesoKg: product.pesoKg,
-                imagen: imagenPath,
-                requiereCodigoBarras: product.requiereCodigoBarras,
-                categoriaId: categoriaIdToSend,
                 almacenId: product.almacenId,
-                proveedorId: product.proveedorId,
                 stockInicial: product.stockActual,
                 stockMinimo: product.stockMinimo,
                 stockMaximo: product.stockMaximo,
                 ubicacion: product.ubicacionPrincipal,
+                proveedorId: product.proveedorId,
                 codigoBarras: product.codigoBarrasPrincipal,
-            };
+            })], { type: 'application/json' }));
 
-            await api.put(`/productos/${productId}`, productRequestData);
+            // Si hay una imagen nueva, agregarla
+            if (uploadedImageFile) {
+                const timestamp = Date.now();
+                const randomString = Math.random().toString(36).substring(2, 8);
+                const extension = uploadedImageFile.name.split('.').pop() || 'jpg';
+                const filename = `producto_${timestamp}_${randomString}.${extension}`;
+                formData.append('imagen', uploadedImageFile, filename);
+            }
 
-            const productResponse = await api.get(`/productos/${productId}`);
-            setProduct(prev => ({ ...prev, ...productResponse.data }));
-            fetchHistorial(productId);
+            // Enviar PUT con multipart/form-data
+            await api.put(`/productos/${productId}`, formData, {
+                headers: { 'Content-Type': 'multipart/form-data' }
+            });
 
             setShowNotification(true);
             setTimeout(() => {
@@ -320,9 +260,9 @@ const InventoryEditProduct: React.FC = () => {
             }, 1500);
 
         } catch (err: any) {
-            const errorMessage = err.response?.data?.message || 'Error desconocido al guardar. Revise el backend.';
-            console.error('Error al guardar:', err.response?.data || err);
-            alert(`Error al guardar: ${errorMessage}`);
+            console.error('Error al guardar:', err);
+            const errorMessage = err.response?.data?.message || 'Error al actualizar el producto.';
+            alert(`Error: ${errorMessage}`);
         }
     };
 
@@ -595,8 +535,7 @@ const InventoryEditProduct: React.FC = () => {
                                 {imagePreview ? (
                                     <div className="relative">
                                         <ProductImage
-                                            // --- CORRECCIÓN 3: Usar imagePreview ---
-                                            imagen={imagePreview || ''}
+                                            imagen={imagePreview}
                                             nombre={product.nombre}
                                             className="w-32 h-32 rounded-lg mx-auto mb-3 object-cover border-2 border-gray-300"
                                         />
@@ -716,7 +655,6 @@ const InventoryEditProduct: React.FC = () => {
                                     <select
                                         className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500"
                                         name="categoriaId"
-                                        // --- CORRECCIÓN 4: Value seguro ---
                                         value={product.categoriaId || ""}
                                         onChange={handleChange}
                                     >
@@ -756,7 +694,6 @@ const InventoryEditProduct: React.FC = () => {
                             <div className="bg-gray-50 p-4 rounded-lg border border-gray-200 mb-6">
                                 <h4 className="text-sm font-semibold text-gray-700 mb-3 flex items-center gap-2"><IoIosBarcode className="w-4 h-4" />Vista Previa del Código de Barras</h4>
                                 <div className="bg-white p-4 rounded border">
-                                    {/* Imagen del código de barras generado por TEC-IT */}
                                     {barcodeImageUrl ? (
                                         <div className="mb-3">
                                             <img
@@ -768,7 +705,6 @@ const InventoryEditProduct: React.FC = () => {
                                         </div>
                                     ) : (
                                         <div className="flex justify-center items-center space-x-1 mb-2">
-                                            {/* Representación de barras simplificada como fallback */}
                                             {Array.from({ length: 13 }).map((_, index) => (
                                                 <div
                                                     key={index}
@@ -799,7 +735,7 @@ const InventoryEditProduct: React.FC = () => {
                                 </div>
                             </div>
 
-                            {/* 🚀 CAMPO DE DESCRIPCIÓN */}
+                            {/* Campo de Descripción */}
                             <div className="mb-6">
                                 <label className="block text-sm font-medium text-gray-700 mb-1">Descripción del Producto</label>
                                 <textarea
@@ -811,7 +747,6 @@ const InventoryEditProduct: React.FC = () => {
                                     className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500"
                                 />
                             </div>
-                            {/* FIN CAMPO DESCRIPCIÓN */}
 
                             <h3 className="text-lg font-semibold mb-4 flex items-center gap-2"><IoIosCash className="h-5 w-5" />Precios y Stock</h3>
                             <div className="grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
@@ -828,7 +763,7 @@ const InventoryEditProduct: React.FC = () => {
                             <h3 className="text-lg font-semibold mb-4 flex items-center gap-2"><IoIosArchive className="h-5 w-5" />Especificaciones</h3>
                             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                                 
-                                {/* CAMBIO 4: Unidad de Medida ESTÁTICA */}
+                                {/* Unidad de Medida ESTÁTICA */}
                                 <div>
                                     <label className="block text-sm font-medium text-gray-700 mb-1">Unidad de Medida</label>
                                     <input

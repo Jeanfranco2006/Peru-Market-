@@ -332,58 +332,81 @@ if (imagen != null && !imagen.isEmpty()) {
     /**
      * Actualiza la información principal del producto.
      */
-    @Transactional
-    public ProductoResponse actualizarProducto(Integer id, ProductoRequest request) {
-        Producto productoExistente = productoRepository.findById(id)
-                .orElseThrow(() -> new ResourceNotFoundException("Producto", "id", id.toString()));
+   @Transactional
+public ProductoResponse actualizarProducto(Integer id, ProductoRequest request, MultipartFile imagen) {
+    Producto productoExistente = productoRepository.findById(id)
+            .orElseThrow(() -> new ResourceNotFoundException("Producto", "id", id.toString()));
 
-        // Validar SKU (si cambió y ya existe)
-        if (!productoExistente.getSku().equals(request.getSku())
-                && productoRepository.findBySku(request.getSku()).isPresent()) {
-            throw new DataIntegrityViolationException("El SKU '" + request.getSku() + "' ya está en uso.");
-        }
-
-        // 1. Cargar y actualizar Producto
-        CategoriaProducto categoria = categoriaProductoRepository.findById(request.getCategoriaId())
-                .orElseThrow(
-                        () -> new ResourceNotFoundException("Categoría", "id", request.getCategoriaId().toString()));
-
-        productoExistente.setNombre(request.getNombre());
-        productoExistente.setDescripcion(request.getDescripcion());
-        productoExistente.setSku(request.getSku());
-        productoExistente.setPrecioVenta(request.getPrecioVenta());
-        productoExistente
-                .setPrecioCompra(request.getPrecioCompra() != null ? request.getPrecioCompra() : BigDecimal.ZERO);
-        productoExistente.setCategoria(categoria);
-        productoExistente.setPesoKg(request.getPesoKg());
-        productoExistente.setImagen(request.getImagen());
-        productoExistente.setRequiereCodigoBarras(
-                request.getRequiereCodigoBarras() != null ? request.getRequiereCodigoBarras() : true);
-
-        try {
-            productoExistente.setUnidadMedida(UnidadMedida.valueOf(request.getUnidadMedida().toUpperCase()));
-        } catch (IllegalArgumentException e) {
-            throw new DataIntegrityViolationException("Unidad de medida no válida: " + request.getUnidadMedida());
-        }
-
-        Producto productoActualizado = productoRepository.save(productoExistente);
-
-        // 2. Opcional: Actualizar Inventario Principal (Si el DTO incluye datos de
-        // stock, se debe actualizar aquí)
-        // Ya que tu request incluye stockMinimo/Maximo, se actualizaría el registro
-        // principal:
-        inventarioRepository.findByProductoId(productoActualizado.getId()).stream().findFirst().ifPresent(inv -> {
-            inv.setStockMinimo(request.getStockMinimo());
-            inv.setStockMaximo(request.getStockMaximo());
-            inv.setUbicacion(request.getUbicacion());
-            // No se toca StockActual, eso solo se hace con movimientos
-            inventarioRepository.save(inv);
-        });
-
-        // Retorna el DTO de respuesta con la información actualizada (debes
-        // refactorizar para obtener todos los datos relacionados)
-        return obtenerProductoPorId(productoActualizado.getId());
+    // Validar SKU (si cambió y ya existe)
+    if (!productoExistente.getSku().equals(request.getSku())
+            && productoRepository.findBySku(request.getSku()).isPresent()) {
+        throw new DataIntegrityViolationException("El SKU '" + request.getSku() + "' ya está en uso.");
     }
+
+    // 1. Cargar y actualizar Producto
+    CategoriaProducto categoria = categoriaProductoRepository.findById(request.getCategoriaId())
+            .orElseThrow(() -> new ResourceNotFoundException("Categoría", "id", request.getCategoriaId().toString()));
+
+    productoExistente.setNombre(request.getNombre());
+    productoExistente.setDescripcion(request.getDescripcion());
+    productoExistente.setSku(request.getSku());
+    productoExistente.setPrecioVenta(request.getPrecioVenta());
+    productoExistente.setPrecioCompra(request.getPrecioCompra() != null ? request.getPrecioCompra() : BigDecimal.ZERO);
+    productoExistente.setCategoria(categoria);
+    productoExistente.setPesoKg(request.getPesoKg());
+    productoExistente.setRequiereCodigoBarras(
+            request.getRequiereCodigoBarras() != null ? request.getRequiereCodigoBarras() : true);
+
+    try {
+        productoExistente.setUnidadMedida(UnidadMedida.valueOf(request.getUnidadMedida().toUpperCase()));
+    } catch (IllegalArgumentException e) {
+        throw new DataIntegrityViolationException("Unidad de medida no válida: " + request.getUnidadMedida());
+    }
+
+    // === ACTUALIZAR IMAGEN (SI SE PROPORCIONA) ===
+    if (imagen != null && !imagen.isEmpty()) {
+        try {
+            String nombreArchivo = "producto_" + System.currentTimeMillis() + "_" + imagen.getOriginalFilename();
+            Path carpeta = Paths.get("uploads/productos");
+            if (!Files.exists(carpeta)) Files.createDirectories(carpeta);
+
+            Path rutaFinal = carpeta.resolve(nombreArchivo);
+            Files.copy(imagen.getInputStream(), rutaFinal, StandardCopyOption.REPLACE_EXISTING);
+
+            // Opcional: Eliminar imagen anterior si existe
+            String imagenAnterior = productoExistente.getImagen();
+            if (imagenAnterior != null && !imagenAnterior.isEmpty()) {
+                try {
+                    Path rutaAnterior = Paths.get(imagenAnterior.replace("/uploads/", "uploads/"));
+                    Files.deleteIfExists(rutaAnterior);
+                } catch (IOException e) {
+                    // Log error pero continuar
+                    System.err.println("No se pudo eliminar imagen anterior: " + e.getMessage());
+                }
+            }
+
+            productoExistente.setImagen("/uploads/productos/" + nombreArchivo);
+
+        } catch (IOException e) {
+            throw new RuntimeException("Error al actualizar la imagen: " + e.getMessage(), e);
+        }
+    }
+    // Si no se envía imagen, mantener la existente (no hacer nada)
+
+    // ⚠️ CRÍTICO: GUARDAR EL PRODUCTO ACTUALIZADO
+    Producto productoActualizado = productoRepository.save(productoExistente);
+
+    // 2. Actualizar Inventario Principal
+    inventarioRepository.findByProductoId(productoActualizado.getId()).stream().findFirst().ifPresent(inv -> {
+        inv.setStockMinimo(request.getStockMinimo());
+        inv.setStockMaximo(request.getStockMaximo());
+        inv.setUbicacion(request.getUbicacion());
+        inventarioRepository.save(inv);
+    });
+
+    // 3. Retornar el DTO actualizado
+    return obtenerProductoPorId(productoActualizado.getId());
+}
 
     /**
      * Desactiva un producto (cambia el estado a INACTIVO).

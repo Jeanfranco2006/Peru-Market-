@@ -22,6 +22,44 @@ export const productService = {
 
     return { categorias: catData, almacenes: almData, proveedores: provData };
   },
+  // Agregar este método al productService
+updateProduct: async (id: number, productData: ProductoFormData, file?: File): Promise<void> => {
+  const formData = new FormData();
+
+  // Convertimos el objeto a JSON
+  formData.append('data', new Blob([JSON.stringify({
+    ...productData,
+    categoriaId: productData.categoriaId || undefined,
+    almacenId: productData.almacenId || undefined,
+    proveedorId: productData.proveedorId || undefined,
+    unidadMedida: productData.unidadMedida.toUpperCase(),
+    stockInicial: productData.stockInicial || 0,
+    stockMinimo: productData.stockMinimo || 0,
+    precioCompra: productData.precioCompra || 0.0,
+    precioVenta: productData.precioVenta || 0.0,
+    pesoKg: productData.pesoKg || 0.0,
+  })], { type: 'application/json' }));
+
+  // Si hay nueva imagen, la añadimos
+  if (file) {
+    const timestamp = Date.now();
+    const randomString = Math.random().toString(36).substring(2, 8);
+    const extension = file.name.split('.').pop() || 'jpg';
+    const filename = `producto_${timestamp}_${randomString}.${extension}`;
+    formData.append('imagen', file, filename);
+  }
+
+  try {
+    await api.put(`/productos/${id}`, formData, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    });
+  } catch (error: any) {
+    throw {
+      status: error.response?.status,
+      body: error.response?.data,
+    };
+  }
+},
 
   // Crear producto con imagen (multipart/form-data)
   createProduct: async (productData: ProductoFormData, file?: File): Promise<void> => {

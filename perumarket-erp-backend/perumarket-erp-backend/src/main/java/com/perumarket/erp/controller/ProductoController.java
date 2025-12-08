@@ -1,20 +1,30 @@
 package com.perumarket.erp.controller;
 
-import com.perumarket.erp.models.entity.Producto;
-import com.perumarket.erp.models.entity.Producto.EstadoProducto;
-import com.perumarket.erp.models.dto.MovimientoInventarioDTO;
-import com.perumarket.erp.models.dto.ProductoRequest;
-import com.perumarket.erp.models.dto.ProductoResponse; // <-- NECESARIO PARA LISTAR
-import com.perumarket.erp.service.ProductoService;
-import jakarta.validation.Valid;
+import java.util.List;
+import java.util.Map;
+
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
-import org.springframework.web.bind.annotation.*;
+import org.springframework.web.bind.annotation.DeleteMapping; // <-- NECESARIO PARA LISTAR
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PatchMapping;
+import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.PutMapping;
+import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestPart; // NECESARIO PARA LISTAR
+import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.multipart.MultipartFile;
 
-import java.io.IOException;
-import java.util.List; // NECESARIO PARA LISTAR
-import java.util.Map;
+import com.perumarket.erp.models.dto.MovimientoInventarioDTO;
+import com.perumarket.erp.models.dto.ProductoRequest;
+import com.perumarket.erp.models.dto.ProductoResponse;
+import com.perumarket.erp.models.entity.Producto;
+import com.perumarket.erp.models.entity.Producto.EstadoProducto;
+import com.perumarket.erp.service.ProductoService;
+
+import jakarta.validation.Valid;
 
 @RestController
 // El path de acceso debe ser el complemento del context-path: /api + /productos
@@ -69,12 +79,16 @@ public ResponseEntity<?> crearProducto(
     }
 
     // 4. 🆕 ENDPOINT PARA ACTUALIZAR UN PRODUCTO (PUT /productos/{id})
-    @PutMapping("/{id}")
-    public ResponseEntity<ProductoResponse> actualizarProducto(@PathVariable Integer id,
-            @Valid @RequestBody ProductoRequest request) {
-        ProductoResponse productoActualizado = productoService.actualizarProducto(id, request);
-        return ResponseEntity.ok(productoActualizado);
-    }
+    // CAMBIO 1: Actualizar el endpoint PUT para aceptar MultipartFile
+@PutMapping(value = "/{id}", consumes = "multipart/form-data")
+public ResponseEntity<ProductoResponse> actualizarProducto(
+        @PathVariable Integer id,
+        @Valid @RequestPart("data") ProductoRequest request,
+        @RequestPart(value = "imagen", required = false) MultipartFile imagen) {
+    
+    ProductoResponse productoActualizado = productoService.actualizarProducto(id, request, imagen);
+    return ResponseEntity.ok(productoActualizado);
+}
 
     // 5. 🆕 ENDPOINT PARA DESACTIVAR UN PRODUCTO (DELETE /productos/{id})
     // Se usa DELETE para la acción, pero es una "eliminación lógica"

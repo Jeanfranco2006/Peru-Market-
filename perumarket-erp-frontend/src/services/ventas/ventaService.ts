@@ -6,17 +6,30 @@ import { api } from '../api';
 const limpiarObjeto = (obj: any): any =>
   Object.fromEntries(Object.entries(obj).filter(([_, v]) => v !== undefined && v !== null));
 
+// En ventaService.ts
+
+const construirUrlImagen = (imagePath: string | null | undefined): string => {
+  if (!imagePath) return "/img/products/default-product.png";
+  
+  if (imagePath.startsWith('http')) return imagePath;
+  if (imagePath.startsWith('data:')) return imagePath;
+  
+  const cleanPath = imagePath.startsWith('/') ? imagePath : `/${imagePath}`;
+  
+  // 🟢 AHORA (Agregamos /api):
+  return `http://localhost:8080/api${cleanPath}`; 
+};
+
 export const ventaService = {
   // Productos
-  async fetchProductos(): Promise<Producto[]> {
+ async fetchProductos(): Promise<Producto[]> {
     try {
       const { data } = await api.get('/productos');
       return data.map((p: any) => ({
         id: p.id,
         nombre: p.nombre,
         precio: p.precioVenta,
-        imagen: p.imagen ? `${import.meta.env.VITE_API_URL}/uploads/${p.imagen}` : "/img/products/default-product.png",
-
+        imagen: construirUrlImagen(p.imagen), // Usar función helper
         stock: p.stockActual,
         categoria: {
           id: p.categoriaId ?? 0,
@@ -39,6 +52,7 @@ export const ventaService = {
       throw error;
     }
   },
+  
 
   // Clientes
   async fetchClientes(): Promise<Cliente[]> {
@@ -126,6 +140,7 @@ export const ventaService = {
       throw error;
     }
   },
+  
 
   // Calcular totales
   calcularTotales(carrito: ProductoVenta[]) {
