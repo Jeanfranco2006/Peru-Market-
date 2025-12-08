@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { FaFileSignature, FaUser, FaPhone, FaEnvelope, FaExclamationCircle } from 'react-icons/fa';
+import { FaFileSignature, FaUser, FaPhone, FaEnvelope, FaExclamationCircle, FaBuilding, FaMapMarkerAlt, FaTimes, FaSave, FaIdCard } from 'react-icons/fa';
 import type { ProveedorData } from '../../../types/proveedor/proveedorType';
 
 interface Props {
@@ -80,119 +80,200 @@ export default function ProveedorFormModal({
 
   if (!isOpen) return null;
 
+  // Clases reutilizables para mantener consistencia
+  const inputContainerClass = "relative group";
+  const labelClass = "block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1.5 ml-1";
+  const iconClass = "absolute top-[2.4rem] left-3.5 text-slate-400 group-focus-within:text-blue-500 transition-colors z-10 text-sm";
+  const inputClass = "w-full pl-10 pr-4 py-2.5 bg-white border border-slate-200 rounded-xl text-sm font-medium text-slate-700 focus:outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-500/10 transition-all placeholder:text-slate-400";
+
   return (
-    <div className="fixed inset-0 bg-slate-900/80 backdrop-blur-sm flex justify-center items-center z-[9999] p-4">
+    <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm flex justify-center items-center z-[9999] p-4 transition-opacity duration-300">
       
-      {/* CAMBIOS REALIZADOS EN EL CLASSNAME DE ABAJO:
-          1. [&::-webkit-scrollbar]:hidden -> Oculta scrollbar en Chrome/Safari
-          2. [-ms-overflow-style:none] -> Oculta en IE
-          3. [scrollbar-width:none] -> Oculta en Firefox
-      */}
       <div className="
-          bg-white rounded-xl shadow-2xl w-full max-w-2xl max-h-[90vh] 
-          overflow-y-auto animate-fadeInUp flex flex-col relative
+          bg-white rounded-2xl shadow-2xl w-full max-w-2xl max-h-[90vh] 
+          overflow-y-auto flex flex-col relative animate-fadeInUp border border-slate-100
           [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]
       ">
         
-        {/* Header (Sticky Top) */}
-        <div className="bg-indigo-600 p-4 md:p-6 flex justify-between items-center text-white sticky top-0 z-30 shadow-md">
-           <h2 className="text-lg md:text-xl font-bold flex items-center gap-3 uppercase tracking-wide">
-             <FaFileSignature className="text-slate-400"/>
-             {isEditing ? 'Editar Ficha' : 'Nueva Ficha'}
-           </h2>
-           <div className="text-xs font-mono opacity-50 bg-indigo-800 px-2 py-1 rounded">
-             ID: {isEditing ? formData.id : 'NEW'}
+        {/* === HEADER === */}
+        <div className="bg-white p-5 border-b border-slate-100 flex justify-between items-center sticky top-0 z-30">
+           <div className="flex items-center gap-3">
+             <div className="bg-blue-50 p-2.5 rounded-lg text-blue-600">
+                <FaFileSignature size={20} />
+             </div>
+             <div>
+                <h2 className="text-lg font-bold text-slate-800 tracking-tight">
+                  {isEditing ? 'Editar Proveedor' : 'Nuevo Proveedor'}
+                </h2>
+                <p className="text-xs text-slate-500 font-medium">Complete la ficha técnica</p>
+             </div>
            </div>
+           
+           <button onClick={onClose} className="text-slate-400 hover:text-slate-600 hover:bg-slate-50 p-2 rounded-full transition-colors">
+              <FaTimes />
+           </button>
         </div>
 
+        {/* === ERROR ALERT === */}
         {error && (
-          <div className="mx-4 md:mx-8 mt-4 p-3 bg-red-50 border border-red-200 rounded-lg flex items-center gap-3 text-red-700 text-sm font-bold animate-pulse">
-            <FaExclamationCircle className="text-xl shrink-0" />
-            <span>{error}</span>
+          <div className="mx-6 mt-6 p-4 bg-red-50 border border-red-100 rounded-xl flex items-start gap-3 animate-pulse">
+            <FaExclamationCircle className="text-red-500 text-lg shrink-0 mt-0.5" />
+            <div>
+              <h4 className="text-sm font-bold text-red-700">Atención</h4>
+              <p className="text-xs text-red-600 font-medium">{error}</p>
+            </div>
           </div>
         )}
 
-        <form onSubmit={handleSubmit} className="p-4 md:p-8 grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-6 bg-white">
-           
-           <div className="md:col-span-2 text-xs font-bold text-slate-400 uppercase tracking-widest border-b border-slate-100 pb-2 mb-2">
-             Información Fiscal
-           </div>
-           
-           <div className="space-y-1">
-             <label className="text-xs font-bold text-slate-700">RUC <span className="text-red-500">*</span></label>
-             <input 
+        {/* === FORMULARIO === */}
+        <form onSubmit={handleSubmit} className="p-6 grid grid-cols-1 md:grid-cols-2 gap-6">
+            
+            {/* SECCIÓN: FISCAL */}
+            <div className="md:col-span-2 flex items-center gap-2 pb-2 border-b border-slate-100 mb-2">
+                <FaBuilding className="text-slate-400 text-xs" />
+                <span className="text-xs font-bold text-slate-800 uppercase tracking-widest">Información Fiscal</span>
+            </div>
+            
+            <div className={inputContainerClass}>
+              <label className={labelClass}>RUC <span className="text-red-500">*</span></label>
+              <FaIdCard className={iconClass} />
+              <input 
                 type="text"
                 inputMode="numeric"
-                name="ruc"                   
+                name="ruc"                  
                 value={formData.ruc} 
                 onChange={handleChange} 
                 maxLength={20}
-                placeholder="Solo números"
-                className="w-full p-3 bg-slate-50 border border-slate-200 rounded-lg focus:bg-white focus:border-slate-900 focus:ring-1 focus:ring-slate-900 outline-none text-base md:text-sm font-bold font-mono transition-all"
-             />
-             <p className="text-[10px] text-slate-400 text-right">{formData.ruc.length}/20</p>
-           </div>
-           
-           <div className="space-y-1">
-             <label className="text-xs font-bold text-slate-700">Razón Social <span className="text-red-500">*</span></label>
-             <input type="text" name="razon_social" value={formData.razon_social} onChange={handleChange} className="w-full p-3 bg-slate-50 border border-slate-200 rounded-lg focus:bg-white focus:border-slate-900 focus:ring-1 focus:ring-slate-900 outline-none text-base md:text-sm font-bold transition-all"/>
-           </div>
+                placeholder="Ej: 20123456789"
+                className={`${inputClass} font-mono tracking-wide`}
+              />
+              <div className="absolute right-3 top-[2.5rem] text-[9px] font-bold text-slate-400 bg-slate-100 px-1.5 rounded">
+                {formData.ruc.length}/11
+              </div>
+            </div>
+            
+            <div className={inputContainerClass}>
+              <label className={labelClass}>Razón Social <span className="text-red-500">*</span></label>
+              <FaBuilding className={iconClass} />
+              <input 
+                type="text" 
+                name="razon_social" 
+                value={formData.razon_social} 
+                onChange={handleChange} 
+                className={inputClass}
+                placeholder="Nombre de la empresa"
+              />
+            </div>
 
-           <div className="md:col-span-2 text-xs font-bold text-slate-400 uppercase tracking-widest border-b border-slate-100 pb-2 mb-2 mt-4">
-             Contacto
-           </div>
+            {/* SECCIÓN: CONTACTO */}
+            <div className="md:col-span-2 flex items-center gap-2 pb-2 border-b border-slate-100 mb-2 mt-2">
+                <FaUser className="text-slate-400 text-xs" />
+                <span className="text-xs font-bold text-slate-800 uppercase tracking-widest">Contacto Directo</span>
+            </div>
 
-           <div className="relative">
-             <FaUser className="absolute top-3.5 left-3 text-slate-400"/>
-             <input type="text" name="contacto" value={formData.contacto} onChange={handleChange} placeholder="Nombre Contacto *" className="w-full pl-10 p-3 bg-slate-50 border border-slate-200 rounded-lg focus:border-slate-900 outline-none text-base md:text-sm font-medium"/>
-           </div>
-           
-           <div className="relative">
-             <FaPhone className="absolute top-3.5 left-3 text-slate-400"/>
-             <input 
+            <div className={inputContainerClass}>
+              <label className={labelClass}>Persona de Contacto <span className="text-red-500">*</span></label>
+              <FaUser className={iconClass} />
+              <input 
+                type="text" 
+                name="contacto" 
+                value={formData.contacto} 
+                onChange={handleChange} 
+                placeholder="Nombre completo" 
+                className={inputClass}
+              />
+            </div>
+            
+            <div className={inputContainerClass}>
+              <label className={labelClass}>Teléfono <span className="text-red-500">*</span></label>
+              <FaPhone className={iconClass} />
+              <input 
                 type="text"
                 inputMode="tel"
                 name="telefono" 
                 value={formData.telefono} 
                 onChange={handleChange} 
-                placeholder="Teléfono (Máx 9 dígitos) *" 
+                placeholder="999 999 999" 
                 maxLength={9} 
-                className="w-full pl-10 p-3 bg-slate-50 border border-slate-200 rounded-lg focus:border-slate-900 outline-none text-base md:text-sm font-medium"
-             />
-           </div>
-           
-           <div className="relative md:col-span-2">
-             <FaEnvelope className="absolute top-3.5 left-3 text-slate-400"/>
-             <input type="email" name="correo" value={formData.correo} onChange={handleChange} placeholder="Correo Electrónico" className="w-full pl-10 p-3 bg-slate-50 border border-slate-200 rounded-lg focus:border-slate-900 outline-none text-base md:text-sm font-medium"/>
-           </div>
-           
-           <div className="relative md:col-span-2">
-             <input type="text" name="direccion" value={formData.direccion} onChange={handleChange} placeholder="Dirección Fiscal Completa" className="w-full p-3 bg-slate-50 border border-slate-200 rounded-lg focus:border-slate-900 outline-none text-base md:text-sm font-medium"/>
-           </div>
+                className={inputClass}
+              />
+            </div>
+            
+            <div className={`${inputContainerClass} md:col-span-2`}>
+              <label className={labelClass}>Correo Electrónico</label>
+              <FaEnvelope className={iconClass} />
+              <input 
+                type="email" 
+                name="correo" 
+                value={formData.correo} 
+                onChange={handleChange} 
+                placeholder="ejemplo@empresa.com" 
+                className={inputClass}
+              />
+            </div>
+            
+            <div className={`${inputContainerClass} md:col-span-2`}>
+              <label className={labelClass}>Dirección Fiscal</label>
+              <FaMapMarkerAlt className={iconClass} />
+              <input 
+                type="text" 
+                name="direccion" 
+                value={formData.direccion} 
+                onChange={handleChange} 
+                placeholder="Av. Principal 123, Oficina 404" 
+                className={inputClass}
+              />
+            </div>
 
-           <div className="md:col-span-2 mt-2">
-             <label className="text-xs font-bold text-slate-700 block mb-1">Estado</label>
-             <select name="estado" value={formData.estado} onChange={handleChange} className="w-full p-3 bg-slate-50 border border-slate-200 rounded-lg focus:border-slate-900 outline-none text-sm font-bold cursor-pointer">
-               <option value="ACTIVO">ACTIVO</option>
-               <option value="INACTIVO">INACTIVO</option>
-             </select>
-           </div>
+            <div className="md:col-span-2 bg-slate-50 p-4 rounded-xl border border-slate-100 mt-2">
+              <label className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-2 block">Estado del Proveedor</label>
+              <div className="flex gap-4">
+                <label className="flex items-center cursor-pointer group">
+                    <input 
+                        type="radio" 
+                        name="estado" 
+                        value="ACTIVO" 
+                        checked={formData.estado === 'ACTIVO'} 
+                        onChange={handleChange}
+                        className="hidden peer"
+                    />
+                    <div className="w-4 h-4 rounded-full border-2 border-slate-300 peer-checked:border-emerald-500 peer-checked:bg-emerald-500 transition-all relative"></div>
+                    <span className="ml-2 text-sm font-medium text-slate-600 peer-checked:text-slate-900">Activo</span>
+                </label>
+                <label className="flex items-center cursor-pointer group">
+                    <input 
+                        type="radio" 
+                        name="estado" 
+                        value="INACTIVO" 
+                        checked={formData.estado === 'INACTIVO'} 
+                        onChange={handleChange}
+                        className="hidden peer"
+                    />
+                    <div className="w-4 h-4 rounded-full border-2 border-slate-300 peer-checked:border-red-500 peer-checked:bg-red-500 transition-all relative"></div>
+                    <span className="ml-2 text-sm font-medium text-slate-600 peer-checked:text-slate-900">Inactivo</span>
+                </label>
+              </div>
+            </div>
 
-           {/* Footer: Sticky en móvil, estático en Desktop */}
-           <div className="
-              md:col-span-2 flex items-center justify-end gap-3
-              sticky bottom-0 left-0 right-0 z-20 bg-white border-t border-slate-100 shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.05)]
-              -mx-4 px-4 py-4 mb-[-1rem]
-              
-              md:static md:bg-transparent md:border-none md:shadow-none md:mx-0 md:px-0 md:py-0 md:mb-0 md:mt-6
-           ">
-               <button type="button" onClick={onClose} className="flex-1 md:flex-none px-6 py-3 rounded-lg font-bold text-slate-500 bg-slate-200 hover:bg-slate-300 transition-colors text-sm">
-                 Cancelar
-               </button>
-               <button type="submit" className="flex-1 md:flex-none px-8 py-3 bg-indigo-600 text-white rounded-lg font-bold text-sm hover:bg-indigo-700 transition shadow-lg">
-                 Guardar
-               </button>
-           </div>
+            {/* === FOOTER === */}
+            <div className="
+               md:col-span-2 flex flex-col-reverse md:flex-row items-center justify-end gap-3 pt-6 border-t border-slate-100
+            ">
+                <button 
+                    type="button" 
+                    onClick={onClose} 
+                    className="w-full md:w-auto px-6 py-2.5 rounded-xl font-bold text-slate-600 bg-white border border-slate-200 hover:bg-slate-50 hover:text-slate-800 transition-all text-sm"
+                >
+                  Cancelar
+                </button>
+                <button 
+                    type="submit" 
+                    className="w-full md:w-auto px-8 py-2.5 bg-slate-900 text-white rounded-xl font-bold text-sm hover:bg-blue-600 hover:shadow-lg hover:shadow-blue-200 transition-all flex items-center justify-center gap-2 transform active:scale-95"
+                >
+                  <FaSave />
+                  {isEditing ? 'Guardar Cambios' : 'Registrar Proveedor'}
+                </button>
+            </div>
         </form>
       </div>
     </div>
