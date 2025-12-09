@@ -19,8 +19,8 @@ public interface ClienteRepository extends JpaRepository<Cliente, Long> {
 
     // Buscar por nombre completo
     @Query("SELECT c FROM Cliente c WHERE " +
-           "LOWER(CONCAT(c.persona.nombres, ' ', c.persona.apellidoPaterno, ' ', c.persona.apellidoMaterno)) " +
-           "LIKE LOWER(CONCAT('%', :texto, '%'))")
+            "LOWER(CONCAT(c.persona.nombres, ' ', c.persona.apellidoPaterno, ' ', c.persona.apellidoMaterno)) " +
+            "LIKE LOWER(CONCAT('%', :texto, '%'))")
     List<Cliente> findByNombreCompletoContaining(@Param("texto") String texto);
 
     // Buscar por DNI
@@ -28,20 +28,22 @@ public interface ClienteRepository extends JpaRepository<Cliente, Long> {
 
     // Filtros combinados
     @Query("""
-        SELECT c FROM Cliente c 
-        WHERE 
-            (LOWER(CONCAT(c.persona.nombres, ' ', c.persona.apellidoPaterno, ' ', c.persona.apellidoMaterno)) 
-                LIKE LOWER(CONCAT('%', :texto, '%')) 
-             OR :texto IS NULL)
-        AND (c.persona.numeroDocumento LIKE CONCAT('%', :dni, '%') 
-             OR :dni IS NULL)
-        AND (c.tipo = :tipo OR :tipo IS NULL)
-    """)
+                SELECT c FROM Cliente c
+                WHERE
+                    (LOWER(CONCAT(c.persona.nombres, ' ', c.persona.apellidoPaterno, ' ', c.persona.apellidoMaterno))
+                        LIKE LOWER(CONCAT('%', :texto, '%'))
+                     OR :texto IS NULL)
+                AND (c.persona.numeroDocumento LIKE CONCAT('%', :dni, '%')
+                     OR :dni IS NULL)
+                AND (c.tipo = :tipo OR :tipo IS NULL)
+            """)
     List<Cliente> findByFilters(
             @Param("texto") String texto,
             @Param("dni") String dni,
-            @Param("tipo") Cliente.TipoCliente tipo
-    );
+            @Param("tipo") Cliente.TipoCliente tipo);
+
+    @Query("SELECT c FROM Cliente c WHERE c.estado = 'ACTIVO' ORDER BY c.persona.nombres ASC")
+    List<Cliente> findAllActivos();
 
     // NUEVO MÉTODO: Buscar cliente por persona
     Optional<Cliente> findByPersona(Persona persona);

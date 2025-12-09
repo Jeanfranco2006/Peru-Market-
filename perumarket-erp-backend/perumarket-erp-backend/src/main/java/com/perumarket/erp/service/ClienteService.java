@@ -56,6 +56,16 @@ public class ClienteService {
     }
 
    
+/**
+ * Obtener solo clientes ACTIVOS para módulo de ventas
+ */
+public List<ClienteDTO> findAllActivos() {
+    return clienteRepository.findAllActivos()
+            .stream()
+            .map(this::convertToDTO)
+            .collect(Collectors.toList());
+}
+
 // VERIFICAR SI DNI YA EXISTE (MEJORADO)
 // ---------------------------------------------------------
 public boolean checkDniExists(String dni, Long excludeClienteId) {

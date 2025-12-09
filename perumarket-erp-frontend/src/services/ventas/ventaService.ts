@@ -55,21 +55,28 @@ export const ventaService = {
   
 
   // Clientes
-  async fetchClientes(): Promise<Cliente[]> {
-    try {
-      const { data } = await api.get('/clientes');
-      return data.map((cliente: any) => ({
-        clienteid: cliente.clienteid || cliente.id,
-        persona: cliente.persona,
-        tipo: cliente.tipo || 'NORMAL',
-        fechaCreacion: cliente.fechaCreacion || new Date().toISOString(),
-        fechaActualizacion: cliente.fechaActualizacion || new Date().toISOString()
-      }));
-    } catch (error) {
-      console.error('Error al cargar clientes:', error);
-      throw error;
-    }
-  },
+
+async fetchClientes(): Promise<Cliente[]> {
+  try {
+    // 🔴 ANTES (traía todos):
+    // const { data } = await api.get('/clientes');
+    
+    // 🟢 AHORA (solo activos):
+    const { data } = await api.get('/clientes/activos');
+    
+    return data.map((cliente: any) => ({
+      id: cliente.clienteid || cliente.id, // ✅ Usa 'id' consistente
+      persona: cliente.persona,
+      tipo: cliente.tipo || 'NATURAL',
+      estado: cliente.estado || 'ACTIVO', // ✅ Incluir estado
+      fechaCreacion: cliente.fechaCreacion || new Date().toISOString(),
+      fechaActualizacion: cliente.fechaActualizacion || new Date().toISOString()
+    }));
+  } catch (error) {
+    console.error('Error al cargar clientes activos:', error);
+    throw new Error('No se pudieron cargar los clientes disponibles');
+  }
+},
 
   async registrarCliente(clienteData: Omit<Cliente, 'clienteid'>): Promise<Cliente> {
     try {
@@ -87,6 +94,28 @@ export const ventaService = {
     }
   },
 
+
+  // ============================================
+// OPCIONAL: Método para buscar con filtro
+// ============================================
+async buscarClientesActivos(texto: string): Promise<Cliente[]> {
+  try {
+    const params = texto.trim() ? { texto } : {};
+    const { data } = await api.get('/clientes/activos/buscar', { params });
+    
+    return data.map((cliente: any) => ({
+      id: cliente.clienteid || cliente.id,
+      persona: cliente.persona,
+      tipo: cliente.tipo,
+      estado: cliente.estado,
+      fechaCreacion: cliente.fechaCreacion,
+      fechaActualizacion: cliente.fechaActualizacion
+    }));
+  } catch (error) {
+    console.error('Error buscando clientes:', error);
+    return [];
+  }
+},
   // Métodos de pago
   async cargarMetodosPago(): Promise<MetodoPago[]> {
     return [
