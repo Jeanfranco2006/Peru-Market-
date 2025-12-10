@@ -58,7 +58,7 @@ public class EmpleadoController {
             @RequestParam(required = false) String texto,
             @RequestParam(required = false) String dni,
             @RequestParam(required = false) String estado) {
-        
+
         return ResponseEntity.ok(empleadoService.findByFilters(texto, dni, estado));
     }
 
@@ -68,25 +68,25 @@ public class EmpleadoController {
             @RequestPart("empleado") String empleadoJson,
             @RequestPart(value = "foto", required = false) MultipartFile foto,
             @RequestPart(value = "cv", required = false) MultipartFile cv) {
-        
+
         try {
             EmpleadoDTO empleadoDTO = objectMapper.readValue(empleadoJson, EmpleadoDTO.class);
-            
+
             // Procesar foto
             if (foto != null && !foto.isEmpty()) {
                 String fotoFilename = saveFile(foto, "fotos");
                 empleadoDTO.setFoto(fotoFilename);
             }
-            
+
             // Procesar CV
             if (cv != null && !cv.isEmpty()) {
                 String cvFilename = saveFile(cv, "cvs");
                 empleadoDTO.setCv(cvFilename);
             }
-            
+
             EmpleadoDTO savedEmpleado = empleadoService.save(empleadoDTO);
             return ResponseEntity.ok(savedEmpleado);
-            
+
         } catch (IOException e) {
             return ResponseEntity.badRequest().build();
         }
@@ -105,11 +105,11 @@ public class EmpleadoController {
             @RequestPart("empleado") String empleadoJson,
             @RequestPart(value = "foto", required = false) MultipartFile foto,
             @RequestPart(value = "cv", required = false) MultipartFile cv) {
-        
+
         try {
             EmpleadoDTO empleadoDTO = objectMapper.readValue(empleadoJson, EmpleadoDTO.class);
             empleadoDTO.setEmpleadoId(id);
-            
+
             // Si hay nueva foto
             if (foto != null && !foto.isEmpty()) {
                 // Obtener empleado actual y eliminar foto anterior
@@ -121,7 +121,7 @@ public class EmpleadoController {
                 String fotoFilename = saveFile(foto, "fotos");
                 empleadoDTO.setFoto(fotoFilename);
             }
-            
+
             // Si hay nuevo CV
             if (cv != null && !cv.isEmpty()) {
                 empleadoService.findById(id).ifPresent(emp -> {
@@ -132,10 +132,10 @@ public class EmpleadoController {
                 String cvFilename = saveFile(cv, "cvs");
                 empleadoDTO.setCv(cvFilename);
             }
-            
+
             EmpleadoDTO updatedEmpleado = empleadoService.save(empleadoDTO);
             return ResponseEntity.ok(updatedEmpleado);
-            
+
         } catch (IOException e) {
             return ResponseEntity.badRequest().build();
         }
@@ -159,8 +159,10 @@ public class EmpleadoController {
                 deleteFile(empleado.getCv(), "cvs");
             }
         });
-        
-        empleadoService.deleteById(id);
+
+        // 2. Eliminar empleado + persona asociada
+        empleadoService.deleteCompleto(id);
+
         return ResponseEntity.ok().build();
     }
 
@@ -170,17 +172,17 @@ public class EmpleadoController {
         // Crear directorios si no existen
         Path uploadDir = Paths.get(uploadPath, subFolder);
         Files.createDirectories(uploadDir);
-        
+
         // Generar nombre único
         String originalFilename = file.getOriginalFilename();
-        String extension = originalFilename != null ? 
-            originalFilename.substring(originalFilename.lastIndexOf(".")) : "";
+        String extension = originalFilename != null ? originalFilename.substring(originalFilename.lastIndexOf("."))
+                : "";
         String filename = UUID.randomUUID().toString() + extension;
-        
+
         // Guardar archivo
         Path filePath = uploadDir.resolve(filename);
         Files.copy(file.getInputStream(), filePath, StandardCopyOption.REPLACE_EXISTING);
-        
+
         return filename;
     }
 
