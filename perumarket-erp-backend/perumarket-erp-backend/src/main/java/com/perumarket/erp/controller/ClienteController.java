@@ -3,6 +3,7 @@ package com.perumarket.erp.controller;
 import java.util.List;
 import java.util.Map;
 
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.DeleteMapping;
@@ -19,6 +20,7 @@ import com.perumarket.erp.exception.DataIntegrityViolationException;
 import com.perumarket.erp.models.dto.ClienteDTO;
 import com.perumarket.erp.models.entity.Cliente.TipoCliente;
 import com.perumarket.erp.service.ClienteService;
+import com.perumarket.erp.service.EmpleadoService;
 
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -30,6 +32,8 @@ public class ClienteController {
 
     private final ClienteService clienteService;
 
+        @Autowired
+    private EmpleadoService empleadoService; // <-- FALTA ESTO
     // LISTAR TODO
     @GetMapping
     public ResponseEntity<List<ClienteDTO>> listarTodos() {
@@ -44,40 +48,65 @@ public class ClienteController {
                 .orElse(ResponseEntity.notFound().build());
     }
 
-    // VALIDAR DNI (NUEVO ENDPOINT)
 @GetMapping("/check-dni")
 public ResponseEntity<Map<String, Object>> checkDniExists(
         @RequestParam String dni,
         @RequestParam(required = false) Long excludeId) {
-    
+
     try {
-        // Validar formato básico
+        // Validación mínima
         if (dni == null || dni.trim().isEmpty()) {
             return ResponseEntity.badRequest()
                     .body(Map.of(
-                        "valid", false,
-                        "message", "El número de documento es requerido"
+                            "valid", false,
+                            "message", "El número de documento es requerido"
                     ));
         }
-        
-        boolean exists = clienteService.checkDniExists(dni, excludeId);
-        
-        return ResponseEntity.ok(Map.of(
-            "exists", exists,
-            "valid", true,
-            "message", exists ? 
-                "El documento ya está registrado" : 
-                "Documento disponible"
-        ));
-        
+
+        // 1. VALIDAR SI EL DNI YA EXISTE EN EMPLEADOS
+        boolean empleadoExists = empleadoService.existsByNumeroDocumento(dni);
+
+        if (empleadoExists) {
+            return ResponseEntity.ok(
+                    Map.of(
+                            "exists", true,
+                            "valid", false,
+                            "message", "Este número de documento ya está registrado como EMPLEADO"
+                    )
+            );
+        }
+
+        // 2. VALIDAR SI EXISTE EN CLIENTES (CON EXCEPCIÓN SI ES EDICIÓN)
+        boolean clienteExists = clienteService.checkDniExists(dni, excludeId);
+
+        if (clienteExists) {
+            return ResponseEntity.ok(
+                    Map.of(
+                            "exists", true,
+                            "valid", false,
+                            "message", "Este número de documento ya está registrado como CLIENTE"
+                    )
+            );
+        }
+
+        // 3. DNI DISPONIBLE
+        return ResponseEntity.ok(
+                Map.of(
+                        "exists", false,
+                        "valid", true,
+                        "message", "Documento disponible"
+                )
+        );
+
     } catch (Exception e) {
         return ResponseEntity.badRequest()
                 .body(Map.of(
-                    "valid", false,
-                    "message", "Error al validar el documento: " + e.getMessage()
+                        "valid", false,
+                        "message", "Error al validar el documento: " + e.getMessage()
                 ));
     }
 }
+
 
     // BÚSQUEDA POR FILTROS
     @GetMapping("/search")

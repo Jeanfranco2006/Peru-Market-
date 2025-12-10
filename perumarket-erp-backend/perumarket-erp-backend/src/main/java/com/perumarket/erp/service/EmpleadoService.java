@@ -4,6 +4,7 @@ import java.util.List;
 import java.util.Optional;
 import java.util.stream.Collectors;
 
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -23,10 +24,15 @@ import lombok.RequiredArgsConstructor;
 @RequiredArgsConstructor
 public class EmpleadoService {
 
+    @Autowired
     private final EmpleadoRepository empleadoRepository;
     private final PersonaRepository personaRepository;
     private final DepartamentoRepository departamentoRepository;
 
+
+    // ============================================================
+    // LISTAR
+    // ============================================================
     public List<EmpleadoDTO> findAll() {
         return empleadoRepository.findAll().stream()
                 .map(this::convertToDTO)
@@ -38,13 +44,18 @@ public class EmpleadoService {
                 .map(this::convertToDTO);
     }
 
+    public boolean existsByNumeroDocumento(String dni) {
+    return empleadoRepository.existsByPersona_NumeroDocumento(dni);
+}
+
     public List<EmpleadoDTO> findByFilters(String texto, String dni, String estado) {
         Empleado.EstadoEmpleado estadoEnum = null;
+
         if (estado != null && !estado.isEmpty()) {
             try {
                 estadoEnum = Empleado.EstadoEmpleado.valueOf(estado.toUpperCase());
             } catch (IllegalArgumentException e) {
-                // Si el estado no es válido, se ignora el filtro
+                // Se ignora si envían estado incorrecto
             }
         }
 
@@ -57,29 +68,57 @@ public class EmpleadoService {
         .collect(Collectors.toList());
     }
 
+
+    // ============================================================
+    // GUARDAR / ACTUALIZAR (CON VALIDACIONES)
+    // ============================================================
     @Transactional
     public EmpleadoDTO save(EmpleadoDTO empleadoDTO) {
+
+        PersonaDTO personaDTO = empleadoDTO.getPersona();
+        String dni = personaDTO.getNumeroDocumento();
+
+        // ------------------------------------------------------------
+        // VALIDACIÓN DNI DUPLICADO
+        // ------------------------------------------------------------
+        if (empleadoDTO.getEmpleadoId() == null) {
+            // CREAR — DNI no debe existir
+            if (personaRepository.existsByNumeroDocumento(dni)) {
+                throw new IllegalArgumentException("El DNI " + dni + " ya está registrado en otra persona.");
+            }
+        } else {
+            // EDITAR — DNI no debe existir en otra persona
+            Long personaId = personaDTO.getId();
+            if (personaRepository.existsByNumeroDocumentoAndIdNot(dni, personaId)) {
+                throw new IllegalArgumentException("El DNI " + dni + " pertenece a otra persona.");
+            }
+        }
+
+        // ------------------------------------------------------------
         // Buscar o crear persona
-        Persona persona = personaRepository.findByNumeroDocumento(empleadoDTO.getPersona().getNumeroDocumento())
-                .orElse(new Persona());
-        
-        // Actualizar datos de persona
-        updatePersonaFromDTO(persona, empleadoDTO.getPersona());
+        // ------------------------------------------------------------
+        Persona persona = (personaDTO.getId() != null)
+                ? personaRepository.findById(personaDTO.getId()).orElse(new Persona())
+                : personaRepository.findByNumeroDocumento(dni).orElse(new Persona());
+
+        updatePersonaFromDTO(persona, personaDTO);
         persona = personaRepository.save(persona);
 
-        // Buscar departamento si está presente
+        // ------------------------------------------------------------
+        // Buscar departamento
+        // ------------------------------------------------------------
         Departamento departamento = null;
         if (empleadoDTO.getDepartamento() != null && empleadoDTO.getDepartamento().getId() != null) {
             departamento = departamentoRepository.findById(empleadoDTO.getDepartamento().getId())
                     .orElse(null);
         }
 
+        // ------------------------------------------------------------
         // Crear o actualizar empleado
-        Empleado empleado = new Empleado();
-        if (empleadoDTO.getEmpleadoId() != null) {
-            empleado = empleadoRepository.findById(empleadoDTO.getEmpleadoId())
-                    .orElse(new Empleado());
-        }
+        // ------------------------------------------------------------
+        Empleado empleado = (empleadoDTO.getEmpleadoId() != null)
+                ? empleadoRepository.findById(empleadoDTO.getEmpleadoId()).orElse(new Empleado())
+                : new Empleado();
 
         empleado.setPersona(persona);
         empleado.setDepartamento(departamento);
@@ -88,7 +127,7 @@ public class EmpleadoService {
         empleado.setFechaContratacion(empleadoDTO.getFechaContratacion());
         empleado.setFoto(empleadoDTO.getFoto());
         empleado.setCv(empleadoDTO.getCv());
-        
+
         if (empleadoDTO.getEstado() != null) {
             empleado.setEstado(Empleado.EstadoEmpleado.valueOf(empleadoDTO.getEstado().toUpperCase()));
         }
@@ -97,12 +136,35 @@ public class EmpleadoService {
         return convertToDTO(empleado);
     }
 
+
+    // ============================================================
+    // ELIMINAR
+    // ============================================================
     @Transactional
     public void deleteById(Long id) {
         empleadoRepository.deleteById(id);
     }
 
-    private void updatePersonaFromDTO(Persona persona, com.perumarket.erp.models.dto.PersonaDTO personaDTO) {
+    @Transactional
+public void deleteCompleto(Long empleadoId) {
+    Empleado empleado = empleadoRepository.findById(empleadoId)
+            .orElseThrow(() -> new RuntimeException("Empleado no encontrado"));
+
+    Long personaId = empleado.getPersona().getId();
+
+    // Eliminar empleado primero
+    empleadoRepository.deleteById(empleadoId);
+
+    // Luego eliminar persona asociada
+    personaRepository.deleteById(personaId);
+}
+
+
+
+    // ============================================================
+    // MÉTODOS AUXILIARES
+    // ============================================================
+    private void updatePersonaFromDTO(Persona persona, PersonaDTO personaDTO) {
         persona.setTipoDocumento(personaDTO.getTipoDocumento());
         persona.setNumeroDocumento(personaDTO.getNumeroDocumento());
         persona.setNombres(personaDTO.getNombres());
@@ -117,7 +179,7 @@ public class EmpleadoService {
     private EmpleadoDTO convertToDTO(Empleado empleado) {
         EmpleadoDTO dto = new EmpleadoDTO();
         dto.setEmpleadoId(empleado.getId());
-        
+
         PersonaDTO personaDTO = new PersonaDTO();
         personaDTO.setId(empleado.getPersona().getId());
         personaDTO.setTipoDocumento(empleado.getPersona().getTipoDocumento());
@@ -129,7 +191,7 @@ public class EmpleadoService {
         personaDTO.setTelefono(empleado.getPersona().getTelefono());
         personaDTO.setFechaNacimiento(empleado.getPersona().getFechaNacimiento());
         personaDTO.setDireccion(empleado.getPersona().getDireccion());
-        
+
         dto.setPersona(personaDTO);
 
         if (empleado.getDepartamento() != null) {
