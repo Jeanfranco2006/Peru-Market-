@@ -4,12 +4,10 @@ import {
     FaImage, FaWeightHanging, FaTag, FaCloudUploadAlt
 } from 'react-icons/fa';
 import type { ProveedorData } from '../../../types/proveedor/proveedorType';
-import { api } from '../../../services/api'; // ajusta la ruta
-
+import { api } from '../../../services/api'; // Asegúrate que esta ruta sea correcta
 
 // --- INTERFACES ---
 
-// Esta interfaz debe coincidir con el DTO Java "ProductoProveedorResponse"
 interface ProductoProveedorDTO {
     id: number;           // ID de la relación
     productoId: number;   // ID del producto
@@ -18,7 +16,7 @@ interface ProductoProveedorDTO {
     precio_compra: number;
     peso_kg: number;
     descuento: number;
-    imagen?: string;
+    imagen?: string;      // Ruta relativa que viene de la BD (ej: /api/uploads/...)
 }
 
 interface Props {
@@ -28,6 +26,8 @@ interface Props {
 }
 
 export default function ProveedorProductosModal({ isOpen, onClose, proveedor }: Props) {
+    const API_URL = 'http://localhost:8080';
+
     const [productos, setProductos] = useState<ProductoProveedorDTO[]>([]);
     const [loading, setLoading] = useState(false);
 
@@ -39,8 +39,6 @@ export default function ProveedorProductosModal({ isOpen, onClose, proveedor }: 
     // Estados para la imagen
     const [imagenFile, setImagenFile] = useState<File | null>(null);
     const [imagenPreview, setImagenPreview] = useState<string | null>(null);
-
-
 
     useEffect(() => {
         if (isOpen && proveedor) {
@@ -71,7 +69,6 @@ export default function ProveedorProductosModal({ isOpen, onClose, proveedor }: 
         }
     };
 
-
     // Manejo de imagen
     const handleImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
         const file = e.target.files?.[0];
@@ -101,7 +98,6 @@ export default function ProveedorProductosModal({ isOpen, onClose, proveedor }: 
             const skuAuto = `PROV-${Date.now().toString().slice(-6)}`;
             formData.append('sku', skuAuto);
 
-            // Nombres de parámetros exactos como espera el Backend (@RequestParam)
             formData.append('precio_compra', precioInput);
             formData.append('peso_kg', pesoInput);
 
@@ -133,7 +129,6 @@ export default function ProveedorProductosModal({ isOpen, onClose, proveedor }: 
 
         try {
             await api.delete(`/proveedores/productos/${idRelacion}`);
-
             setProductos(productos.filter(p => p.id !== idRelacion));
         } catch (error) {
             console.error("Error al eliminar producto:", error);
@@ -156,7 +151,6 @@ export default function ProveedorProductosModal({ isOpen, onClose, proveedor }: 
                         </div>
                         <div className="min-w-0">
                             <h2 className="text-base sm:text-lg font-bold text-slate-800 tracking-tight truncate">Catálogo de Proveedor</h2>
-                            {/* Usamos razonSocial o razon_social según llegue */}
                             <div className="flex items-center gap-2 text-xs font-medium text-slate-500 truncate">
                                 <span className="hidden sm:inline bg-slate-100 px-2 py-0.5 rounded text-slate-600 font-bold uppercase">{proveedor.ruc}</span>
                                 <span className="truncate max-w-[150px] sm:max-w-xs">
@@ -224,7 +218,7 @@ export default function ProveedorProductosModal({ isOpen, onClose, proveedor }: 
                                     />
                                 </div>
 
-                                {/* Imagen */}
+                                {/* Imagen Input */}
                                 <div className="col-span-2 md:col-span-12">
                                     <label className="block text-xs font-bold text-slate-500 mb-1 ml-1">Imagen (Opcional)</label>
 
@@ -242,7 +236,6 @@ export default function ProveedorProductosModal({ isOpen, onClose, proveedor }: 
                                     ) : (
                                         <div className="relative w-full h-40 sm:h-48 rounded-xl border border-slate-200 bg-slate-50 flex items-center justify-center overflow-hidden group">
                                             <img src={imagenPreview} alt="Previsualización" className="h-full object-contain" />
-
                                             <button
                                                 type="button"
                                                 onClick={handleRemoveImage}
@@ -278,19 +271,26 @@ export default function ProveedorProductosModal({ isOpen, onClose, proveedor }: 
                             productos.map((prod) => (
                                 <div key={prod.id} className="bg-white p-3 rounded-xl border border-slate-200 flex items-center justify-between gap-3 hover:border-indigo-200 transition-all">
                                     <div className="flex items-center gap-3 sm:gap-4 overflow-hidden">
-                                        {/* Thumbnail adaptable con URL correcta */}
-                                        <div className="h-12 w-12 sm:h-14 sm:w-14 rounded-lg bg-slate-100 border border-slate-200 flex items-center justify-center text-slate-400 shrink-0 overflow-hidden relative group">
+                                        {/* IMAGEN DEL PRODUCTO */}
+                                        <div className="h-12 w-12 sm:h-16 sm:w-16 shrink-0 rounded-lg bg-slate-100 border border-slate-200 overflow-hidden flex items-center justify-center relative">
                                             {prod.imagen ? (
                                                 <img
-                                                    src={`http://localhost:8080/api${prod.imagen}`}
+                                                    // Aquí concatenamos la URL del servidor con la ruta relativa de la BD
+                                                    src={`${API_URL}${prod.imagen}`}
                                                     alt={prod.nombre}
                                                     className="w-full h-full object-cover"
+                                                    onError={(e) => {
+                                                        // Si la imagen no carga, la ocultamos y mostramos el icono
+                                                        e.currentTarget.style.display = 'none';
+                                                        e.currentTarget.nextElementSibling?.classList.remove('hidden');
+                                                    }}
                                                 />
-
                                             ) : (
-                                                <FaImage className="w-5 h-5 sm:w-6 sm:h-6" />
+                                                <FaImage className="text-slate-300 w-5 h-5 sm:w-6 sm:h-6" />
                                             )}
+                                            <FaImage className="text-slate-300 w-5 h-5 sm:w-6 sm:h-6 absolute hidden" />
                                         </div>
+                                        {/* -------------------------------------- */}
 
                                         <div className="min-w-0">
                                             <h4 className="font-bold text-slate-800 text-sm truncate">{prod.nombre}</h4>
