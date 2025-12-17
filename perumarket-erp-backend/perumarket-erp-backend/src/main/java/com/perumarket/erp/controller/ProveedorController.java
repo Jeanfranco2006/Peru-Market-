@@ -1,6 +1,6 @@
 package com.perumarket.erp.controller;
 
-import com.perumarket.erp.models.dto.ProductoProveedorResponse; // DTO para la lista de productos
+import com.perumarket.erp.models.dto.ProductoProveedorResponse;
 import com.perumarket.erp.models.dto.ProveedorDTO;
 import com.perumarket.erp.models.entity.Proveedor;
 import com.perumarket.erp.service.ProveedorService;
@@ -8,7 +8,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
-import org.springframework.web.multipart.MultipartFile; // Necesario para subir imágenes
+import org.springframework.web.multipart.MultipartFile;
 
 import java.math.BigDecimal;
 import java.util.HashMap;
@@ -18,7 +18,6 @@ import java.util.stream.Collectors;
 
 @RestController
 @RequestMapping("/proveedores")
-@CrossOrigin(origins = "http://localhost:5173") // <--- SOLUCIÓN AL ERROR DE CORS
 public class ProveedorController {
 
     @Autowired
@@ -30,7 +29,7 @@ public class ProveedorController {
 
     private Proveedor convertToEntity(ProveedorDTO dto) {
         Proveedor entity = new Proveedor();
-        entity.setId(dto.getId()); 
+        entity.setId(dto.getId());
         entity.setRuc(dto.getRuc());
         entity.setRazonSocial(dto.getRazonSocial());
         entity.setContacto(dto.getContacto());
@@ -39,7 +38,7 @@ public class ProveedorController {
         entity.setDireccion(dto.getDireccion());
         try {
             entity.setEstado(Proveedor.EstadoProveedor.valueOf(dto.getEstado().toUpperCase()));
-        } catch (IllegalArgumentException e) {
+        } catch (Exception e) {
             entity.setEstado(Proveedor.EstadoProveedor.ACTIVO);
         }
         return entity;
@@ -59,7 +58,7 @@ public class ProveedorController {
     }
 
     // ================================================================
-    // ENDPOINTS CRUD DE PROVEEDORES (Básicos)
+    // ENDPOINTS CRUD GENERAL DE PROVEEDORES
     // ================================================================
 
     @GetMapping
@@ -118,7 +117,7 @@ public class ProveedorController {
 
     // =======================================================================
     // NUEVOS ENDPOINTS: GESTIÓN DE PRODUCTOS DEL PROVEEDOR
-    // (Estos son los que te daban error 404 porque faltaban)
+    // (Estos son los que te daban error 404/CORS)
     // =======================================================================
 
     // 1. Listar productos de un proveedor específico
@@ -140,7 +139,7 @@ public class ProveedorController {
         try {
             proveedorService.registrarProductoDesdeProveedor(id, nombre, sku, precioCompra, pesoKg, imagen);
             
-            // Retornamos un JSON para que React pueda hacer response.json() sin fallar
+            // Retornamos un JSON (Map) para que React reciba un objeto válido
             Map<String, String> response = new HashMap<>();
             response.put("mensaje", "Producto registrado exitosamente");
             return ResponseEntity.ok(response);

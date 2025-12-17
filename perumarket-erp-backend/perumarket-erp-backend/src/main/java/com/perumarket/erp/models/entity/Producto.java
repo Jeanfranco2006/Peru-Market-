@@ -63,7 +63,8 @@ public class Producto {
     // ENUMS
     public enum EstadoProducto {
         ACTIVO,
-        INACTIVO
+        INACTIVO,
+        CATALOGO
     }
     
     public enum UnidadMedida {

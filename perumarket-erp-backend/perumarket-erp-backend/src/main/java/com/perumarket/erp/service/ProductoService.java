@@ -203,7 +203,7 @@ if (imagen != null && !imagen.isEmpty()) {
      */
     @Transactional(readOnly = true)
     public List<ProductoResponse> obtenerTodosProductosConStock() {
-        List<Producto> productos = productoRepository.findAll();
+List<Producto> productos = productoRepository.findByEstado(EstadoProducto.ACTIVO);
 
         return productos.stream().map(producto -> {
             // Buscamos el inventario principal para este producto (asumimos el primero o el

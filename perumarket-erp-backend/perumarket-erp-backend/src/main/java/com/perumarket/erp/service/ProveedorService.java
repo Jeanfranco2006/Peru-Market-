@@ -25,13 +25,9 @@ public class ProveedorService {
     @Autowired
     private ProveedorProductoRepository proveedorProductoRepository;
     @Autowired
-    private InventarioRepository inventarioRepository;
-    @Autowired
-    private AlmacenRepository almacenRepository;
-    @Autowired
     private CategoriaProductoRepository categoriaProductoRepository;
 
-    // --- MÉTODOS ESTÁNDAR ---
+    // --- MÉTODOS ESTÁNDAR PROVEEDOR ---
     public List<Proveedor> findAll() { return proveedorRepository.findAll(); }
     public Optional<Proveedor> findById(Integer id) { return proveedorRepository.findById(id); }
     public Proveedor save(Proveedor proveedor) { return proveedorRepository.save(proveedor); }
@@ -41,7 +37,7 @@ public class ProveedorService {
         return proveedorRepository.findByRucContainingOrRazonSocialContainingIgnoreCase(query, query);
     }
 
-    // --- MÉTODOS PARA EL MODAL DE PRODUCTOS ---
+    // --- MÉTODOS GESTIÓN PRODUCTOS-PROVEEDOR ---
 
     @Transactional(readOnly = true)
     public List<ProductoProveedorResponse> listarProductosDeProveedor(Integer proveedorId) {
@@ -55,10 +51,9 @@ public class ProveedorService {
             dto.setProductoId(p.getId());
             dto.setNombre(p.getNombre());
             dto.setCodigo(p.getSku());
-            
-            // Leemos los datos de la tabla intermedia
+            dto.setImagen(p.getImagen());
             dto.setPrecio_compra(pp.getPrecioCompra());
-            
+            dto.setPeso_kg(p.getPesoKg());
             respuesta.add(dto);
         }
         return respuesta;
@@ -75,61 +70,56 @@ public class ProveedorService {
         Proveedor proveedor = proveedorRepository.findById(proveedorId)
                 .orElseThrow(() -> new RuntimeException("Proveedor no encontrado"));
 
-        // 1. Crear Producto Base
+        // 1. Crear Producto
         Producto producto = new Producto();
         producto.setNombre(nombre);
         producto.setSku(sku);
-        producto.setPrecioVenta(precioCompra.multiply(new BigDecimal("1.30"))); // +30% margen
+        
+        // --- LÓGICA CRÍTICA ---
+        // Estado CATALOGO: No aparece en ventas.
+        // Precio Venta 0: Porque no se vende aún.
+        producto.setEstado(Producto.EstadoProducto.CATALOGO); 
+        producto.setPrecioVenta(BigDecimal.ZERO); 
+        
         producto.setPrecioCompra(precioCompra);
         producto.setPesoKg(pesoKg);
-        producto.setEstado(Producto.EstadoProducto.ACTIVO);
         producto.setUnidadMedida(Producto.UnidadMedida.UNIDAD);
         producto.setRequiereCodigoBarras(true);
         
-        // Asignar categoría por defecto
+        // Asignar primera categoría disponible (fix temporal)
         CategoriaProducto catDefault = categoriaProductoRepository.findAll().stream()
-                .findFirst().orElseThrow(() -> new RuntimeException("Crea al menos una categoría primero"));
+                .findFirst().orElseThrow(() -> new RuntimeException("No hay categorías creadas en el sistema"));
         producto.setCategoria(catDefault);
 
-        // Guardar imagen en disco y asignar ruta
-        String rutaImagen = null;
+        // Guardar Imagen
         if (imagen != null && !imagen.isEmpty()) {
             try {
-                String nombreArchivo = "prov_" + System.currentTimeMillis() + "_" + imagen.getOriginalFilename();
+                String nombreArchivo = "prod_" + System.currentTimeMillis() + "_" + imagen.getOriginalFilename();
                 Path carpeta = Paths.get("uploads/productos");
                 if (!Files.exists(carpeta)) Files.createDirectories(carpeta);
-                
                 Path rutaFinal = carpeta.resolve(nombreArchivo);
                 Files.copy(imagen.getInputStream(), rutaFinal, StandardCopyOption.REPLACE_EXISTING);
                 
-                rutaImagen = "/uploads/productos/" + nombreArchivo;
+                // Ruta para que el frontend la lea
+                producto.setImagen("/api/uploads/productos/" + nombreArchivo); 
             } catch (IOException e) {
-                throw new RuntimeException("Error guardando imagen", e);
+                throw new RuntimeException("Error al subir imagen", e);
             }
         }
-        producto.setImagen(rutaImagen); // Respaldo
+        
+        // Guardamos Producto
         producto = productoRepository.save(producto);
 
-        // 2. Crear Relación ProveedorProducto
+        // 2. Crear Vinculación
         ProveedorProducto pp = new ProveedorProducto();
         pp.setProveedor(proveedor);
         pp.setProducto(producto);
         pp.setPrecioCompra(precioCompra);
         pp.setEsPrincipal(true);
+        
         proveedorProductoRepository.save(pp);
 
-        // 3. Inicializar Inventario (Para evitar errores en otros módulos)
-        Almacen almacen = almacenRepository.findById(1).orElse(null);
-        if (almacen != null) {
-            Inventario inv = new Inventario();
-            inv.setProducto(producto);
-            inv.setAlmacen(almacen);
-            inv.setStockActual(0);
-            inv.setStockMinimo(5);
-            inv.setStockMaximo(1000);
-            inv.setUbicacion("RECEPCION");
-            inventarioRepository.save(inv);
-        }
+        // 3. NO CREAMOS INVENTARIO (Así no ensucia el almacén)
     }
 
     @Transactional
