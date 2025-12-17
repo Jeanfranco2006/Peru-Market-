@@ -58,9 +58,6 @@ public class ProveedorService {
             
             // Leemos los datos de la tabla intermedia
             dto.setPrecio_compra(pp.getPrecioCompra());
-            dto.setPeso_kg(pp.getPesoKg() != null ? pp.getPesoKg() : p.getPesoKg());
-            dto.setDescuento(pp.getDescuento());
-            dto.setImagen(pp.getImagen() != null ? pp.getImagen() : p.getImagen());
             
             respuesta.add(dto);
         }
@@ -118,9 +115,6 @@ public class ProveedorService {
         pp.setProveedor(proveedor);
         pp.setProducto(producto);
         pp.setPrecioCompra(precioCompra);
-        pp.setPesoKg(pesoKg);
-        pp.setDescuento(BigDecimal.ZERO);
-        pp.setImagen(rutaImagen); // Imagen específica
         pp.setEsPrincipal(true);
         proveedorProductoRepository.save(pp);
 
