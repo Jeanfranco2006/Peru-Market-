@@ -1,5 +1,5 @@
 import { Link } from 'react-router-dom';
-import { useCallback, useEffect } from 'react'; // IMPORTANTE: useEffect añadido
+import { useCallback, useEffect } from 'react'; 
 import {
   IoMdArrowBack,
   IoIosCloudUpload,

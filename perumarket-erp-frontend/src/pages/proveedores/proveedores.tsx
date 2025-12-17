@@ -87,7 +87,7 @@ export default function Proveedores() {
               <FaAddressBook size={24}/>
            </div>
            <div className="text-center xl:text-left">
-              <h1 className="text-2xl md:text-3xl font-black text-slate-900 uppercase tracking-tight leading-none">Proveedores</h1>
+              <h1 className="text-2xl md:text-3xl font-black text-slate-900 uppercase tracking-tight leading-none">Proveedoress</h1>
            </div>
         </div>
         
