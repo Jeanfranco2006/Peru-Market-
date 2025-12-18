@@ -1,413 +1,254 @@
-import { Link, useParams } from 'react-router-dom';
-import { useState, useEffect } from 'react';
+import { Link, useNavigate } from 'react-router-dom';
+import { useState, useMemo, useEffect } from 'react';
 import { 
-  IoMdArrowRoundBack, 
-  IoIosDocument, 
-  IoIosCash,
-  IoIosPrint,
-  IoIosCloudDownload,
-  IoIosInformationCircle,
-  IoIosPeople,
-  IoIosList
+  IoMdAdd, IoIosEye, IoIosList, IoIosSearch, 
+  IoIosDocument, IoIosCash, IoIosCalendar, 
+  IoMdArrowRoundBack 
 } from "react-icons/io";
+import { api } from '../../services/api';
 
 interface Compra {
-  id: string;
-  numero: string;
-  proveedor: string;
-  ruc: string;
-  fecha: string;
-  tipoComprobante: string;
-  estado: string;
-  subtotalBruto: number;
-  descuentoTotal: number;
-  subtotalNeto: number;
-  igv: number;
-  total: number;
-  productos: Producto[];
-  metodoPago: string;
-  fechaVencimiento?: string;
-  observaciones?: string;
-}
-
-interface Producto {
   id: number;
-  nombre: string;
-  precio_unitario: number;
-  cantidad: number;
-  descuento: number;
-  subtotal: number;
+  numeroComprobante: string;
+  tipoComprobante: string;
+  fechaCompra: string; 
+  total: number;
+  estado: string;
+  proveedor: { razonSocial: string; };
+  almacen: { nombre: string; };
 }
 
-export default function PurchaseHistory() {
-  const { id } = useParams<{ id: string }>();
-  const [compra, setCompra] = useState<Compra | null>(null);
-  const [error, setError] = useState<string | null>(null);
+// Helper para estilos de estado (Más sutiles)
+const getStatusStyles = (status: string) => {
+  const s = status ? status.toUpperCase() : '';
+  switch (s) {
+    case 'COMPLETADO': case 'APROBADO': return 'bg-emerald-50 text-emerald-700 border-emerald-200 ring-1 ring-emerald-600/20';
+    case 'PENDIENTE': return 'bg-amber-50 text-amber-700 border-amber-200 ring-1 ring-amber-600/20';
+    case 'CANCELADO': return 'bg-rose-50 text-rose-700 border-rose-200 ring-1 ring-rose-600/20';
+    default: return 'bg-slate-50 text-slate-700 border-slate-200 ring-1 ring-slate-600/20';
+  }
+};
 
-  const comprasMock: Compra[] = [
-    {
-      id: '1',
-      numero: 'F001-0000000933',
-      proveedor: 'Tecnolimport SA',
-      ruc: '20123456789',
-      fecha: '2024-11-15',
-      tipoComprobante: 'Factura',
-      estado: 'COMPLETADO',
-      subtotalBruto: 2655.00,
-      descuentoTotal: 14.50,
-      subtotalNeto: 2640.50,
-      igv: 490.75,
-      total: 3131.25,
-      metodoPago: 'Contado',
-      productos: [
-        { id: 1, nombre: 'Laptop HP 15"', precio_unitario: 1200, cantidad: 2, descuento: 0, subtotal: 2400.00 },
-        { id: 2, nombre: 'Teclado Mecánico', precio_unitario: 85, cantidad: 3, descuento: 14.50, subtotal: 255.00 },
-      ],
-      observaciones: 'Compra realizada con descuento por volumen'
-    },
-    {
-      id: '2',
-      numero: 'B002-0000105',
-      proveedor: 'ElectroPeru S.R.L.',
-      ruc: '20198765432',
-      fecha: '2024-11-10',
-      tipoComprobante: 'Boleta',
-      estado: 'PENDIENTE',
-      subtotalBruto: 890.50,
-      descuentoTotal: 0,
-      subtotalNeto: 890.50,
-      igv: 160.29,
-      total: 1050.79,
-      metodoPago: 'Crédito',
-      fechaVencimiento: '2024-12-10',
-      productos: [
-        { id: 3, nombre: 'Mouse Inalámbrico', precio_unitario: 25, cantidad: 5, descuento: 0, subtotal: 125.00 },
-        { id: 4, nombre: 'Pad Mouse', precio_unitario: 15, cantidad: 3, descuento: 0, subtotal: 45.00 },
-      ]
-    },
-    {
-      id: '3',
-      numero: 'F001-0000002',
-      proveedor: 'Distribuidora XYZ',
-      ruc: '20345678901',
-      fecha: '2024-11-01',
-      tipoComprobante: 'Factura',
-      estado: 'COMPLETADO',
-      subtotalBruto: 12500.00,
-      descuentoTotal: 250.00,
-      subtotalNeto: 12250.00,
-      igv: 2205.00,
-      total: 14455.00,
-      metodoPago: 'Crédito',
-      fechaVencimiento: '2024-12-01',
-      productos: [
-        { id: 5, nombre: 'Monitor 24"', precio_unitario: 300, cantidad: 5, descuento: 250.00, subtotal: 1500.00 },
-        { id: 6, nombre: 'Silla Gamer', precio_unitario: 350, cantidad: 2, descuento: 0, subtotal: 700.00 },
-      ]
-    }
-  ];
+// Helper para obtener iniciales del proveedor (Visual candy)
+const getInitials = (name: string) => {
+    return name ? name.substring(0, 2).toUpperCase() : '??';
+};
+
+export default function PurchaseList() {
+  const navigate = useNavigate();
+  const [compras, setCompras] = useState<Compra[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [searchTerm, setSearchTerm] = useState('');
+  const [filterEstado, setFilterEstado] = useState('all');
 
   useEffect(() => {
-    const cargarCompra = () => {
+    const fetchCompras = async () => {
       try {
-        if (id) {
-          const compraEncontrada = comprasMock.find(c => c.id === id);
-          if (compraEncontrada) {
-            setCompra(compraEncontrada);
-            setError(null);
-          } else {
-            setError('Compra no encontrada');
-          }
-        } else {
-          setCompra(comprasMock[0]);
-        }
-      } catch (err) {
-        setError('Error al cargar los datos de la compra');
+        const response = await api.get('/compras');
+        setCompras(response.data);
+      } catch (error) {
+        console.error("Error al cargar historial:", error);
+      } finally {
+        setLoading(false);
       }
     };
+    fetchCompras();
+  }, []);
 
-    cargarCompra();
-  }, [id]);
+  const comprasFiltradas = useMemo(() => {
+    return compras.filter(compra => {
+      const term = searchTerm.toLowerCase();
+      const matchSearch = 
+        (compra.numeroComprobante || '').toLowerCase().includes(term) ||
+        (compra.proveedor?.razonSocial || '').toLowerCase().includes(term);
+      const matchEstado = filterEstado === 'all' || compra.estado === filterEstado;
+      return matchSearch && matchEstado;
+    });
+  }, [searchTerm, filterEstado, compras]);
+
+  const totalCompras = compras.reduce((sum, c) => sum + c.total, 0);
+  const comprasCompletadas = compras.filter(c => c.estado === 'COMPLETADO' || c.estado === 'APROBADO').length;
+  const comprasPendientes = compras.filter(c => c.estado === 'PENDIENTE').length;
 
   const formatearFecha = (fecha: string) => {
-    return new Date(fecha).toLocaleDateString('es-ES', {
-      day: '2-digit',
-      month: '2-digit',
-      year: 'numeric'
+    if (!fecha) return '-';
+    return new Date(fecha).toLocaleDateString('es-PE', {
+        day: '2-digit', month: 'short', year: 'numeric' // Month short es más limpio
     });
   };
 
-  const handleImprimir = () => {
-    const confirmar = window.confirm('¿Desea imprimir el detalle de esta compra?');
-    if (confirmar) {
-      window.print();
-    }
-  };
-
-  const handleExportarPDF = () => {
-    const confirmar = window.confirm('¿Desea exportar esta compra a PDF?');
-    if (confirmar) {
-      alert(`Generando PDF para la compra ${compra?.numero}...`);
-      console.log('Exportando a PDF:', compra);
-    }
-  };
-
-  const getEstadoStyles = (estado: string) => {
-    switch (estado) {
-      case 'COMPLETADO':
-        return 'bg-green-100 text-green-800 border-green-200';
-      case 'PENDIENTE':
-        return 'bg-yellow-100 text-yellow-800 border-yellow-200';
-      case 'CANCELADO':
-        return 'bg-red-100 text-red-800 border-red-200';
-      default:
-        return 'bg-gray-100 text-gray-800 border-gray-200';
-    }
-  };
-
-  const getEstadoTexto = (estado: string) => {
-    switch (estado) {
-      case 'COMPLETADO':
-        return 'Completado';
-      case 'PENDIENTE':
-        return 'Pendiente';
-      case 'CANCELADO':
-        return 'Cancelado';
-      default:
-        return estado;
-    }
-  };
-
-  if (error || !compra) {
-    return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
-        <div className="text-center">
-          <IoIosInformationCircle className="h-16 w-16 text-red-500 mx-auto mb-4" />
-          <h2 className="text-2xl font-bold text-gray-800 mb-2">Error</h2>
-          <p className="text-gray-600 mb-4">{error || 'No se pudo cargar la compra'}</p>
-          <Link 
-            to="/compras" 
-            className="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
-          >
-            Volver al Historial
-          </Link>
-        </div>
-      </div>
-    );
-  }
+  if (loading) return (
+    <div className="flex h-screen items-center justify-center bg-gray-50">
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-indigo-600"></div>
+    </div>
+  );
 
   return (
-    <div className="min-h-screen bg-gray-50 p-4 print:p-0">
-      <div className="max-w-6xl mx-auto bg-white shadow-2xl rounded-xl p-6 md:p-8 print:shadow-none print:rounded-none">
-        
-        {/* Header */}
-        <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center mb-6 border-b pb-4 print:border-b-0">
-          <div className="flex items-center mb-4 lg:mb-0">
-            <Link 
-              to="/compras" 
-              className="flex items-center px-4 py-2 bg-gray-600 text-white rounded-lg hover:bg-gray-700 transition-colors mr-4 print:hidden"
-            >
-              <IoMdArrowRoundBack className="h-5 w-5 mr-2" />
-              Volver al Historial
-            </Link>
-            <div>
-              <h1 className="text-2xl lg:text-3xl font-extrabold text-gray-800 flex items-center">
-                <IoIosInformationCircle className="h-6 w-6 lg:h-7 lg:w-7 mr-3 text-blue-600" />
-                Detalle de Compra
-              </h1>
-              <p className="text-blue-600 font-semibold text-lg mt-1">#{compra.numero}</p>
-            </div>
-          </div>
-          
-          {/* Estado de la compra */}
-          <div className="flex items-center space-x-4">
-            <span className="text-sm text-gray-600 font-medium">Estado:</span>
-            <span className={`inline-flex px-4 py-2 text-sm font-bold rounded-full border ${getEstadoStyles(compra.estado)}`}>
-              {getEstadoTexto(compra.estado)}
-            </span>
-          </div>
-        </div>
-
-        {/* Información General */}
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-8">
-          
-          {/* Datos del Proveedor */}
-          <div className="bg-blue-50 border-l-4 border-blue-400 rounded-lg p-5 shadow-sm">
-            <h3 className="text-lg font-semibold text-blue-800 flex items-center mb-4">
-              <IoIosPeople className="h-5 w-5 mr-2" />
-              Datos del Proveedor
-            </h3>
-            <div className="space-y-3">
-              <div className="flex justify-between">
-                <span className="text-sm text-gray-600">Proveedor:</span>
-                <span className="text-sm font-medium text-right">{compra.proveedor}</span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-sm text-gray-600">RUC:</span>
-                <span className="text-sm font-medium">{compra.ruc}</span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-sm text-gray-600">Fecha Compra:</span>
-                <span className="text-sm font-medium">{formatearFecha(compra.fecha)}</span>
-              </div>
-            </div>
-          </div>
-
-          {/* Comprobante */}
-          <div className="bg-white border rounded-lg p-5 shadow-sm">
-            <h3 className="text-lg font-semibold text-gray-800 flex items-center mb-4">
-              <IoIosDocument className="h-5 w-5 mr-2" />
-              Comprobante
-            </h3>
-            <div className="space-y-3">
-              <div className="flex justify-between">
-                <span className="text-sm text-gray-600">Tipo:</span>
-                <span className="text-sm font-medium">{compra.tipoComprobante}</span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-sm text-gray-600">Número:</span>
-                <span className="text-sm font-medium">{compra.numero}</span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-sm text-gray-600">Método Pago:</span>
-                <span className="text-sm font-medium">{compra.metodoPago}</span>
-              </div>
-              {compra.fechaVencimiento && (
-                <div className="flex justify-between">
-                  <span className="text-sm text-gray-600">Vencimiento:</span>
-                  <span className="text-sm font-medium">{formatearFecha(compra.fechaVencimiento)}</span>
+    <div className="min-h-screen bg-slate-50/50 pb-20 font-sans text-slate-600">
+      
+      {/* Header Superior con fondo blanco para separar del contenido */}
+      <div className="bg-white border-b border-slate-200 sticky top-0 z-10">
+          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div className="flex flex-col sm:flex-row justify-between items-center py-4 gap-4">
+                <div className="flex items-center gap-4 w-full sm:w-auto">
+                    <Link to="/" className="p-2 rounded-lg hover:bg-slate-100 text-slate-500 transition-colors">
+                        <IoMdArrowRoundBack className="h-6 w-6" />
+                    </Link>
+                    <div>
+                        <h1 className="text-2xl font-bold text-slate-800">Historial de Compras</h1>
+                        <p className="text-sm text-slate-500">Gestiona tus adquisiciones y proveedores</p>
+                    </div>
                 </div>
-              )}
+                
+                <Link to="/compras/nueva" 
+                    className="group relative inline-flex items-center justify-center px-5 py-2.5 text-sm font-medium text-white transition-all duration-200 bg-indigo-600 rounded-lg hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-600 shadow-sm shadow-indigo-200">
+                    <IoMdAdd className="mr-2 w-5 h-5 group-hover:scale-110 transition-transform" /> 
+                    Nueva Compra
+                </Link>
+            </div>
+          </div>
+      </div>
+
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        
+        {/* Stats Grid - Estilo Bento */}
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
+          {/* Card 1 */}
+          <div className="bg-white rounded-xl p-6 shadow-[0_2px_10px_-3px_rgba(6,81,237,0.1)] border border-slate-100 flex items-center gap-4">
+            <div className="p-3 bg-blue-50 text-blue-600 rounded-lg">
+                <IoIosDocument className="w-6 h-6"/>
+            </div>
+            <div>
+                <p className="text-xs font-medium text-slate-500 uppercase tracking-wider">Operaciones</p>
+                <p className="text-2xl font-bold text-slate-800">{compras.length}</p>
             </div>
           </div>
 
-          {/* Resumen Económico */}
-          <div className="bg-green-50 border-l-4 border-green-500 rounded-lg p-5 shadow-sm">
-            <h3 className="text-lg font-semibold text-green-800 flex items-center mb-4">
-              <IoIosCash className="h-5 w-5 mr-2" />
-              Resumen Económico
-            </h3>
-            <div className="space-y-2">
-              <div className="flex justify-between">
-                <span className="text-sm text-gray-800">Subtotal Bruto:</span>
-                <span className="text-sm font-medium">${compra.subtotalBruto.toFixed(2)}</span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-sm text-gray-800">Descuento Total:</span>
-                <span className="text-sm font-semibold text-red-600">-${compra.descuentoTotal.toFixed(2)}</span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-sm text-gray-800">Subtotal Neto:</span>
-                <span className="text-sm font-medium">${compra.subtotalNeto.toFixed(2)}</span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-sm text-gray-800">IGV (18%):</span>
-                <span className="text-sm font-medium">${compra.igv.toFixed(2)}</span>
-              </div>
-              <div className="flex justify-between border-t border-green-300 pt-3 mt-2">
-                <span className="text-lg font-bold text-gray-800">TOTAL:</span>
-                <span className="text-xl font-extrabold text-green-700">${compra.total.toFixed(2)}</span>
-              </div>
+          {/* Card 2 */}
+          <div className="bg-white rounded-xl p-6 shadow-[0_2px_10px_-3px_rgba(6,81,237,0.1)] border border-slate-100 flex items-center gap-4">
+            <div className="p-3 bg-emerald-50 text-emerald-600 rounded-lg">
+                <IoIosCash className="w-6 h-6"/>
+            </div>
+            <div>
+                <p className="text-xs font-medium text-slate-500 uppercase tracking-wider">Total Invertido</p>
+                <p className="text-2xl font-bold text-slate-800">S/ {totalCompras.toLocaleString('es-PE', {minimumFractionDigits: 2})}</p>
+            </div>
+          </div>
+
+          {/* Card 3 */}
+          <div className="bg-white rounded-xl p-6 shadow-[0_2px_10px_-3px_rgba(6,81,237,0.1)] border border-slate-100 flex items-center gap-4">
+            <div className="p-3 bg-indigo-50 text-indigo-600 rounded-lg">
+                <IoIosCalendar className="w-6 h-6"/>
+            </div>
+            <div>
+                <p className="text-xs font-medium text-slate-500 uppercase tracking-wider">Completadas</p>
+                <p className="text-2xl font-bold text-slate-800">{comprasCompletadas}</p>
+            </div>
+          </div>
+
+          {/* Card 4 */}
+          <div className="bg-white rounded-xl p-6 shadow-[0_2px_10px_-3px_rgba(6,81,237,0.1)] border border-slate-100 flex items-center gap-4">
+            <div className="p-3 bg-amber-50 text-amber-600 rounded-lg">
+                <IoIosCalendar className="w-6 h-6"/>
+            </div>
+            <div>
+                <p className="text-xs font-medium text-slate-500 uppercase tracking-wider">Pendientes</p>
+                <p className="text-2xl font-bold text-slate-800">{comprasPendientes}</p>
             </div>
           </div>
         </div>
 
-        {/* Observaciones */}
-        {compra.observaciones && (
-          <div className="bg-yellow-50 border-l-4 border-yellow-400 rounded-lg p-4 mb-6">
-            <h4 className="font-semibold text-yellow-800 mb-2">Observaciones</h4>
-            <p className="text-sm text-gray-700">{compra.observaciones}</p>
-          </div>
-        )}
+        {/* Contenedor Principal de la Tabla */}
+        <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
+            
+            {/* Barra de Filtros */}
+            <div className="p-5 border-b border-slate-100 bg-slate-50/50 flex flex-col md:flex-row justify-between items-center gap-4">
+                <div className="relative w-full md:w-96">
+                    <IoIosSearch className="w-5 h-5 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+                    <input type="text" placeholder='Buscar por N° comprobante o proveedor...'
+                        className='w-full pl-10 pr-4 py-2.5 bg-white border border-slate-200 rounded-lg text-sm focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 transition-all'
+                        value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)}
+                    />
+                </div>
+                
+                <div className="flex items-center gap-2 w-full md:w-auto">
+                    <span className="text-sm text-slate-500 hidden sm:block">Estado:</span>
+                    <select className="w-full md:w-auto border border-slate-200 rounded-lg px-3 py-2.5 bg-white text-sm text-slate-700 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 outline-none cursor-pointer"
+                        value={filterEstado} onChange={(e) => setFilterEstado(e.target.value)}>
+                        <option value="all">Todos</option>
+                        <option value="COMPLETADO">Completado</option>
+                        <option value="PENDIENTE">Pendiente</option>
+                        <option value="CANCELADO">Cancelado</option>
+                    </select>
+                </div>
+            </div>
 
-        {/* Tabla de Productos */}
-        <div className="bg-white border rounded-lg shadow-lg mb-8 overflow-hidden">
-          <h3 className="text-xl font-semibold p-4 bg-gray-100 border-b text-gray-700 flex items-center">
-            <IoIosList className="h-5 w-5 mr-2 text-blue-500" />
-            Detalle de Productos ({compra.productos.length} productos)
-          </h3>
-          <div className="overflow-x-auto">
-            <table className="min-w-full divide-y divide-gray-200">
-              <thead className="bg-gray-50">
-                <tr>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Producto</th>
-                  <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">P. Unitario</th>
-                  <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Cantidad</th>
-                  <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Descuento</th>
-                  <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Subtotal</th>
-                </tr>
-              </thead>
-              <tbody className="bg-white divide-y divide-gray-200">
-                {compra.productos.map((producto, index) => (
-                  <tr key={producto.id} className={index % 2 === 0 ? 'bg-white' : 'bg-gray-50'}>
-                    <td className="px-4 py-3 text-sm font-medium text-gray-900">{producto.nombre}</td>
-                    <td className="px-4 py-3 text-sm text-right text-gray-700">${producto.precio_unitario.toFixed(2)}</td>
-                    <td className="px-4 py-3 text-sm text-right text-gray-700">{producto.cantidad}</td>
-                    <td className="px-4 py-3 text-sm text-right text-red-600 font-semibold">
-                      {producto.descuento > 0 ? `-$${producto.descuento.toFixed(2)}` : '$0.00'}
-                    </td>
-                    <td className="px-4 py-3 text-sm text-right font-medium text-gray-900">${producto.subtotal.toFixed(2)}</td>
-                  </tr>
-                ))}
-              </tbody>
-              <tfoot className="bg-gray-100">
-                <tr>
-                  <td colSpan={4} className="px-4 py-3 text-sm font-semibold text-right text-gray-700">
-                    Total:
-                  </td>
-                  <td className="px-4 py-3 text-sm font-bold text-right text-green-700">
-                    ${compra.total.toFixed(2)}
-                  </td>
-                </tr>
-              </tfoot>
-            </table>
-          </div>
-        </div>
+            {/* Tabla */}
+            <div className="overflow-x-auto">
+                <table className="min-w-full divide-y divide-slate-200">
+                    <thead className="bg-slate-50">
+                        <tr>
+                            <th scope="col" className="px-6 py-4 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider">Comprobante</th>
+                            <th scope="col" className="px-6 py-4 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider">Proveedor</th>
+                            <th scope="col" className="px-6 py-4 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider">Almacén</th>
+                            <th scope="col" className="px-6 py-4 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider">Fecha</th>
+                            <th scope="col" className="px-6 py-4 text-right text-xs font-semibold text-slate-500 uppercase tracking-wider">Total</th>
+                            <th scope="col" className="px-6 py-4 text-center text-xs font-semibold text-slate-500 uppercase tracking-wider">Estado</th>
+                            <th scope="col" className="px-6 py-4 text-center text-xs font-semibold text-slate-500 uppercase tracking-wider">Acción</th>
+                        </tr>
+                    </thead>
+                    <tbody className="bg-white divide-y divide-slate-100">
+                        {comprasFiltradas.length === 0 ? (
+                            <tr><td colSpan={7} className="px-6 py-12 text-center text-slate-500">No se encontraron registros que coincidan con tu búsqueda.</td></tr>
+                        ) : (
+                            comprasFiltradas.map((compra) => (
+                                <tr key={compra.id} className="hover:bg-slate-50/80 transition-colors duration-150 group">
+                                    <td className="px-6 py-4 whitespace-nowrap">
+                                        <div className="text-sm font-semibold text-indigo-600">{compra.numeroComprobante || 'S/N'}</div>
+                                        <div className="text-xs text-slate-400">{compra.tipoComprobante}</div>
+                                    </td>
+                                    
+                                    <td className="px-6 py-4 whitespace-nowrap">
+                                        <div className="flex items-center">
+                                            <div className="h-8 w-8 rounded-full bg-indigo-100 text-indigo-600 flex items-center justify-center text-xs font-bold mr-3">
+                                                {getInitials(compra.proveedor?.razonSocial)}
+                                            </div>
+                                            <div className="text-sm font-medium text-slate-700">
+                                                {compra.proveedor?.razonSocial || 'Desconocido'}
+                                            </div>
+                                        </div>
+                                    </td>
 
-        {/* Botones de Acción */}
-        <div className="flex flex-col sm:flex-row justify-between items-center gap-4 border-t pt-6 print:hidden">
-          <div className="text-sm text-gray-500">
-            <p>Compra registrada el {formatearFecha(compra.fecha)}</p>
-          </div>
-          
-          <div className="flex flex-wrap gap-3">
-            <button 
-              className="flex items-center px-5 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 transition-colors shadow-sm"
-              onClick={handleImprimir}
-            >
-              <IoIosPrint className="h-5 w-5 mr-2" />
-              Imprimir
-            </button>
-            <button 
-              className="flex items-center px-5 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors shadow-md"
-              onClick={handleExportarPDF}
-            >
-              <IoIosCloudDownload className="h-5 w-5 mr-2" />
-              Exportar PDF
-            </button>
-          </div>
-        </div>
+                                    <td className="px-6 py-4 whitespace-nowrap text-sm text-slate-600">
+                                        {compra.almacen?.nombre || '-'}
+                                    </td>
 
-        {/* Información para impresión */}
-        <div className="hidden print:block">
-          <div className="text-center mb-6">
-            <h1 className="text-2xl font-bold">Detalle de Compra #{compra.numero}</h1>
-            <p className="text-gray-600">Emitido el {new Date().toLocaleDateString('es-ES')}</p>
-          </div>
-          <div className="grid grid-cols-2 gap-4 mb-4">
-            <div>
-              <strong>Proveedor:</strong> {compra.proveedor}
+                                    <td className="px-6 py-4 whitespace-nowrap text-sm text-slate-500">
+                                        {formatearFecha(compra.fechaCompra)}
+                                    </td>
+
+                                    <td className="px-6 py-4 whitespace-nowrap text-sm text-right font-bold text-slate-700">
+                                        S/ {compra.total?.toFixed(2)}
+                                    </td>
+
+                                    <td className="px-6 py-4 whitespace-nowrap text-center">
+                                        <span className={`inline-flex px-2.5 py-0.5 rounded-full text-xs font-medium border ${getStatusStyles(compra.estado)}`}>
+                                            {compra.estado}
+                                        </span>
+                                    </td>
+
+                                    <td className="px-6 py-4 whitespace-nowrap text-center">
+                                        <Link to={`/compras/historial/${compra.id}`} 
+                                            className="text-slate-400 hover:text-indigo-600 transition-colors p-2 rounded-full hover:bg-indigo-50 inline-block">
+                                            <IoIosEye className="w-5 h-5" />
+                                        </Link>
+                                    </td>
+                                </tr>
+                            ))
+                        )}
+                    </tbody>
+                </table>
             </div>
-            <div>
-              <strong>RUC:</strong> {compra.ruc}
-            </div>
-            <div>
-              <strong>Fecha:</strong> {formatearFecha(compra.fecha)}
-            </div>
-            <div>
-              <strong>Estado:</strong> {getEstadoTexto(compra.estado)}
-            </div>
-          </div>
         </div>
       </div>
     </div>
