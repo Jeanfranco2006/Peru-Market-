@@ -1,6 +1,7 @@
 package com.perumarket.erp.controller;
 
 import com.perumarket.erp.models.dto.CompraDTO;
+import com.perumarket.erp.models.dto.ProductoPendienteDTO;
 import com.perumarket.erp.models.entity.Compra;
 import com.perumarket.erp.service.CompraService;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -20,12 +21,13 @@ public class CompraController {
     private CompraService compraService;
 
     // 1. CREAR COMPRA (POST)
-    // MEJORA: Devuelve un Map simple en lugar de la Entidad para evitar Error 500 por recursión
+    // MEJORA: Devuelve un Map simple en lugar de la Entidad para evitar Error 500
+    // por recursión
     @PostMapping
     public ResponseEntity<?> crearCompra(@RequestBody CompraDTO compraDTO) {
         try {
             Compra nuevaCompra = compraService.registrarCompra(compraDTO);
-            
+
             // Construimos una respuesta simple y segura
             Map<String, Object> respuesta = new HashMap<>();
             respuesta.put("mensaje", "Compra registrada correctamente");
@@ -33,7 +35,7 @@ public class CompraController {
             respuesta.put("status", "success");
 
             return ResponseEntity.ok(respuesta);
-            
+
         } catch (Exception e) {
             e.printStackTrace(); // Imprime el error real en la consola de Java para depurar
             return ResponseEntity.badRequest().body("Error al procesar la compra: " + e.getMessage());
@@ -53,6 +55,23 @@ public class CompraController {
             return ResponseEntity.ok(compraService.obtenerCompraPorId(id));
         } catch (Exception e) {
             return ResponseEntity.status(404).body("Error: " + e.getMessage());
+        }
+    }
+
+    @GetMapping("/pendientes/{almacenId}")
+    public ResponseEntity<List<ProductoPendienteDTO>> getPendientes(@PathVariable Long almacenId) {
+        List<ProductoPendienteDTO> pendientes = compraService.obtenerPendientesPorAlmacen(almacenId);
+        return ResponseEntity.ok(pendientes);
+    }
+
+    // 4. CAMBIAR ESTADO (PATCH)
+    @PatchMapping("/{id}/estado")
+    public ResponseEntity<?> actualizarEstado(@PathVariable Integer id, @RequestParam String estado) {
+        try {
+            Compra compraActualizada = compraService.actualizarEstado(id, estado);
+            return ResponseEntity.ok(compraActualizada);
+        } catch (Exception e) {
+            return ResponseEntity.badRequest().body("Error al actualizar estado: " + e.getMessage());
         }
     }
 }
