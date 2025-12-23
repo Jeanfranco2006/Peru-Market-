@@ -29,6 +29,9 @@ public class Producto {
 
     @Column(name = "precio_compra", precision = 10, scale = 2)
     private BigDecimal precioCompra;
+
+    @Column(name = "stock")
+    private Integer stock;
     
     @Enumerated(EnumType.STRING)
     @Column(name = "unidad_medida", columnDefinition = "ENUM('UNIDAD','CAJA','PAQUETE','KG','LITRO') DEFAULT 'UNIDAD'")

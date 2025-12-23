@@ -2,7 +2,6 @@ import { ventaService } from "../../services/ventas/ventaService";
 import type { Cliente } from "../../types/clientes/Client";
 import type { DetallePago } from "../../types/ventas/ventas";
 
-
 export const useVenta = () => {
   const procesarVenta = async (cliente: Cliente | null, carrito: any[], detallesPago: DetallePago[]) => {
     try {
@@ -39,15 +38,16 @@ export const useVenta = () => {
         }))
       };
 
+      // Enviamos al backend
       const resultado = await ventaService.procesarVenta(ventaBody);
 
-      // Actualizar stock
-      await Promise.all(carrito.map(item =>
-        ventaService.actualizarStock(item.producto.id, item.producto.stock)
-      ));
-
+      // --- ELIMINADO: Actualizar stock manual ---
+      // El backend ya lo hace. Si lo hacemos aquí, podríamos estar enviando
+      // el stock "local" (del navegador) que podría estar desfasado.
+      
       alert(`✅ Venta procesada correctamente. Total: S/ ${totalVenta.toFixed(2)}`);
       return resultado;
+
     } catch (error: any) {
       console.error('Error procesarVenta:', error);
       alert(error.message || "❌ Ocurrió un error al procesar la venta");

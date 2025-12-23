@@ -1,5 +1,5 @@
 import React from 'react';
-import { FaTrash, FaCreditCard, FaMoneyBillWave, FaUniversity, FaMobileAlt, FaWallet, FaReceipt, FaCheckCircle, FaTimes } from 'react-icons/fa';
+import { FaTrash, FaCreditCard, FaMoneyBillWave, FaUniversity, FaMobileAlt, FaWallet, FaReceipt, FaCheckCircle, FaTimes, FaPrint, FaArrowRight } from 'react-icons/fa';
 import type { Cliente } from '../../types/clientes/Client';
 import type { DetallePago, MetodoPago } from '../../types/ventas/ventas';
 
@@ -13,9 +13,21 @@ interface ModalPagoProps {
 }
 
 const ModalPago: React.FC<ModalPagoProps> = ({ isOpen, onClose, onConfirmar, cliente, total, metodosPago }) => {
-  const inicializarPago = () => ({
+  
+  // 1. Calcular totales fuera para usarlos en la inicialización y validación
+  // Nota: Esto se recalcula en cada render, lo cual es correcto.
+  const [detallesPago, setDetallesPago] = React.useState<DetallePago[]>([]);
+  
+  const totalPagado = detallesPago.reduce((sum, pago) => sum + pago.monto, 0);
+  // El saldo restante es el TOTAL menos lo que ya está en la lista.
+  // Usamos toFixed(2) para evitar errores de punto flotante y volvemos a número.
+  const saldoRestante = Number((total - totalPagado).toFixed(2));
+
+  // Función para resetear el formulario. 
+  // OJO: Ahora el monto inicial dinámico depende del saldo restante actual.
+  const inicializarPago = (montoSugerido: number) => ({
     id_metodo_pago: metodosPago[0]?.id || 0,
-    monto: total,
+    monto: montoSugerido > 0 ? montoSugerido : 0, // El monto por defecto es lo que falta pagar
     referencia: '',
     numero_tarjeta: '',
     fecha_vencimiento: '',
@@ -25,13 +37,16 @@ const ModalPago: React.FC<ModalPagoProps> = ({ isOpen, onClose, onConfirmar, cli
     numero_operacion: ''
   });
 
-  const [pagoActual, setPagoActual] = React.useState<DetallePago>(inicializarPago());
-  const [detallesPago, setDetallesPago] = React.useState<DetallePago[]>([]);
+  // Iniciamos con el total completo
+  const [pagoActual, setPagoActual] = React.useState<DetallePago>(inicializarPago(total));
+  const [mostrarExito, setMostrarExito] = React.useState(false);
 
   React.useEffect(() => {
     if (isOpen) {
-      setPagoActual(inicializarPago());
       setDetallesPago([]);
+      // Al abrir, el monto sugerido es el total completo
+      setPagoActual(inicializarPago(total));
+      setMostrarExito(false);
     }
   }, [isOpen, total, metodosPago]);
 
@@ -58,6 +73,14 @@ const ModalPago: React.FC<ModalPagoProps> = ({ isOpen, onClose, onConfirmar, cli
       alert('El monto debe ser mayor a 0');
       return false;
     }
+    // Validación extra de seguridad: no permitir agregar más del saldo restante
+    // (aunque el input lo bloquea, es bueno tenerlo aquí también)
+    // Usamos un pequeño margen de error (0.01) por si acaso decimales
+    if (pagoActual.monto > saldoRestante + 0.01) {
+        alert(`El monto no puede superar el saldo restante (S/ ${saldoRestante.toFixed(2)})`);
+        return false;
+    }
+
     switch (m) {
       case 2:
       case 3:
@@ -85,35 +108,110 @@ const ModalPago: React.FC<ModalPagoProps> = ({ isOpen, onClose, onConfirmar, cli
 
   const agregarPago = () => {
     if (!validarCamposPago()) return;
-    setDetallesPago([...detallesPago, { ...pagoActual }]);
-    setPagoActual(inicializarPago());
+    
+    // 1. Agregamos el pago a la lista
+    const nuevosDetalles = [...detallesPago, { ...pagoActual }];
+    setDetallesPago(nuevosDetalles);
+    
+    // 2. Calculamos cuánto falta AHORA
+    const nuevoTotalPagado = nuevosDetalles.reduce((sum, p) => sum + p.monto, 0);
+    const nuevoSaldoRestante = Number((total - nuevoTotalPagado).toFixed(2));
+
+    // 3. Reseteamos el formulario, pero SUGIRIENDO el saldo restante
+    // Si ya se pagó todo (saldo 0), sugerimos 0.
+    setPagoActual(inicializarPago(nuevoSaldoRestante));
   };
 
   const eliminarPago = (index: number) => {
+    // Al eliminar, el saldo restante aumentará automáticamente en el render.
+    // Opcional: Podríamos actualizar el input actual para que refleje el nuevo saldo,
+    // pero dejar que el usuario lo escriba es mejor UX para evitar cambios bruscos.
     setDetallesPago(detallesPago.filter((_, i) => i !== index));
   };
 
-  const getTotalPagado = () => detallesPago.reduce((sum, pago) => sum + pago.monto, 0);
-  const totalPagado = getTotalPagado();
-  const cambio = totalPagado - total;
-
+  // Cambio: Eliminamos el cálculo de "cambio" ya que no habrá vuelto.
+  
   const handleConfirmar = () => {
     if (detallesPago.length === 0) {
       alert('Agrega al menos un método de pago');
       return;
     }
+    // Verificación final estricta: debe ser pago exacto
     if (totalPagado < total) {
-      alert(`El total pagado (S/ ${totalPagado.toFixed(2)}) es menor al total de la venta (S/ ${total.toFixed(2)})`);
+      alert(`Aún falta cubrir el monto total. Faltan S/ ${(total - totalPagado).toFixed(2)}`);
       return;
     }
+    setMostrarExito(true);
+  };
+
+  const handleFinalizarReal = () => {
     onConfirmar(detallesPago);
   };
 
+  // MANEJO DEL INPUT DE MONTO
+  const handleMontoChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    let valor = parseFloat(e.target.value);
+    
+    if (isNaN(valor)) valor = 0;
+
+    // LÓGICA DE TOPE:
+    // Si el valor ingresado es mayor al saldo restante, lo forzamos al saldo restante.
+    if (valor > saldoRestante) {
+        valor = saldoRestante;
+    }
+
+    setPagoActual({ ...pagoActual, monto: valor });
+  };
+
+
   if (!isOpen) return null;
 
-  // Estilos comunes para inputs
   const inputClassName = "w-full bg-white border border-slate-200 rounded-lg px-3 py-2.5 text-sm text-slate-700 focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-200 transition-all placeholder-slate-400";
   const labelClassName = "block text-xs font-semibold text-slate-600 mb-1.5 uppercase tracking-wide";
+
+  if (mostrarExito) {
+    return (
+      <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4 z-50 transition-opacity">
+        <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md p-8 relative animate-fadeIn flex flex-col items-center text-center">
+            
+            <div className="mb-6 relative">
+              <div className="absolute inset-0 bg-green-100 rounded-full animate-ping opacity-75"></div>
+              <div className="relative bg-white p-2 rounded-full">
+                <FaCheckCircle className="text-emerald-500 text-6xl shadow-sm" />
+              </div>
+            </div>
+
+            <h2 className="text-2xl font-black text-slate-800 mb-2">¡Pedido Realizado!</h2>
+            <p className="text-slate-500 mb-6 text-sm">
+              El pago se ha procesado correctamente.
+            </p>
+
+            <div className="bg-slate-50 rounded-xl p-4 w-full border border-slate-100 mb-8 space-y-2">
+                <div className="flex justify-between items-center border-b border-slate-200 pb-2">
+                    <span className="text-xs font-bold text-slate-400 uppercase">Total Pagado</span>
+                    <span className="text-xl font-black text-slate-800">S/ {total.toFixed(2)}</span>
+                </div>
+            </div>
+
+            <div className="flex flex-col gap-3 w-full">
+                <button
+                    onClick={() => console.log("Imprimiendo ticket...")}
+                    className="w-full bg-white border border-slate-200 text-slate-600 py-3 rounded-xl font-bold flex items-center justify-center gap-2 hover:bg-slate-50 hover:text-slate-800 transition-all"
+                >
+                    <FaPrint className="text-slate-400" /> Imprimir Ticket
+                </button>
+                
+                <button
+                    onClick={handleFinalizarReal}
+                    className="w-full bg-slate-800 text-white py-3 rounded-xl font-bold flex items-center justify-center gap-2 hover:bg-slate-900 transition-all shadow-lg hover:shadow-xl transform active:scale-95"
+                >
+                    Finalizar y Cerrar <FaArrowRight size={12} />
+                </button>
+            </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4 z-50 transition-opacity">
@@ -185,23 +283,27 @@ const ModalPago: React.FC<ModalPagoProps> = ({ isOpen, onClose, onConfirmar, cli
                         })}
                     </div>
 
-                    {/* Monto editable */}
+                    {/* Monto editable con TOPE DINÁMICO */}
                     <div className="mb-4">
-                        <label className={labelClassName}>Monto a Pagar</label>
+                        <label className={labelClassName}>
+                            Monto a Pagar 
+                        </label>
                         <div className="relative">
                             <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 font-bold">S/</span>
                             <input
                                 type="number"
                                 value={pagoActual.monto}
-                                onChange={(e) => setPagoActual({ ...pagoActual, monto: parseFloat(e.target.value) || 0 })}
+                                onChange={handleMontoChange} // Usamos la nueva función con validación
                                 className={`${inputClassName} pl-8 font-bold text-slate-800`}
                                 min={0}
+                                max={saldoRestante} // Ayuda visual para el navegador
                                 step={0.01}
+                                disabled={saldoRestante <= 0} // Si ya no hay deuda, bloqueamos
                             />
                         </div>
                     </div>
 
-                    {/* Campos dinámicos */}
+                    {/* Campos dinámicos (Sin cambios) */}
                     <div className="mb-5 min-h-[80px]">
                     {(() => {
                         switch (pagoActual.id_metodo_pago) {
@@ -330,9 +432,15 @@ const ModalPago: React.FC<ModalPagoProps> = ({ isOpen, onClose, onConfirmar, cli
 
                     <button
                         onClick={agregarPago}
-                        className="w-full bg-slate-800 text-white py-3 rounded-xl hover:bg-slate-900 transition-all shadow-md hover:shadow-lg flex items-center justify-center gap-2 font-bold text-sm transform active:scale-95"
+                        disabled={saldoRestante <= 0} // Si ya no hay deuda, bloqueamos agregar más
+                        className={`w-full py-3 rounded-xl transition-all shadow-md flex items-center justify-center gap-2 font-bold text-sm transform active:scale-95 ${
+                            saldoRestante <= 0 
+                            ? 'bg-slate-200 text-slate-400 cursor-not-allowed'
+                            : 'bg-slate-800 text-white hover:bg-slate-900 hover:shadow-lg'
+                        }`}
                     >
-                        <FaCheckCircle className="text-emerald-400" /> Agregar al Pago
+                        <FaCheckCircle className={saldoRestante <= 0 ? "text-slate-400" : "text-emerald-400"} /> 
+                        {saldoRestante <= 0 ? 'Monto Completado' : 'Agregar al Pago'}
                     </button>
                 </div>
             </div>
@@ -392,9 +500,10 @@ const ModalPago: React.FC<ModalPagoProps> = ({ isOpen, onClose, onConfirmar, cli
                             <span className="font-bold text-emerald-600">S/ {totalPagado.toFixed(2)}</span>
                         </div>
                         
-                        <div className={`mt-3 pt-3 border-t border-slate-200 flex justify-between items-center ${cambio >= 0 ? 'text-blue-600' : 'text-red-500'}`}>
-                            <span className="font-bold text-sm uppercase">{cambio >= 0 ? 'Vuelto / Cambio' : 'Restante'}</span>
-                            <span className="text-xl font-black">S/ {Math.abs(cambio).toFixed(2)}</span>
+                        {/* Modificado: Solo mostramos RESTANTE si falta dinero. Ocultamos si es 0 */}
+                        <div className={`mt-3 pt-3 border-t border-slate-200 flex justify-between items-center ${saldoRestante > 0 ? 'text-red-500' : 'text-green-600'}`}>
+                            <span className="font-bold text-sm uppercase">{saldoRestante > 0 ? 'Restante por pagar' : 'Pago Completo'}</span>
+                            <span className="text-xl font-black">S/ {saldoRestante.toFixed(2)}</span>
                         </div>
                     </div>
                 </div>
@@ -412,9 +521,10 @@ const ModalPago: React.FC<ModalPagoProps> = ({ isOpen, onClose, onConfirmar, cli
             </button>
             <button
               onClick={handleConfirmar}
-              disabled={totalPagado < total}
+              // Disabled solo si falta dinero (saldoRestante > 0)
+              disabled={saldoRestante > 0} 
               className={`px-8 py-2.5 rounded-xl shadow-lg transition-all text-sm font-bold flex items-center gap-2 transform active:scale-95 ${
-                totalPagado >= total 
+                saldoRestante <= 0 
                 ? 'bg-blue-600 text-white hover:bg-blue-700 hover:shadow-blue-200' 
                 : 'bg-slate-200 text-slate-400 cursor-not-allowed shadow-none'
               }`}

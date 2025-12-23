@@ -69,6 +69,12 @@ public class VentaService {
                 inventario.setStockActual(inventario.getStockActual() - det.getCantidad());
                 inventarioRepository.save(inventario);
 
+                // --- AGREGAR ESTO: Actualizar también el stock global en la tabla PRODUCTO ---
+                Producto producto = inventario.getProducto();
+                int stockGlobalActual = producto.getStock() != null ? producto.getStock() : 0;
+                // Evitamos que el stock global sea negativo
+                int nuevoStockGlobal = Math.max(0, stockGlobalActual - det.getCantidad());
+
                 DetalleVenta detalleVenta = new DetalleVenta();
                 detalleVenta.setIdProducto(det.getIdProducto());
                 detalleVenta.setCantidad(det.getCantidad());
