@@ -1,5 +1,6 @@
 package com.perumarket.erp.models.entity;
 import java.time.LocalDateTime;
+
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;
@@ -33,6 +34,10 @@ public class Cliente {
     @Column(columnDefinition = "ENUM('NATURAL','JURIDICO')")
     private TipoCliente tipo=TipoCliente.NATURAL;
 
+    // --- AGREGAR ESTO ---
+    @Column(name = "estado", length = 20)
+    private String estado;
+
     @Column(name = "fecha_creacion")
     private LocalDateTime fechaCreacion;
 
@@ -43,12 +48,18 @@ public class Cliente {
     protected void onCreate() {
         fechaCreacion = LocalDateTime.now();
         fechaActualizacion = LocalDateTime.now();
+        // Asegura que al crear uno nuevo, nazca activo
+        if (this.estado == null) {
+            this.estado = "ACTIVO";
+        }
     }
 
     @PreUpdate
     protected void onUpdate() {
         fechaActualizacion = LocalDateTime.now();
     }
+
+    
 
 
 public enum TipoCliente {

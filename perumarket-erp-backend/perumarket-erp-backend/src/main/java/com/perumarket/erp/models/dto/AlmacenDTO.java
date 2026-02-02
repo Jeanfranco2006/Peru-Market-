@@ -12,4 +12,5 @@ public class AlmacenDTO {
     private BigDecimal capacidadM3;
     private String responsable;
     private String estado; // Se envía como String (ACTIVO/INACTIVO)
+    private BigDecimal ocupacionCalculada;
 }

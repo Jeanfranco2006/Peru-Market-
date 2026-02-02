@@ -1,26 +1,29 @@
-import axios from 'axios';
+
+import { api } from './../api'; 
 import type { ProveedorData } from '../../types/proveedor/proveedorType';
 
-const API_URL = 'http://localhost:8080/api/proveedores'; // Ajusta tu URL base
+const ENDPOINT = '/proveedores'; 
 
 export const ProveedorService = {
   getAll: async (query: string = '') => {
-    const url = query ? `${API_URL}/buscar?q=${query}` : API_URL;
-    const response = await axios.get<ProveedorData[]>(url);
+    // Si hay query usa /proveedores/buscar, si no, usa /proveedores
+    const url = query ? `${ENDPOINT}/buscar?q=${query}` : ENDPOINT;
+    const response = await api.get<ProveedorData[]>(url);
     return response.data;
   },
 
   create: async (data: ProveedorData) => {
-    const response = await axios.post<ProveedorData>(API_URL, data);
+    // Aquí automáticamente usará el token gracias al interceptor en api.ts
+    const response = await api.post<ProveedorData>(ENDPOINT, data);
     return response.data;
   },
 
   update: async (id: number, data: ProveedorData) => {
-    const response = await axios.put<ProveedorData>(`${API_URL}/${id}`, data);
+    const response = await api.put<ProveedorData>(`${ENDPOINT}/${id}`, data);
     return response.data;
   },
 
   delete: async (id: number) => {
-    await axios.delete(`${API_URL}/${id}`);
+    await api.delete(`${ENDPOINT}/${id}`);
   }
 };

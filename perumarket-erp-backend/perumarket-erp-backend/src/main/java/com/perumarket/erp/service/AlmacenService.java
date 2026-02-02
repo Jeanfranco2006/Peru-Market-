@@ -1,5 +1,6 @@
 package com.perumarket.erp.service;
 
+import java.math.BigDecimal;
 import java.util.List;
 import java.util.stream.Collectors;
 
@@ -13,18 +14,21 @@ import com.perumarket.erp.models.dto.AlmacenRequest;
 import com.perumarket.erp.models.entity.Almacen;
 import com.perumarket.erp.models.entity.Almacen.EstadoAlmacen;
 import com.perumarket.erp.repository.AlmacenRepository;
+import com.perumarket.erp.repository.InventarioRepository;
 
 @Service
 public class AlmacenService {
 
     private final AlmacenRepository almacenRepository;
+    private final InventarioRepository inventarioRepository;
 
-    public AlmacenService(AlmacenRepository almacenRepository) {
+    public AlmacenService(AlmacenRepository almacenRepository, InventarioRepository inventarioRepository) {
         this.almacenRepository = almacenRepository;
+        this.inventarioRepository = inventarioRepository;
     }
 
     // --- Mapeo de Entidad a DTO ---
-    private AlmacenDTO mapToDTO(Almacen almacen) {
+   private AlmacenDTO mapToDTO(Almacen almacen) {
         AlmacenDTO dto = new AlmacenDTO();
         dto.setId(almacen.getId());
         dto.setNombre(almacen.getNombre());
@@ -33,6 +37,12 @@ public class AlmacenService {
         dto.setCapacidadM3(almacen.getCapacidadM3());
         dto.setResponsable(almacen.getResponsable());
         dto.setEstado(almacen.getEstado().name());
+
+        // --- CÁLCULO DE OCUPACIÓN REAL ---
+        BigDecimal ocupacion = inventarioRepository.obtenerPesoTotalEnAlmacen(almacen.getId());
+        
+        dto.setOcupacionCalculada(ocupacion);
+
         return dto;
     }
 

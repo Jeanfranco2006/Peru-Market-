@@ -2,6 +2,7 @@ package com.perumarket.erp.models.entity;
 
 import jakarta.persistence.*;
 import lombok.Data;
+import lombok.ToString;
 
 import java.time.LocalDateTime;
 
@@ -16,9 +17,16 @@ public class DetalleVenta {
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "id_venta", nullable = false)
+    @ToString.Exclude
     private Venta venta;
 
+    // RELACIÓN SOLO LECTURA AL PRODUCTO
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "id_producto", insertable = false, updatable = false)
+    @ToString.Exclude
+    private Producto producto;
 
+    // ID REAL QUE SE GUARDA EN LA TABLA
     @Column(name = "id_producto")
     private Integer idProducto;
 

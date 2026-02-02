@@ -27,4 +27,8 @@ public interface EmpleadoRepository extends JpaRepository<Empleado, Long> {
     List<Empleado> findByFilters(@Param("texto") String texto, 
                                 @Param("dni") String dni, 
                                 @Param("estado") Empleado.EstadoEmpleado estado);
+
+boolean existsByPersona_NumeroDocumento(String numeroDocumento);
+
+
 }

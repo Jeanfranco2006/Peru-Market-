@@ -46,5 +46,5 @@ public class ProveedorProducto {
     @PreUpdate
     protected void onUpdate() {
         this.fechaActualizacion = LocalDateTime.now();
-    }
+    }   
 }

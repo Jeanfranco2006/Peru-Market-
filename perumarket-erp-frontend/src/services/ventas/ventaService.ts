@@ -6,21 +6,38 @@ import { api } from '../api';
 const limpiarObjeto = (obj: any): any =>
   Object.fromEntries(Object.entries(obj).filter(([_, v]) => v !== undefined && v !== null));
 
+// En ventaService.ts
+
+const construirUrlImagen = (imagePath: string | null | undefined): string => {
+  if (!imagePath) return "/img/products/default-product.png";
+  
+  if (imagePath.startsWith('http')) return imagePath;
+  if (imagePath.startsWith('data:')) return imagePath;
+  
+  const cleanPath = imagePath.startsWith('/') ? imagePath : `/${imagePath}`;
+  
+  // 🟢 AHORA (Agregamos /api):
+  return `http://localhost:8080/api${cleanPath}`; 
+};
+
 export const ventaService = {
   // Productos
-  async fetchProductos(): Promise<Producto[]> {
+ async fetchProductos(): Promise<Producto[]> {
     try {
-      const { data } = await api.get('/productos');
+      const idAlmacen = Number(localStorage.getItem("almacenId")) || 1;
+      const { data } = await api.get('/productos/venta', { params: { almacenId: idAlmacen } });
       return data.map((p: any) => ({
         id: p.id,
         nombre: p.nombre,
+        sku: p.sku || '',
         precio: p.precioVenta,
-        imagen: p.imagen ?? "",
+        imagen: construirUrlImagen(p.imagen),
         stock: p.stockActual,
         categoria: {
           id: p.categoriaId ?? 0,
           nombre: p.categoriaNombre ?? "Sin categoría"
-        }
+        },
+        unidadMedida: p.unidadMedida || 'UNIDAD'
       }));
     } catch (error) {
       console.error("Error cargando productos:", error);
@@ -38,29 +55,37 @@ export const ventaService = {
       throw error;
     }
   },
+  
 
   // Clientes
-  async fetchClientes(): Promise<Cliente[]> {
-    try {
-      const { data } = await api.get('/clientes');
-      return data.map((cliente: any) => ({
-        clienteid: cliente.clienteid || cliente.id,
-        persona: cliente.persona,
-        tipo: cliente.tipo || 'NORMAL',
-        fechaCreacion: cliente.fechaCreacion || new Date().toISOString(),
-        fechaActualizacion: cliente.fechaActualizacion || new Date().toISOString()
-      }));
-    } catch (error) {
-      console.error('Error al cargar clientes:', error);
-      throw error;
-    }
-  },
+
+async fetchClientes(): Promise<Cliente[]> {
+  try {
+    // 🔴 ANTES (traía todos):
+    // const { data } = await api.get('/clientes');
+    
+    // 🟢 AHORA (solo activos):
+    const { data } = await api.get('/clientes/activos');
+    
+    return data.map((cliente: any) => ({
+      id: cliente.clienteid || cliente.id, // ✅ Usa 'id' consistente
+      persona: cliente.persona,
+      tipo: cliente.tipo || 'NATURAL',
+      estado: cliente.estado || 'ACTIVO', // ✅ Incluir estado
+      fechaCreacion: cliente.fechaCreacion || new Date().toISOString(),
+      fechaActualizacion: cliente.fechaActualizacion || new Date().toISOString()
+    }));
+  } catch (error) {
+    console.error('Error al cargar clientes activos:', error);
+    throw new Error('No se pudieron cargar los clientes disponibles');
+  }
+},
 
   async registrarCliente(clienteData: Omit<Cliente, 'clienteid'>): Promise<Cliente> {
     try {
       const { data } = await api.post('/clientes', limpiarObjeto(clienteData));
       return {
-        clienteid: data.clienteid || data.id,
+        id: data.id || data.id,
         persona: data.persona,
         tipo: data.tipo || 'NORMAL',
         fechaCreacion: data.fechaCreacion || new Date().toISOString(),
@@ -72,6 +97,28 @@ export const ventaService = {
     }
   },
 
+
+  // ============================================
+// OPCIONAL: Método para buscar con filtro
+// ============================================
+async buscarClientesActivos(texto: string): Promise<Cliente[]> {
+  try {
+    const params = texto.trim() ? { texto } : {};
+    const { data } = await api.get('/clientes/activos/buscar', { params });
+    
+    return data.map((cliente: any) => ({
+      id: cliente.clienteid || cliente.id,
+      persona: cliente.persona,
+      tipo: cliente.tipo,
+      estado: cliente.estado,
+      fechaCreacion: cliente.fechaCreacion,
+      fechaActualizacion: cliente.fechaActualizacion
+    }));
+  } catch (error) {
+    console.error('Error buscando clientes:', error);
+    return [];
+  }
+},
   // Métodos de pago
   async cargarMetodosPago(): Promise<MetodoPago[]> {
     return [
@@ -120,11 +167,13 @@ export const ventaService = {
 
       const { data } = await api.post('/ventas', datosLimpios);
       return data;
-    } catch (error) {
+    } catch (error: any) {
       console.error("Error procesando venta:", error);
-      throw error;
+      const mensaje = error.response?.data?.error || error.message || "Error al procesar la venta";
+      throw new Error(mensaje);
     }
   },
+  
 
   // Calcular totales
   calcularTotales(carrito: ProductoVenta[]) {
@@ -139,6 +188,27 @@ export const ventaService = {
       total: Number(total.toFixed(2)),
       subtotalProduct: Number(subtotalProduct.toFixed(2))
     };
+  },
+
+  // Historial de ventas
+  async fetchVentas(): Promise<any[]> {
+    try {
+      const { data } = await api.get('/ventas');
+      return data;
+    } catch (error) {
+      console.error("Error cargando ventas:", error);
+      throw error;
+    }
+  },
+
+  async fetchVentaPorId(id: number): Promise<any> {
+    try {
+      const { data } = await api.get(`/ventas/${id}`);
+      return data;
+    } catch (error) {
+      console.error(`Error cargando venta ${id}:`, error);
+      throw error;
+    }
   },
 
   // Obtener datos de sesión

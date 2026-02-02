@@ -1,5 +1,6 @@
 // EmployeeDeleteModal.tsx
 import { FiAlertTriangle } from "react-icons/fi";
+import { useThemeClasses } from "../../hooks/useThemeClasses";
 
 interface Props {
   visible: boolean;
@@ -10,42 +11,45 @@ interface Props {
   loading?: boolean;
 }
 
-export default function DeleteModal({ 
-  visible, 
-  message, 
-  subMessage, 
-  onCancel, 
+export default function DeleteModal({
+  visible,
+  message,
+  subMessage,
+  onCancel,
   onConfirm,
-  loading = false 
+  loading = false
 }: Props) {
-  
+  const theme = useThemeClasses();
+
   if (!visible) return null;
 
   return (
     <div className="fixed inset-0 z-[200] overflow-y-auto">
       <div className="flex min-h-screen items-center justify-center p-4 text-center">
-        
+
         {/* Backdrop */}
-        <div 
-          className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm transition-opacity" 
+        <div
+          className={`fixed inset-0 backdrop-blur-sm transition-opacity ${theme.isDark ? 'bg-black/60' : 'bg-slate-900/60'}`}
           onClick={onCancel}
         ></div>
 
         {/* Modal Content */}
-        <div className="relative transform overflow-hidden rounded-xl bg-white text-left shadow-2xl transition-all sm:w-full sm:max-w-lg">
-          
+        <div className={`relative transform overflow-hidden rounded-xl ${theme.modalContent} border text-left shadow-2xl transition-all sm:w-full sm:max-w-lg`}>
+
           {/* Header */}
-          <div className="bg-white px-6 pt-6 pb-4">
+          <div className={`px-6 pt-6 pb-4 ${theme.isDark ? 'bg-gray-800' : 'bg-white'}`}>
             <div className="flex items-start">
-              <div className="flex-shrink-0 flex items-center justify-center h-12 w-12 rounded-full bg-red-100 mx-auto sm:mx-0">
-                <FiAlertTriangle className="h-6 w-6 text-red-600" />
+              <div className={`flex-shrink-0 flex items-center justify-center h-12 w-12 rounded-full mx-auto sm:mx-0 ${
+                theme.isDark ? 'bg-red-900/30' : 'bg-red-100'
+              }`}>
+                <FiAlertTriangle className={`h-6 w-6 ${theme.isDark ? 'text-red-400' : 'text-red-600'}`} />
               </div>
               <div className="mt-0 ml-4 text-left flex-1">
-                <h3 className="text-lg font-semibold text-slate-900 leading-6">
+                <h3 className={`text-lg font-semibold leading-6 ${theme.heading}`}>
                   {message}
                 </h3>
                 <div className="mt-2">
-                  <p className="text-sm text-slate-500">
+                  <p className={`text-sm ${theme.textTertiary}`}>
                     {subMessage}
                   </p>
                 </div>
@@ -54,13 +58,15 @@ export default function DeleteModal({
           </div>
 
           {/* Footer */}
-          <div className="bg-slate-50 px-6 py-4 flex flex-col sm:flex-row-reverse gap-3 rounded-b-xl">
+          <div className={`px-6 py-4 flex flex-col sm:flex-row-reverse gap-3 rounded-b-xl ${
+            theme.isDark ? 'bg-gray-800/50 border-t border-gray-700' : 'bg-slate-50'
+          }`}>
             <button
               type="button"
               disabled={loading}
               className={`inline-flex w-full justify-center rounded-lg px-4 py-2.5 text-sm font-semibold text-white shadow-sm
-                ${loading 
-                  ? 'bg-red-400 cursor-not-allowed' 
+                ${loading
+                  ? 'bg-red-400 cursor-not-allowed'
                   : 'bg-red-600 hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-offset-2'
                 }`}
               onClick={onConfirm}
@@ -75,11 +81,11 @@ export default function DeleteModal({
                 </>
               ) : 'Eliminar'}
             </button>
-            
+
             <button
               type="button"
               disabled={loading}
-              className="inline-flex w-full justify-center rounded-lg border border-slate-300 bg-white px-4 py-2.5 text-sm font-medium text-slate-700 shadow-sm hover:bg-slate-50 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2"
+              className={`inline-flex w-full justify-center rounded-lg border px-4 py-2.5 text-sm font-medium shadow-sm focus:outline-none focus:ring-2 focus:ring-offset-2 ${theme.btnSecondary}`}
               onClick={onCancel}
             >
               Cancelar

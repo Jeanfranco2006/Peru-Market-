@@ -45,13 +45,31 @@ export const useProveedores = () => {
     }
   };
 
-  const removeProveedor = async (id: number) => {
+const removeProveedor = async (id: number) => {
     try {
       await ProveedorService.delete(id);
       await fetchProveedores();
       return { success: true };
-    } catch (error) {
-      return { success: false, message: 'Error al eliminar proveedor' };
+    } catch (error: any) {
+      // 1. ELIMINA O COMENTA ESTA LÍNEA 
+      // Al quitar esto, ya no verás el objeto de error expandible, solo la línea del navegador.
+      // console.error("Error eliminando:", error); 
+
+      // 2. Lógica para mostrar mensaje bonito al usuario
+      let mensajeError = "No se puede eliminar el proveedor.";
+
+      // Si el backend te manda un mensaje específico
+      if (error.response?.data?.message) {
+          mensajeError = error.response.data.message;
+      } 
+      
+      // Si es error 500 (Server Error) o 409 (Conflicto de llaves foráneas)
+      if (error.response?.status === 500 || error.response?.status === 409) {
+         mensajeError = "No se puede eliminar: El proveedor tiene productos o compras asociadas.";
+      }
+
+      // Retornamos false para que el modal muestre la alerta, pero sin ensuciar la consola
+      return { success: false, message: mensajeError };
     }
   };
 

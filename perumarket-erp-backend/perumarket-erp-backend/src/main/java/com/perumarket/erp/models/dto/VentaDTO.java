@@ -15,4 +15,7 @@ public class VentaDTO {
     private Double total;
 
     private List<DetalleVentaDTO> detalles;
+
+    private Boolean conEnvio = false;
+    private String direccionEnvio;
 }

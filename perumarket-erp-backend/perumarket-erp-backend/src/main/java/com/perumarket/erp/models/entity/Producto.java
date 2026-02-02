@@ -1,5 +1,6 @@
 package com.perumarket.erp.models.entity;
 
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties; // <--- FALTABA ESTA IMPORTACIÓN
 import jakarta.persistence.*;
 import lombok.Data;
 import java.math.BigDecimal;
@@ -28,22 +29,24 @@ public class Producto {
 
     @Column(name = "precio_compra", precision = 10, scale = 2)
     private BigDecimal precioCompra;
-    
-    // NOTA: El stock global 'stock' de la tabla DB no lo usaremos directamente en la Entidad, 
-    // ya que la fuente de verdad es la tabla INVENTARIO. Spring lo ignorará por defecto si no lo mapeamos, lo cual es bueno.
+
+    @Column(name = "stock")
+    private Integer stock;
     
     @Enumerated(EnumType.STRING)
-    @Column(name = "unidad_medida", columnDefinition = "ENUM('UNIDAD','CAJA','PAQUETE','KG','LITRO') DEFAULT 'UNIDAD'")
+    @Column(name = "unidad_medida", length = 20)
     private UnidadMedida unidadMedida;
 
     @Column(name = "peso_kg", precision = 10, scale = 3)
     private BigDecimal pesoKg;
 
     @Column(name = "imagen", length = 255)
-    private String imagen; // Ruta o URL de la imagen
+    private String imagen;
 
+    // --- AQUÍ ESTABA EL ERROR ---
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "categoria_id")
+    @JsonIgnoreProperties({"hibernateLazyInitializer", "handler"}) // <--- AGREGA ESTO OBLIGATORIAMENTE
     private CategoriaProducto categoria;
 
     @Column(name = "requiere_codigo_barras")
@@ -61,24 +64,19 @@ public class Producto {
 
     // ENUMS
     public enum EstadoProducto {
-        ACTIVO,
-        INACTIVO
+        ACTIVO, INACTIVO, CATALOGO
     }
     
     public enum UnidadMedida {
-        UNIDAD, CAJA, PAQUETE, KG, LITRO
+        UNIDAD, CAJA, PAQUETE, DOCENA, KG, GRAMO, LITRO, MILILITRO, METRO, GALON, SACO, BOLSA, LIBRA, ROLLO, PAR
     }
 
     @PrePersist
     protected void onCreate() {
         this.fechaCreacion = LocalDateTime.now();
         this.fechaActualizacion = LocalDateTime.now();
-        if (this.estado == null) {
-            this.estado = EstadoProducto.ACTIVO;
-        }
-        if (this.unidadMedida == null) {
-            this.unidadMedida = UnidadMedida.UNIDAD;
-        }
+        if (this.estado == null) this.estado = EstadoProducto.ACTIVO;
+        if (this.unidadMedida == null) this.unidadMedida = UnidadMedida.UNIDAD;
     }
 
     @PreUpdate

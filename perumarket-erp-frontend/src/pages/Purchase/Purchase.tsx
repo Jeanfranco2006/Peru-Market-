@@ -1,344 +1,216 @@
-import { Link, useNavigate } from 'react-router-dom';
-import { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
+import { useState, useEffect, useMemo } from 'react';
 import {
-  IoIosCart, 
-  IoIosInformationCircle, 
-  IoIosPeople, 
-  IoIosDocument, 
-  IoIosClipboard,  
-  IoIosArchive, 
-  IoMdAdd, 
-  IoMdCloseCircle, 
-  IoIosCash, 
-  IoIosList, 
-  IoMdCheckmark,
-  IoIosWarning,
-  IoIosCheckmarkCircle,
-  IoIosHome,
-  IoIosCube,
-  IoIosBasket,
-  IoIosRemove,
-  IoIosAlert,
-  IoIosLock
+  IoIosDocument, IoMdAdd, IoMdCloseCircle,
+  IoIosList, IoMdCheckmark, IoIosWarning, IoIosCheckmarkCircle,
+  IoIosSearch, IoMdImage, IoMdBarcode, IoMdCopy, IoMdPrint, IoMdTrash
 } from "react-icons/io";
+import { FaWarehouse, FaBoxOpen, FaTruckLoading } from "react-icons/fa";
+import { api } from '../../services/api';
+import { useWarehouseList } from '../../hooks/inventario/useWarehouseList';
+import { useThemeClasses } from '../../hooks/useThemeClasses';
 
+// --- CONFIGURACIÓN ---
+const API_URL = 'http://localhost:8080';
+const ID_USUARIO_ACTUAL = 1;
+
+// --- INTERFACES ---
 interface ProductoCompra {
   id: number;
+  id_producto: number;
   nombre: string;
   precio_unitario: number;
   cantidad: number;
-  descuento: number;
   subtotal: number;
-  id_producto?: number;
-  sku?: string;
+  sku: string;
   peso_total: number;
-  id_codigo_barras?: number;
+  imagen?: string;
+  unidadMedida?: string;
 }
 
 interface Proveedor {
   id: number;
-  razon_social: string;
+  razon_social?: string;
+  razonSocial?: string;
   ruc: string;
-  contacto: string;
-  telefono: string;
 }
 
-interface Almacen {
+interface ProductoProveedorDTO {
   id: number;
+  productoId: number;
   nombre: string;
   codigo: string;
-  capacidad_utilizada: number;
-  capacidad_total: number;
-  capacidad_peso_utilizada: number;
-  capacidad_peso_total: number;
-  responsable: string;
-  direccion: string;
+  precio_compra: number;
+  peso_kg: number;
+  imagen?: string;
+  unidadMedida?: string;
 }
 
-interface ProductoInventario {
-  id: number;
+interface BarcodeData {
   nombre: string;
-  descripcion: string;
-  sku: string;
-  precio_compra: number;
-  precio_venta: number;
-  stock_actual: number;
-  stock_minimo: number;
-  stock_maximo: number;
-  unidad_medida: string;
-  categoria: string;
-  proveedor_id: number;
-  descuento_proveedor: number;
-  peso_kg: number;
-  ubicacion: string;
-  almacen_id: number;
-  imagen?: string;
-  estado: 'ACTIVO' | 'INACTIVO';
+  codigoBarras: string;
 }
 
 export default function NewPurchase() {
   const navigate = useNavigate();
-  
+  const { warehouses: almacenes } = useWarehouseList();
+  const { isDark, heading, textTertiary, tableHeader, tableHeaderText, emptyState } = useThemeClasses();
+
+  // --- ESTADOS ---
+  const [proveedores, setProveedores] = useState<Proveedor[]>([]);
+  const [productosDisponibles, setProductosDisponibles] = useState<ProductoProveedorDTO[]>([]);
+
+  // Formulario
   const [proveedor, setProveedor] = useState<number | ''>('');
-  const [tipoComprobante, setTipoComprobante] = useState('Factura');
-  const [metodoPago, setMetodoPago] = useState('Contado');
+  const [tipoComprobante, setTipoComprobante] = useState('ORDEN_COMPRA');
   const [almacen, setAlmacen] = useState<number | ''>('');
+  const [metodoPago, setMetodoPago] = useState('EFECTIVO');
   const [observaciones, setObservaciones] = useState('');
-  
-  const [productoSeleccionado, setProductoSeleccionado] = useState<number | ''>('');
+
+  // Modales y Selección
+  const [isProductModalOpen, setIsProductModalOpen] = useState(false);
+  const [filtroProductoModal, setFiltroProductoModal] = useState('');
+  const [productoActual, setProductoActual] = useState<ProductoProveedorDTO | null>(null);
   const [cantidad, setCantidad] = useState(1);
-  const [precioUnitario, setPrecioUnitario] = useState(0);
-  const [descuentoProveedor, setDescuentoProveedor] = useState(0);
-  const [pesoProducto, setPesoProducto] = useState(0);
-  
-  const [showNotification, setShowNotification] = useState(false);
-  const [showCancelModal, setShowCancelModal] = useState(false);
-  const [alertaCapacidad, setAlertaCapacidad] = useState('');
 
-  const proveedores: Proveedor[] = [
-    { id: 1, razon_social: 'Tecnolimport SA', ruc: '20123456789', contacto: 'Juan Pérez', telefono: '987654321' },
-    { id: 2, razon_social: 'ElectroPeru S.R.L.', ruc: '20198765432', contacto: 'María López', telefono: '987654322' },
-    { id: 3, razon_social: 'Distribuidora XYZ', ruc: '20345678901', contacto: 'Carlos Rodríguez', telefono: '987654323' },
-    { id: 4, razon_social: 'BULB Industries', ruc: '20456789012', contacto: 'Ana García', telefono: '987654324' },
-  ];
-
-  const almacenes: Almacen[] = [
-    { 
-      id: 1, 
-      nombre: "Almacén Principal", 
-      codigo: "ALM-PRIN", 
-      capacidad_utilizada: 325, 
-      capacidad_total: 500,
-      capacidad_peso_utilizada: 1200,
-      capacidad_peso_total: 2000,
-      responsable: "Juan Pérez", 
-      direccion: "Av. Industrial 123, Zona Industrial" 
-    },
-    { 
-      id: 2, 
-      nombre: "Almacén Norte", 
-      codigo: "ALM-NORTE", 
-      capacidad_utilizada: 90, 
-      capacidad_total: 300,
-      capacidad_peso_utilizada: 450,
-      capacidad_peso_total: 1000,
-      responsable: "María López", 
-      direccion: "Av. Norte 456, Distrito Norte" 
-    },
-    { 
-      id: 3, 
-      nombre: "Almacén Sur", 
-      codigo: "ALM-SUR", 
-      capacidad_utilizada: 90, 
-      capacidad_total: 200,
-      capacidad_peso_utilizada: 300,
-      capacidad_peso_total: 800,
-      responsable: "Carlos Rodríguez", 
-      direccion: "Calle Sur 789, Urbanización Sur" 
-    },
-  ];
-
-  const productosInventario: ProductoInventario[] = [
-    {
-      id: 1,
-      nombre: "ANITA TALLARIN",
-      descripcion: "Ricos y deliciosos",
-      sku: "BULB-FA-001",
-      precio_compra: 4.50,
-      precio_venta: 12.00,
-      stock_actual: 12,
-      stock_minimo: 5,
-      stock_maximo: 50,
-      unidad_medida: "Unidad",
-      categoria: "Fideos",
-      proveedor_id: 4,
-      descuento_proveedor: 5,
-      peso_kg: 0.5,
-      ubicacion: "A-12-B-04",
-      almacen_id: 1,
-      estado: 'ACTIVO'
-    },
-    {
-      id: 2,
-      nombre: "LENTEJA VERDE",
-      descripcion: "Menestra de alta calidad",
-      sku: "MENS-LV-002",
-      precio_compra: 6.00,
-      precio_venta: 8.50,
-      stock_actual: 4,
-      stock_minimo: 5,
-      stock_maximo: 30,
-      unidad_medida: "Kilogramo",
-      categoria: "Menestras",
-      proveedor_id: 3,
-      descuento_proveedor: 3,
-      peso_kg: 1.0,
-      ubicacion: "B-01-C-10",
-      almacen_id: 2,
-      estado: 'ACTIVO'
-    },
-    {
-      id: 3,
-      nombre: "RESISTENCIA M-10",
-      descripcion: "Resistencia electrónica 10 ohms",
-      sku: "ELEC-RM-003",
-      precio_compra: 3.50,
-      precio_venta: 5.00,
-      stock_actual: 0,
-      stock_minimo: 10,
-      stock_maximo: 100,
-      unidad_medida: "Unidad",
-      categoria: "Electrónicos",
-      proveedor_id: 2,
-      descuento_proveedor: 2,
-      peso_kg: 0.01,
-      ubicacion: "C-05-D-01",
-      almacen_id: 3,
-      estado: 'INACTIVO'
-    },
-    {
-      id: 4,
-      nombre: "Laptop HP 15\"",
-      descripcion: "Laptop empresarial 15 pulgadas",
-      sku: "TEC-LP-004",
-      precio_compra: 1200.00,
-      precio_venta: 1500.00,
-      stock_actual: 5,
-      stock_minimo: 2,
-      stock_maximo: 20,
-      unidad_medida: "Unidad",
-      categoria: "Electrónicos",
-      proveedor_id: 1,
-      descuento_proveedor: 8,
-      peso_kg: 2.5,
-      ubicacion: "A-01-B-01",
-      almacen_id: 1,
-      estado: 'ACTIVO'
-    }
-  ];
-
+  // Carrito
   const [productosEnCompra, setProductosEnCompra] = useState<ProductoCompra[]>([]);
 
-  const productosDisponibles = proveedor 
-    ? productosInventario.filter(
-        producto => producto.proveedor_id === proveedor && producto.estado === "ACTIVO"
-      )
-    : [];
+  // UI - Modales
+  const [showNotification, setShowNotification] = useState(false);
+  const [showCancelModal, setShowCancelModal] = useState(false);
+  const [showConfirmModal, setShowConfirmModal] = useState(false);
+  const [loadingData, setLoadingData] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
 
-  const generarNumeroComprobante = () => {
-    const serie = tipoComprobante === 'Factura' ? 'F001' : 'B001';
-    const numero = Math.floor(100000 + Math.random() * 900000);
-    return `${serie}-${numero}`;
-  };
+  // Barcode
+  const [barcodeModalOpen, setBarcodeModalOpen] = useState(false);
+  const [currentBarcodeData, setCurrentBarcodeData] = useState<BarcodeData | null>(null);
 
+  const getNombreProveedor = (p: Proveedor) => p.razon_social || p.razonSocial || "Proveedor";
+
+  // --- EFECTOS ---
   useEffect(() => {
-    if (productoSeleccionado) {
-      const producto = productosInventario.find(p => p.id === productoSeleccionado);
-      if (producto) {
-        setPrecioUnitario(producto.precio_compra);
-        setDescuentoProveedor(producto.descuento_proveedor);
-        setPesoProducto(producto.peso_kg);
+    const cargarProveedores = async () => {
+      try {
+        const resProv = await api.get('/proveedores');
+        setProveedores(resProv.data);
+      } catch (error) {
+        console.error("Error al cargar proveedores:", error);
       }
-    } else {
-      setPrecioUnitario(0);
-      setDescuentoProveedor(0);
-      setPesoProducto(0);
-    }
-  }, [productoSeleccionado]);
+    };
+    cargarProveedores();
+  }, []);
 
   useEffect(() => {
-    setProductoSeleccionado('');
-    setPrecioUnitario(0);
-    setDescuentoProveedor(0);
-    setPesoProducto(0);
+    setProductoActual(null);
+    setProductosDisponibles([]);
+    setProductosEnCompra([]);
+    if (proveedor) {
+      cargarProductosDelProveedor(Number(proveedor));
+    }
   }, [proveedor]);
 
-  const calcularTotalesCompra = () => {
-    const pesoTotal = productosEnCompra.reduce((sum, p) => sum + p.peso_total, 0);
-    const volumenTotal = productosEnCompra.reduce((sum, p) => sum + (p.peso_total * 0.001), 0);
-    
-    return { pesoTotal, volumenTotal };
+  const cargarProductosDelProveedor = async (idProveedor: number) => {
+    setLoadingData(true);
+    try {
+      const res = await api.get(`/proveedores/${idProveedor}/productos`);
+      setProductosDisponibles(res.data);
+    } catch (error) {
+      console.error("Error cargando productos:", error);
+    } finally {
+      setLoadingData(false);
+    }
   };
 
-  const verificarCapacidadAlmacen = () => {
-    if (!almacen) return { tieneCapacidad: true, mensaje: '' };
-
-    const almacenSeleccionado = almacenes.find(a => a.id === almacen);
-    if (!almacenSeleccionado) return { tieneCapacidad: true, mensaje: '' };
-
-    const { pesoTotal, volumenTotal } = calcularTotalesCompra();
-    
-    const capacidadVolumenDisponible = almacenSeleccionado.capacidad_total - almacenSeleccionado.capacidad_utilizada;
-    const capacidadPesoDisponible = almacenSeleccionado.capacidad_peso_total - almacenSeleccionado.capacidad_peso_utilizada;
-
-    if (volumenTotal > capacidadVolumenDisponible) {
-      return { 
-        tieneCapacidad: false, 
-        mensaje: `El almacén no tiene suficiente capacidad volumétrica. Necesita ${volumenTotal.toFixed(2)}m³ pero solo tiene ${capacidadVolumenDisponible.toFixed(2)}m³ disponibles.` 
-      };
-    }
-
-    if (pesoTotal > capacidadPesoDisponible) {
-      return { 
-        tieneCapacidad: false, 
-        mensaje: `El almacén no tiene suficiente capacidad de peso. Necesita ${pesoTotal.toFixed(2)}kg pero solo tiene ${capacidadPesoDisponible.toFixed(2)}kg disponibles.` 
-      };
-    }
-
-    return { 
-      tieneCapacidad: true, 
-      mensaje: `Capacidad suficiente: ${volumenTotal.toFixed(2)}m³ / ${capacidadVolumenDisponible.toFixed(2)}m³ - ${pesoTotal.toFixed(2)}kg / ${capacidadPesoDisponible.toFixed(2)}kg` 
-    };
+  const generarNumeroComprobante = () => {
+    const serie = tipoComprobante === 'FACTURA' ? 'F001' : (tipoComprobante === 'BOLETA' ? 'B001' : 'OC01');
+    return `${serie}-${Math.floor(Date.now() / 1000).toString().slice(-6)}`;
   };
 
-  const añadirProducto = () => {
-    if (!productoSeleccionado || cantidad <= 0 || precioUnitario <= 0 || !almacen) {
-      alert('Por favor complete todos los campos del producto y seleccione un almacén');
-      return;
+  // --- CALCULOS ---
+  const volumenAgregado = useMemo(() =>
+    productosEnCompra.reduce((sum, p) => sum + p.peso_total, 0)
+    , [productosEnCompra]);
+
+  const infoAlmacenSeleccionado = useMemo(() => {
+    if (!almacen) return null;
+    const alm = almacenes.find(a => a.id === Number(almacen));
+    if (!alm) return null;
+
+    const capacidadTotalUnits = alm.capacityTotalUnits || 0;
+    const capacityUsedUnits = alm.capacityUsed || 0;
+    const capacidadM3 = alm.capacidadM3 || 0;
+
+    let occupiedM3_Base = 0;
+    if (capacidadTotalUnits > 0) {
+      occupiedM3_Base = (capacityUsedUnits / capacidadTotalUnits) * capacidadM3;
     }
 
-    const productoExistente = productosInventario.find(p => p.id === productoSeleccionado);
-    if (!productoExistente) return;
+    const occupiedM3_Total = occupiedM3_Base + volumenAgregado;
+    const percentageSafe = capacidadM3 > 0
+      ? Math.round((occupiedM3_Total / capacidadM3) * 100)
+      : 0;
 
-    const productoYaExiste = productosEnCompra.find(p => p.id_producto === productoSeleccionado);
-    if (productoYaExiste) {
-      alert('Este producto ya está en la compra. Puede editar la cantidad desde la lista.');
-      return;
+    let colorBarra = 'bg-emerald-500';
+    let colorTexto = 'text-emerald-700';
+    let colorFondo = 'bg-emerald-50';
+
+    if (percentageSafe > 80) {
+      colorBarra = 'bg-rose-500'; colorTexto = 'text-rose-700'; colorFondo = 'bg-rose-50';
+    } else if (percentageSafe > 50) {
+      colorBarra = 'bg-amber-500'; colorTexto = 'text-amber-700'; colorFondo = 'bg-amber-50';
     }
 
-    const subtotalSinDescuento = precioUnitario * cantidad;
-    const descuento = (subtotalSinDescuento * descuentoProveedor) / 100;
-    const subtotalConDescuento = subtotalSinDescuento - descuento;
-    const pesoTotal = productoExistente.peso_kg * cantidad;
-
-    const nuevoProducto: ProductoCompra = {
-      id: Date.now(),
-      nombre: productoExistente.nombre,
-      precio_unitario: precioUnitario,
-      cantidad: cantidad,
-      descuento: descuento,
-      subtotal: subtotalConDescuento,
-      id_producto: productoExistente.id,
-      sku: productoExistente.sku,
-      peso_total: pesoTotal
+    return {
+      ...alm,
+      capacidadM3,
+      occupiedM3_Total,
+      percentage: percentageSafe,
+      colorBarra, colorTexto, colorFondo
     };
+  }, [almacen, almacenes, volumenAgregado]);
 
-    const productosTemporal = [...productosEnCompra, nuevoProducto];
-    const pesoTotalTemporal = productosTemporal.reduce((sum, p) => sum + p.peso_total, 0);
-    const almacenSeleccionado = almacenes.find(a => a.id === almacen);
-
-    if (almacenSeleccionado && pesoTotalTemporal > (almacenSeleccionado.capacidad_peso_total - almacenSeleccionado.capacidad_peso_utilizada)) {
-      alert('No se puede agregar el producto. Excedería la capacidad de peso del almacén.');
+  // --- HANDLERS ---
+  const handleSelectProductFromModal = (prod: ProductoProveedorDTO) => {
+    if (productosEnCompra.some(p => p.id_producto === prod.productoId)) {
+      alert("Este producto ya está en la lista.");
       return;
     }
-
-    setProductosEnCompra(productosTemporal);
-    
-    setProductoSeleccionado('');
+    setProductoActual(prod);
     setCantidad(1);
-    setPrecioUnitario(0);
-    setDescuentoProveedor(0);
-    setPesoProducto(0);
+    setIsProductModalOpen(false);
+    setFiltroProductoModal('');
+  };
+
+  const añadirProductoAlCarrito = () => {
+    if (!productoActual || cantidad <= 0) return;
+    const pesoProductoNuevo = productoActual.peso_kg * cantidad;
+
+    if (infoAlmacenSeleccionado) {
+      if ((infoAlmacenSeleccionado.occupiedM3_Total + pesoProductoNuevo) > infoAlmacenSeleccionado.capacidadM3) {
+        alert(`Capacidad excedida. Falta espacio para ${pesoProductoNuevo.toFixed(2)} m3.`);
+        return;
+      }
+    }
+
+    const subtotal = productoActual.precio_compra * cantidad;
+    const nuevoItem: ProductoCompra = {
+      id: Date.now(),
+      id_producto: productoActual.productoId,
+      nombre: productoActual.nombre,
+      precio_unitario: productoActual.precio_compra,
+      cantidad: cantidad,
+      subtotal: subtotal,
+      sku: productoActual.codigo,
+      peso_total: pesoProductoNuevo,
+      imagen: productoActual.imagen,
+      unidadMedida: productoActual.unidadMedida || 'UNIDAD'
+    };
+
+    setProductosEnCompra([...productosEnCompra, nuevoItem]);
+    setProductoActual(null);
+    setCantidad(1);
   };
 
   const eliminarProducto = (id: number) => {
@@ -346,593 +218,521 @@ export default function NewPurchase() {
   };
 
   const actualizarCantidad = (id: number, nuevaCantidad: number) => {
-    if (nuevaCantidad <= 0) {
-      eliminarProducto(id);
-      return;
-    }
-
+    if (nuevaCantidad <= 0) { eliminarProducto(id); return; }
     setProductosEnCompra(productosEnCompra.map(p => {
       if (p.id === id) {
-        const productoOriginal = productosInventario.find(prod => prod.id === p.id_producto);
-        const descuentoPorcentaje = productoOriginal?.descuento_proveedor || 0;
-        const subtotalSinDescuento = p.precio_unitario * nuevaCantidad;
-        const descuento = (subtotalSinDescuento * descuentoPorcentaje) / 100;
-        const subtotalConDescuento = subtotalSinDescuento - descuento;
-        const pesoTotal = (productoOriginal?.peso_kg || 0) * nuevaCantidad;
-        
-        return { 
-          ...p, 
-          cantidad: nuevaCantidad, 
-          descuento: descuento,
-          subtotal: subtotalConDescuento,
-          peso_total: pesoTotal
+        return {
+          ...p,
+          cantidad: nuevaCantidad,
+          subtotal: p.precio_unitario * nuevaCantidad,
+          peso_total: (p.peso_total / p.cantidad) * nuevaCantidad
         };
       }
       return p;
     }));
   };
 
-  const simularGuardadoBD = () => {
-    const numeroComprobante = generarNumeroComprobante();
-
-    const compraData = {
-      id_proveedor: proveedor,
-      id_almacen: almacen,
-      tipo_comprobante: tipoComprobante,
-      numero_comprobante: numeroComprobante,
-      subtotal: subtotalNeto,
-      igv: igv,
-      total: totalAPagar,
-      estado: 'COMPLETADO',
-      fecha: new Date().toISOString(),
-      observaciones: observaciones
-    };
-
-    const detallesData = productosEnCompra.map(producto => ({
-      id_producto: producto.id_producto,
-      cantidad: producto.cantidad,
-      precio_unitario: producto.precio_unitario,
-      descuento: producto.descuento,
-      subtotal: producto.subtotal
-    }));
-
-    console.log('COMPRA REGISTRADA:', {
-      compraData,
-      detallesData,
-      total_pagado_proveedor: totalAPagar
-    });
-
-    alert(`Compra registrada exitosamente!\n\nTotal pagado al proveedor: S/${totalAPagar.toFixed(2)}\nLos productos se han agregado al inventario.`);
-
-    return true;
+  // --- BARCODE LOGIC ---
+  const openBarcodeModal = (item: ProductoCompra) => {
+    setCurrentBarcodeData({ nombre: item.nombre, codigoBarras: item.sku });
+    setBarcodeModalOpen(true);
   };
 
-  const registrarCompra = () => {
-    if (!proveedor || !almacen) {
-      alert('Por favor seleccione un proveedor y almacén');
-      return;
+  const copyBarcode = () => {
+    if (currentBarcodeData?.codigoBarras) {
+      navigator.clipboard.writeText(currentBarcodeData.codigoBarras);
+      alert('Copiado!');
     }
-    
-    if (productosEnCompra.length === 0) {
-      alert('Por favor añada al menos un producto');
-      return;
-    }
+  };
 
-    const capacidad = verificarCapacidadAlmacen();
-    if (!capacidad.tieneCapacidad) {
-      alert(capacidad.mensaje);
-      return;
-    }
-
-    const confirmacion = window.confirm(
-      `¿Está seguro de registrar la compra?\n\n` +
-      `Proveedor: ${proveedores.find(p => p.id === proveedor)?.razon_social}\n` +
-      `Almacén: ${almacenes.find(a => a.id === almacen)?.nombre}\n` +
-      `Productos: ${productosEnCompra.length}\n` +
-      `Total a pagar al proveedor: S/${totalAPagar.toFixed(2)}\n\n` +
-      `Los productos se agregarán automáticamente al inventario.`
-    );
-
-    if (confirmacion) {
-      const exito = simularGuardadoBD();
-      
-      if (exito) {
-        setShowNotification(true);
-        setTimeout(() => {
-          setShowNotification(false);
-          navigate('/compras/historial');
-        }, 3000);
+  const printBarcode = () => {
+    if (currentBarcodeData?.codigoBarras) {
+      const barcodeUrl = `https://barcode.tec-it.com/barcode.ashx?data=${currentBarcodeData.codigoBarras}&code=Code128&translate-esc=on`;
+      const w = window.open('', '_blank');
+      if (w) {
+        w.document.write(`
+            <html><head><title>${currentBarcodeData.nombre}</title>
+            <style>body{text-align:center;font-family:sans-serif;padding:20px;} @media print{.np{display:none;}}</style>
+            </head><body>
+            <h3>${currentBarcodeData.nombre}</h3>
+            <img src='${barcodeUrl}' style='max-width:100%;'/>
+            <div class="np" style="margin-top:20px"><button onclick="window.print()">Imprimir</button></div>
+            <script>window.onload=function(){setTimeout(function(){window.print();},1000);}</script>
+            </body></html>
+        `);
+        w.document.close();
       }
     }
   };
 
-  const cancelarCompra = () => {
-    const confirmacion = window.confirm('¿Está seguro de cancelar la compra? Se perderán todos los datos.');
-    
-    if (confirmacion) {
+  // --- INICIAR PROCESO DE GUARDADO (ABRIR MODAL) ---
+  const handleSaveClick = () => {
+    if (!proveedor || !almacen || productosEnCompra.length === 0) {
+      alert("Por favor completa los datos obligatorios.");
+      return;
+    }
+    setShowConfirmModal(true);
+  };
+
+  // --- CONFIRMAR GUARDADO ---
+  const registrarCompra = async () => {
+    setIsSaving(true);
+    const compraPayload = {
+      id_proveedor: Number(proveedor),
+      id_almacen: Number(almacen),
+      id_usuario: ID_USUARIO_ACTUAL,
+      tipo_comprobante: tipoComprobante,
+      numero_comprobante: generarNumeroComprobante(),
+      subtotal: Number(subtotalBruto.toFixed(2)),
+      igv: Number(igv.toFixed(2)),
+      total: Number(totalAPagar.toFixed(2)),
+      estado: 'PENDIENTE',
+      metodo_pago: metodoPago,
+      observaciones: observaciones,
+      detalles: productosEnCompra.map(p => ({
+        id_producto: Number(p.id_producto),
+        cantidad: Number(p.cantidad),
+        precio_unitario: Number(p.precio_unitario.toFixed(2)),
+        subtotal: Number(p.subtotal.toFixed(2))
+      }))
+    };
+
+    try {
+      await api.post('/compras', compraPayload);
+      setShowConfirmModal(false);
+      setShowNotification(true);
       setProductosEnCompra([]);
       setProveedor('');
       setAlmacen('');
-      setObservaciones('');
-      setAlertaCapacidad('');
+      setTimeout(() => { setShowNotification(false); navigate('/compras'); }, 1500);
+    } catch (error: any) {
+      alert(`Error: ${error.response?.data?.message || "Desconocido"}`);
+      setIsSaving(false);
     }
   };
 
-  useEffect(() => {
-    if (almacen && productosEnCompra.length > 0) {
-      const capacidad = verificarCapacidadAlmacen();
-      setAlertaCapacidad(capacidad.mensaje);
-    } else {
-      setAlertaCapacidad('');
-    }
-  }, [productosEnCompra, almacen]);
+  const subtotalBruto = productosEnCompra.reduce((sum, p) => sum + p.subtotal, 0);
+  const igv = subtotalBruto * 0.18;
+  const totalAPagar = subtotalBruto + igv;
 
-  const subtotalBruto = productosEnCompra.reduce((sum, p) => sum + (p.precio_unitario * p.cantidad), 0);
-  const descuentoTotal = productosEnCompra.reduce((sum, p) => sum + (p.precio_unitario * p.cantidad * 0.18), 0);
-  const subtotalNeto = subtotalBruto - descuentoTotal;
-  const igvRate = 0.18;
-  const igv = subtotalNeto * igvRate;
-  const totalAPagar = subtotalNeto + igv;
-  const { pesoTotal, volumenTotal } = calcularTotalesCompra();
-
-  const almacenSeleccionado = almacenes.find(a => a.id === almacen);
-  const capacidadVolumenDisponible = almacenSeleccionado ? 
-    almacenSeleccionado.capacidad_total - almacenSeleccionado.capacidad_utilizada : 0;
-  const capacidadPesoDisponible = almacenSeleccionado ? 
-    almacenSeleccionado.capacidad_peso_total - almacenSeleccionado.capacidad_peso_utilizada : 0;
+  // Reusable select class
+  const selectClass = `w-full px-3 py-2.5 ${isDark ? 'bg-gray-700 border-gray-600 text-gray-100' : 'bg-slate-50 border-slate-200 text-slate-700'} border rounded-lg text-sm font-medium focus:ring-1 focus:ring-indigo-500 transition-all outline-none`;
 
   return (
-    <div className="p-4 sm:p-6 bg-gray-50 min-h-screen">
+    <div className={`${isDark ? 'bg-gray-900 text-gray-300' : 'bg-slate-50/50 text-slate-600'} min-h-screen font-sans pb-32`}>
+
+      {/* --- NOTIFICACION FLOTANTE --- */}
       {showNotification && (
-        <div className="fixed top-4 right-4 bg-green-500 text-white px-6 py-3 rounded-lg shadow-lg flex items-center gap-2 z-50 animate-fade-in">
-          <IoIosCheckmarkCircle className="w-5 h-5" />
-          <span>Compra registrada exitosamente! Actualizando inventario...</span>
+        <div className="fixed top-6 right-6 bg-emerald-600 text-white px-6 py-4 rounded-xl shadow-2xl flex items-center gap-3 z-[150] animate-bounce-in ring-4 ring-emerald-100">
+          <IoIosCheckmarkCircle className="w-6 h-6" />
+          <div>
+            <p className="font-bold">Operacion Exitosa!</p>
+            <p className="text-xs text-emerald-100">La compra se ha registrado correctamente.</p>
+          </div>
         </div>
       )}
 
-      <div className="max-w-7xl mx-auto bg-white shadow-xl rounded-xl p-6">
-        <h1 className="text-3xl font-extrabold text-blue-700 mb-8 flex items-center border-b pb-4">
-          <IoIosCart className="mr-3 w-10 h-10" /> Nueva Compra
-        </h1>
-
-        <div className="space-y-8">
-          {/* Datos de Cabecera */}
-          <div className="bg-blue-50 border-l-4 border-blue-500 p-4 rounded-lg shadow-sm">
-            <h2 className="text-xl font-semibold text-blue-800 mb-4 flex items-center">
-              <IoIosInformationCircle className="mr-2 w-5 h-5" /> Datos de Cabecera
-            </h2>
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-              
-              <div>
-                <label className="text-sm font-medium text-gray-700 mb-2 flex items-center">
-                  <IoIosPeople className="mr-2 w-4 h-4 text-blue-500" />
-                  Proveedor *
-                </label>
-                <select 
-                  className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
-                  value={proveedor}
-                  onChange={(e) => setProveedor(e.target.value ? Number(e.target.value) : '')}
-                >
-                  <option value="">Seleccionar proveedor</option>
-                  {proveedores.map(prov => (
-                    <option key={prov.id} value={prov.id}>
-                      {prov.razon_social}
-                    </option>
-                  ))}
-                </select>
-              </div>
-              
-              <div>
-                <label className="text-sm font-medium text-gray-700 mb-2 flex items-center">
-                  <IoIosHome className="mr-2 w-4 h-4 text-blue-500" />
-                  Almacén Destino *
-                </label>
-                <select 
-                  className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
-                  value={almacen}
-                  onChange={(e) => setAlmacen(e.target.value ? Number(e.target.value) : '')}
-                >
-                  <option value="">Seleccionar almacén</option>
-                  {almacenes.map(alm => {
-                    const capacidadVol = ((alm.capacidad_utilizada / alm.capacidad_total) * 100).toFixed(0);
-                    const capacidadPeso = ((alm.capacidad_peso_utilizada / alm.capacidad_peso_total) * 100).toFixed(0);
-                    return (
-                      <option key={alm.id} value={alm.id}>
-                        {alm.nombre} - {capacidadVol}% vol - {capacidadPeso}% peso
-                      </option>
-                    );
-                  })}
-                </select>
-                {almacenSeleccionado && (
-                  <div className="mt-2 text-xs text-gray-600 space-y-1">
-                    <div className="flex justify-between items-center">
-                      <span className="flex items-center">
-                        <IoIosCube className="w-3 h-3 mr-1" />
-                        Volumen:
-                      </span>
-                      <span>{capacidadVolumenDisponible.toFixed(1)}m³ disponibles</span>
-                    </div>
-                    <div className="flex justify-between items-center">
-                      <span className="flex items-center">
-                        <IoIosBasket  className="w-3 h-3 mr-1" />
-                        Peso:
-                      </span>
-                      <span>{capacidadPesoDisponible.toFixed(1)}kg disponibles</span>
-                    </div>
-                  </div>
-                )}
-              </div>
-              
-              <div>
-                <label className="text-sm font-medium text-gray-700 mb-2 flex items-center">
-                  <IoIosDocument className="mr-2 w-4 h-4 text-blue-500" />
-                  Tipo Comprobante
-                </label>
-                <select 
-                  className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
-                  value={tipoComprobante}
-                  onChange={(e) => setTipoComprobante(e.target.value)}
-                >
-                  <option value="Factura">Factura</option>
-                  <option value="Boleta">Boleta</option>
-                </select>
-              </div>
-              
-              <div>
-                <label className="text-sm font-medium text-gray-700 mb-2 flex items-center">
-                  <IoIosClipboard className="mr-2 w-4 h-4 text-blue-500" />
-                  N° Comprobante
-                </label>
-                <div className="w-full p-3 bg-gray-100 text-gray-700 rounded-lg border font-semibold text-center">
-                  {generarNumeroComprobante()}
-                </div>
-              </div>
-
-              <div className="md:col-span-2">
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Método de Pago
-                </label>
-                <select 
-                  className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
-                  value={metodoPago}
-                  onChange={(e) => setMetodoPago(e.target.value)}
-                >
-                  <option value="Contado">Contado</option>
-                  <option value="Crédito">Crédito</option>
-                </select>
-              </div>
-
-              <div className="md:col-span-2">
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Observaciones
-                </label>
-                <textarea 
-                  className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
-                  rows={3}
-                  placeholder="Ingrese observaciones adicionales sobre la compra..."
-                  value={observaciones}
-                  onChange={(e) => setObservaciones(e.target.value)}
-                />
-              </div>
+      {/* --- HEADER SUPERIOR --- */}
+      <div className={`${isDark ? 'bg-gray-800 border-gray-700' : 'bg-white border-slate-200'} border-b sticky top-0 z-30 shadow-sm`}>
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 py-4 flex flex-col sm:flex-row justify-between items-center gap-4">
+          <div className="flex items-center gap-3">
+            <div className="bg-indigo-600 text-white p-2.5 rounded-lg shadow-lg shadow-indigo-200">
+              <FaTruckLoading className="text-xl" />
+            </div>
+            <div>
+              <h1 className={`text-xl font-bold ${heading}`}>Nueva Compra</h1>
+              <p className={`text-xs ${textTertiary}`}>Gestion de abastecimiento</p>
             </div>
           </div>
 
-          {/* Añadir Producto */}
-          <div className="p-6 border border-gray-200 rounded-lg shadow-md bg-white">
-            <h2 className="text-xl font-semibold text-gray-700 mb-6 flex items-center border-b pb-3">
-              <IoIosArchive className="mr-2 w-5 h-5 text-red-500" /> Añadir Producto del Proveedor
-            </h2>
-            
-            {!proveedor && (
-              <div className="mb-4 p-4 bg-yellow-50 border border-yellow-200 rounded-lg">
-                <div className="flex items-center">
-                  <IoIosInformationCircle className="w-5 h-5 text-yellow-600 mr-2" />
-                  <span className="text-yellow-700">
-                    Primero seleccione un proveedor para ver sus productos disponibles
-                  </span>
-                </div>
-              </div>
-            )}
-
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
-              
-              <div className="lg:col-span-2">
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Producto del Proveedor *
-                </label>
-                <select 
-                  className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 disabled:bg-gray-100 disabled:cursor-not-allowed"
-                  value={productoSeleccionado}
-                  onChange={(e) => setProductoSeleccionado(e.target.value ? Number(e.target.value) : '')}
-                  disabled={!proveedor}
-                >
-                  <option value="">
-                    {proveedor ? "Seleccionar producto" : "Primero seleccione un proveedor"}
-                  </option>
-                  {productosDisponibles.map(producto => (
-                    <option key={producto.id} value={producto.id}>
-                      {producto.nombre} - Stock: {producto.stock_actual}
-                    </option>
-                  ))}
-                </select>
-                {proveedor && productosDisponibles.length === 0 && (
-                  <p className="text-xs text-red-600 mt-1 flex items-center">
-                    <IoIosAlert className="w-3 h-3 mr-1" />
-                    Este proveedor no tiene productos activos en el inventario.
-                  </p>
-                )}
-              </div>
-              
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Cantidad *
-                </label>
-                <input 
-                  type="number" 
-                  className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
-                  value={cantidad}
-                  onChange={(e) => setCantidad(Number(e.target.value))}
-                  min={1}
-                  disabled={!productoSeleccionado}
-                />
-              </div>
-              
-              <div>
-                <label className="text-sm font-medium text-gray-700 mb-2 flex items-center">
-                  <IoIosLock className="mr-2 w-4 h-4 text-gray-500" />
-                  Precio Proveedor (S/) *
-                </label>
-                <div className="relative">
-                  <span className="absolute left-3 top-3 text-gray-500">S/</span>
-                  <input 
-                    type="number" 
-                    className="w-full p-3 pl-8 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 bg-gray-100 cursor-not-allowed"
-                    value={precioUnitario}
-                    readOnly
-                    placeholder="0.00"
-                  />
-                </div>
-                <p className="text-xs text-gray-500 mt-1 flex items-center">
-                  <IoIosLock className="w-3 h-3 mr-1" />
-                  Precio fijado por el proveedor (no editable)
-                </p>
-              </div>
-              
-              <div className="flex items-end">
-                <button 
-                  className="w-full bg-blue-600 text-white p-3 rounded-lg hover:bg-blue-700 flex items-center justify-center transition-all shadow-md font-medium disabled:opacity-50 disabled:cursor-not-allowed"
-                  onClick={añadirProducto}
-                  disabled={!productoSeleccionado || cantidad <= 0 || precioUnitario <= 0 || !almacen}
-                >
-                  <IoMdAdd className="mr-2 w-5 h-5" /> Añadir
-                </button>
-              </div>
-            </div>
-            
-            {productoSeleccionado && (
-              <div className="mt-4 p-3 bg-blue-50 rounded-lg border border-blue-200">
-                <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
-                  <div>
-                    <span className="text-gray-600 flex items-center">
-                      <IoIosCash className="w-3 h-3 mr-1" />
-                      Precio venta:
-                    </span>
-                    <div className="font-semibold text-green-600">
-                      S/{productosInventario.find(p => p.id === productoSeleccionado)?.precio_venta}
-                    </div>
-                  </div>
-                  <div>
-                    <span className="text-gray-600 flex items-center">
-                      <IoIosBasket  className="w-3 h-3 mr-1" />
-                      Peso unitario:
-                    </span>
-                    <div className="font-semibold">
-                      {productosInventario.find(p => p.id === productoSeleccionado)?.peso_kg} kg
-                    </div>
-                  </div>
-                  <div>
-                    <span className="text-gray-600">Descuento proveedor:</span>
-                    <div className="font-semibold">
-                      {productosInventario.find(p => p.id === productoSeleccionado)?.descuento_proveedor}%
-                    </div>
-                  </div>
-                  <div>
-                    <span className="text-gray-600 flex items-center">
-                      <IoIosCube className="w-3 h-3 mr-1" />
-                      Peso total:
-                    </span>
-                    <div className="font-semibold">
-                      {(pesoProducto * cantidad).toFixed(2)} kg
-                    </div>
-                  </div>
-                </div>
-              </div>
-            )}
+          <div className="flex items-center gap-3 w-full sm:w-auto">
+            <button onClick={() => setShowCancelModal(true)}
+              className={`px-4 py-2 text-sm font-semibold ${isDark ? 'text-gray-400 hover:bg-gray-700' : 'text-slate-500 hover:bg-slate-100'} rounded-lg transition-colors`}>
+              Cancelar
+            </button>
+            <button onClick={handleSaveClick} disabled={productosEnCompra.length === 0}
+              className="flex-1 sm:flex-none px-6 py-2 bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-bold rounded-lg shadow-md hover:shadow-lg transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2">
+              <IoMdCheckmark className="text-lg" /> Guardar Compra
+            </button>
           </div>
+        </div>
+      </div>
 
-          {/* Alerta de capacidad */}
-          {alertaCapacidad && (
-            <div className={`p-4 rounded-lg border flex items-center ${
-              alertaCapacidad.includes('no tiene suficiente') 
-                ? 'bg-red-50 border-red-200 text-red-700' 
-                : 'bg-green-50 border-green-200 text-green-700'
-            }`}>
-              {alertaCapacidad.includes('no tiene suficiente') ? (
-                <IoIosWarning className="w-5 h-5 mr-2 text-red-600" />
-              ) : (
-                <IoIosCheckmarkCircle className="w-5 h-5 mr-2 text-green-600" />
-              )}
-              <span>{alertaCapacidad}</span>
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 py-8 space-y-6">
+
+        {/* --- GRID PRINCIPAL --- */}
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+
+          {/* COLUMNA IZQUIERDA: DATOS GENERALES (2/3 de ancho) */}
+          <div className="lg:col-span-2 space-y-6">
+
+            {/* 1. TARJETA DE PROVEEDOR Y ALMACEN */}
+            <div className={`${isDark ? 'bg-gray-800 border-gray-700' : 'bg-white border-slate-200'} rounded-xl shadow-sm border p-6 relative overflow-hidden`}>
+              <div className="absolute top-0 left-0 w-1 h-full bg-indigo-500"></div>
+              <h3 className={`text-sm font-bold ${heading} uppercase tracking-wide mb-5 flex items-center gap-2`}>
+                <IoIosDocument className="text-indigo-500" /> Informacion General
+              </h3>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+                {/* Selector Proveedor */}
+                <div className="space-y-1.5">
+                  <label className={`text-xs font-semibold ${textTertiary} ml-1`}>Proveedor <span className="text-rose-500">*</span></label>
+                  <select value={proveedor} onChange={(e) => setProveedor(e.target.value ? Number(e.target.value) : '')}
+                    className={selectClass}>
+                    <option value="">-- Seleccionar Proveedor --</option>
+                    {proveedores.map(prov => (
+                      <option key={prov.id} value={prov.id}>{getNombreProveedor(prov)}</option>
+                    ))}
+                  </select>
+                </div>
+
+                {/* Selector Almacen */}
+                <div className="space-y-1.5">
+                  <label className={`text-xs font-semibold ${textTertiary} ml-1`}>Almacen de Destino <span className="text-rose-500">*</span></label>
+                  <select value={almacen} onChange={(e) => setAlmacen(e.target.value ? Number(e.target.value) : '')}
+                    className={selectClass}>
+                    <option value="">-- Seleccionar Almacen --</option>
+                    {almacenes.map((alm: any) => (
+                      <option key={alm.id} value={alm.id}>{alm.nombre}</option>
+                    ))}
+                  </select>
+                </div>
+
+                {/* Widget de Capacidad (Aparece si hay almacen) */}
+                {infoAlmacenSeleccionado && (
+                  <div className={`md:col-span-2 ${isDark ? 'bg-gray-700 border-gray-600' : 'bg-slate-50 border-slate-200'} rounded-lg p-4 border mt-2`}>
+                    <div className="flex justify-between items-center mb-2">
+                      <span className={`text-xs font-bold ${textTertiary} flex items-center gap-2`}>
+                        <FaWarehouse className={infoAlmacenSeleccionado.colorTexto} /> Capacidad del Almacen
+                      </span>
+                      <span className={`text-xs font-bold px-2 py-0.5 rounded ${infoAlmacenSeleccionado.colorFondo} ${infoAlmacenSeleccionado.colorTexto}`}>
+                        {infoAlmacenSeleccionado.percentage}% Ocupado
+                      </span>
+                    </div>
+                    <div className={`w-full ${isDark ? 'bg-gray-600' : 'bg-slate-200'} rounded-full h-2 overflow-hidden mb-1`}>
+                      <div className={`h-full rounded-full transition-all duration-700 ease-out ${infoAlmacenSeleccionado.colorBarra}`}
+                        style={{ width: `${Math.min(infoAlmacenSeleccionado.percentage, 100)}%` }}>
+                      </div>
+                    </div>
+                    <p className={`text-[10px] text-right ${isDark ? 'text-gray-500' : 'text-slate-400'}`}>
+                      Disponible: {(infoAlmacenSeleccionado.capacidadM3 - infoAlmacenSeleccionado.occupiedM3_Total).toFixed(2)} m3
+                    </p>
+                  </div>
+                )}
+
+                <div className="space-y-1.5">
+                  <label className={`text-xs font-semibold ${textTertiary} ml-1`}>Tipo & N Comprobante</label>
+                  <div className="flex gap-2">
+                    <select value={tipoComprobante} onChange={(e) => setTipoComprobante(e.target.value)}
+                      className={`w-2/3 ${selectClass}`}>
+                      <option value="ORDEN_COMPRA">Orden de Compra</option>
+                      <option value="FACTURA">Factura</option>
+                      <option value="BOLETA">Boleta</option>
+                    </select>
+                    <div className={`w-1/3 px-3 py-2.5 ${isDark ? 'bg-gray-700 border-gray-600 text-gray-400' : 'bg-slate-100 border-slate-200 text-slate-500'} border rounded-lg text-xs font-bold flex items-center justify-center font-mono`}>
+                      {generarNumeroComprobante()}
+                    </div>
+                  </div>
+                </div>
+
+                {/* Selector Metodo de Pago */}
+                <div className="space-y-1.5">
+                  <label className={`text-xs font-semibold ${textTertiary} ml-1`}>Metodo de Pago</label>
+                  <select
+                    value={metodoPago}
+                    onChange={(e) => setMetodoPago(e.target.value)}
+                    className={selectClass}
+                  >
+                    <option value="EFECTIVO">Efectivo (Contado)</option>
+                    <option value="TARJETA">Tarjeta de Credito/Debito</option>
+                    <option value="TRANSFERENCIA">Transferencia Bancaria</option>
+                    <option value="YAPE">Yape</option>
+                    <option value="PLIN">Plin</option>
+                  </select>
+                </div>
+              </div>
             </div>
-          )}
 
-          {/* Detalle de Productos */}
-          <div className="mb-6 border rounded-lg overflow-hidden shadow-lg bg-white">
-            <h3 className="text-lg font-semibold text-gray-700 p-4 bg-gray-100 border-b flex items-center justify-between">
-              <span>Detalle de Productos ({productosEnCompra.length} productos)</span>
-              <div className="flex items-center space-x-4 text-sm">
-                <span className="flex items-center">
-                  <IoIosBasket  className="w-4 h-4 mr-1" />
-                  Peso total: {pesoTotal.toFixed(2)} kg
-                </span>
-                <span className="flex items-center">
-                  <IoIosCube className="w-4 h-4 mr-1" />
-                  Volumen: {volumenTotal.toFixed(3)} m³
+            {/* 2. LISTADO DE PRODUCTOS (Tabla Principal) */}
+            <div className={`${isDark ? 'bg-gray-800 border-gray-700' : 'bg-white border-slate-200'} rounded-xl shadow-sm border overflow-hidden`}>
+              <div className={`p-5 ${isDark ? 'border-gray-700 bg-gray-800' : 'border-slate-100 bg-white'} border-b flex justify-between items-center`}>
+                <h3 className={`text-sm font-bold ${heading} uppercase tracking-wide flex items-center gap-2`}>
+                  <IoIosList className="text-lg text-indigo-500" /> Items en la Orden
+                </h3>
+                <span className={`${isDark ? 'bg-indigo-900/40 text-indigo-300 border-indigo-700' : 'bg-indigo-50 text-indigo-700 border-indigo-100'} text-xs font-bold px-2.5 py-1 rounded-full border`}>
+                  {productosEnCompra.length} Productos
                 </span>
               </div>
-            </h3>
-            <div className="overflow-x-auto">
-              <table className="min-w-full divide-y divide-gray-200">
-                <thead className="bg-gray-50">
-                  <tr>
-                    <th className="p-4 text-left text-xs font-medium text-gray-500 uppercase">Producto</th>
-                    <th className="p-4 text-right text-xs font-medium text-gray-500 uppercase">P. Unitario</th>
-                    <th className="p-4 text-right text-xs font-medium text-gray-500 uppercase">Cantidad</th>
-                    <th className="p-4 text-right text-xs font-medium text-gray-500 uppercase">Peso</th>
-                    <th className="p-4 text-right text-xs font-medium text-gray-500 uppercase">Desc. Proveedor</th>
-                    <th className="p-4 text-right text-xs font-medium text-gray-500 uppercase">Subtotal</th>
-                    <th className="p-4 text-center text-xs font-medium text-gray-500 uppercase">Acciones</th>
-                  </tr>
-                </thead>
-                <tbody className="bg-white divide-y divide-gray-200">
-                  {productosEnCompra.map((p) => {
-                    const productoInfo = productosInventario.find(prod => prod.id === p.id_producto);
-                    return (
-                      <tr key={p.id} className="hover:bg-gray-50">
-                        <td className="p-4">
-                          <div className="font-medium text-gray-900">{p.nombre}</div>
-                          <div className="text-sm text-gray-500">{p.sku}</div>
-                        </td>
-                        <td className="p-4 text-right font-mono">S/{p.precio_unitario.toFixed(2)}</td>
-                        <td className="p-4 text-right">
-                          <div className="flex items-center justify-end space-x-3">
-                            <button 
-                              onClick={() => actualizarCantidad(p.id, p.cantidad - 1)}
-                              className="w-8 h-8 bg-gray-200 rounded-full flex items-center justify-center hover:bg-gray-300 transition-colors"
-                            >
-                              <IoIosRemove className="w-4 h-4" />
-                            </button>
-                            <span className="font-medium text-lg w-12 text-center bg-gray-100 py-1 rounded">
-                              {p.cantidad}
-                            </span>
-                            <button 
-                              onClick={() => actualizarCantidad(p.id, p.cantidad + 1)}
-                              className="w-8 h-8 bg-gray-200 rounded-full flex items-center justify-center hover:bg-gray-300 transition-colors"
-                            >
-                              <IoMdAdd className="w-4 h-4" />
-                            </button>
-                          </div>
-                        </td>
-                        <td className="p-4 text-right font-mono">
-                          {p.peso_total.toFixed(2)} kg
-                        </td>
-                        <td className="p-4 text-right">
-                          <div className="space-y-1">
-                            <div className="font-mono text-red-600">-S/{p.descuento.toFixed(2)}</div>
-                            <div className="text-xs text-gray-500">
-                              ({productoInfo?.descuento_proveedor}%)
-                            </div>
-                          </div>
-                        </td>
-                        <td className="p-4 text-right font-bold font-mono">S/{p.subtotal.toFixed(2)}</td>
-                        <td className="p-4 text-center">
-                          <button 
-                            className="text-red-600 p-2 hover:text-red-800 hover:bg-red-50 rounded-full transition-colors"
-                            onClick={() => eliminarProducto(p.id)}
-                          >
-                            <IoMdCloseCircle className="w-6 h-6" />
-                          </button>
+
+              <div className="overflow-x-auto">
+                <table className="w-full text-left">
+                  <thead className={`${tableHeader} ${isDark ? 'border-gray-700' : 'border-slate-200'} border-b`}>
+                    <tr>
+                      <th className={`px-5 py-3 text-xs font-bold ${tableHeaderText} uppercase tracking-wider`}>Descripcion</th>
+                      <th className={`px-5 py-3 text-xs font-bold ${tableHeaderText} uppercase tracking-wider text-right`}>Precio</th>
+                      <th className={`px-5 py-3 text-xs font-bold ${tableHeaderText} uppercase tracking-wider text-center`}>Cant.</th>
+                      <th className={`px-5 py-3 text-xs font-bold ${tableHeaderText} uppercase tracking-wider text-right`}>Subtotal</th>
+                      <th className={`px-5 py-3 text-xs font-bold ${tableHeaderText} uppercase tracking-wider text-center`}>Acciones</th>
+                    </tr>
+                  </thead>
+                  <tbody className={`divide-y ${isDark ? 'divide-gray-700' : 'divide-slate-100'}`}>
+                    {productosEnCompra.length === 0 ? (
+                      <tr>
+                        <td colSpan={5} className={`py-12 text-center ${emptyState}`}>
+                          <FaBoxOpen className="w-12 h-12 mx-auto mb-3 opacity-20" />
+                          <p className="text-sm">No has agregado productos aun.</p>
                         </td>
                       </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
+                    ) : (
+                      productosEnCompra.map(item => (
+                        <tr key={item.id} className={`${isDark ? 'hover:bg-gray-700/50' : 'hover:bg-slate-50/80'} transition-colors group`}>
+                          <td className="px-5 py-3">
+                            <div className="flex items-center gap-3">
+                              <div className={`w-10 h-10 rounded-lg ${isDark ? 'bg-gray-700 border-gray-600' : 'bg-white border-slate-200'} border p-0.5 shrink-0 overflow-hidden`}>
+                                {item.imagen ?
+                                  <img src={`${API_URL}${item.imagen}`} className="w-full h-full object-cover rounded-md" /> :
+                                  <IoMdImage className={`w-full h-full ${isDark ? 'text-gray-500' : 'text-slate-300'}`} />}
+                              </div>
+                              <div>
+                                <div className={`text-sm font-bold ${heading}`}>{item.nombre}</div>
+                                <div className={`flex items-center gap-2 text-xs ${isDark ? 'text-gray-500' : 'text-slate-400'} font-mono`}>
+                                  {item.sku}
+                                  {item.unidadMedida && item.unidadMedida !== 'UNIDAD' && (
+                                    <span className={`px-1.5 py-0.5 rounded text-[10px] font-bold ${isDark ? 'bg-gray-700 text-gray-300' : 'bg-slate-100 text-slate-600'}`}>{item.unidadMedida}</span>
+                                  )}
+                                  <button onClick={() => openBarcodeModal(item)} className="text-indigo-400 hover:text-indigo-600 transition-colors" title="Ver codigo de barras">
+                                    <IoMdBarcode />
+                                  </button>
+                                </div>
+                              </div>
+                            </div>
+                          </td>
+                          <td className={`px-5 py-3 text-right text-sm ${textTertiary} font-mono`}>S/ {item.precio_unitario.toFixed(2)}</td>
+                          <td className="px-5 py-3">
+                            <div className="flex items-center justify-center">
+                              <button onClick={() => actualizarCantidad(item.id, item.cantidad - 1)} className={`w-7 h-7 flex items-center justify-center rounded-l-md ${isDark ? 'bg-gray-700 hover:bg-gray-600 text-gray-400' : 'bg-slate-100 hover:bg-slate-200 text-slate-500'}`}>-</button>
+                              <div className={`w-10 h-7 flex items-center justify-center border-y ${isDark ? 'border-gray-600 bg-gray-800 text-gray-200' : 'border-slate-200 bg-white text-slate-700'} text-sm font-bold`}>{item.cantidad}</div>
+                              <button onClick={() => actualizarCantidad(item.id, item.cantidad + 1)} className={`w-7 h-7 flex items-center justify-center rounded-r-md ${isDark ? 'bg-gray-700 hover:bg-gray-600 text-gray-400' : 'bg-slate-100 hover:bg-slate-200 text-slate-500'}`}>+</button>
+                            </div>
+                          </td>
+                          <td className={`px-5 py-3 text-right text-sm font-bold ${heading} font-mono`}>S/ {item.subtotal.toFixed(2)}</td>
+                          <td className="px-5 py-3 text-center">
+                            <button onClick={() => eliminarProducto(item.id)} className={`${isDark ? 'text-gray-500 hover:text-rose-400' : 'text-slate-400 hover:text-rose-500'} p-2 transition-colors`}>
+                              <IoMdTrash className="text-lg" />
+                            </button>
+                          </td>
+                        </tr>
+                      ))
+                    )}
+                  </tbody>
+                </table>
+              </div>
             </div>
           </div>
 
-          {/* Resumen Financiero */}
-          <div className="bg-green-50 p-6 rounded-lg shadow-inner border border-green-200">
-            <h3 className="text-xl font-bold text-green-700 mb-4 flex items-center">
-              <IoIosCash className="mr-2 w-5 h-5" /> Resumen Financiero
-            </h3>
-            <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-              <div className="text-center">
-                <label className="block text-sm font-medium text-gray-700 mb-2">Subtotal Bruto</label>
-                <div className="text-2xl font-bold text-gray-900">S/{subtotalBruto.toFixed(2)}</div>
-              </div>
-              <div className="text-center">
-                <label className="block text-sm font-medium text-gray-700 mb-2">Desc. Proveedor</label>
-                <div className="text-xl font-semibold text-red-600">-S/{descuentoTotal.toFixed(2)}</div>
-              </div>
-              <div className="text-center">
-                <label className="block text-sm font-medium text-gray-700 mb-2">IGV (18%)</label>
-                <div className="text-xl font-semibold text-gray-700">S/{igv.toFixed(2)}</div>
-              </div>
-              <div className="text-center">
-                <label className="block text-lg font-medium text-gray-700 mb-2">TOTAL A PAGAR</label>
-                <div className="text-3xl font-extrabold text-green-700">S/{totalAPagar.toFixed(2)}</div>
-              </div>
-            </div>
-          </div>
+          {/* COLUMNA DERECHA: ACCIONES Y TOTALES (1/3 de ancho) */}
+          <div className="space-y-6">
 
-          {/* Botones finales */}
-          <div className="flex justify-between border-t pt-6">
-            <Link to="/compras/historial" className="px-6 py-3 bg-gray-600 text-white rounded-lg hover:bg-gray-700 flex items-center transition-all shadow-md font-medium">
-              <IoIosList className="mr-2 w-5 h-5" /> Ir a Historial
-            </Link>
-            <div className="flex space-x-4">
-              <button 
-                className="px-6 py-3 border border-red-400 rounded-lg text-red-600 hover:bg-red-50 flex items-center transition-all font-medium"
-                onClick={() => setShowCancelModal(true)}
-              >
-                <IoMdCloseCircle className="mr-2 w-5 h-5" /> Cancelar
+            {/* 1. AGREGAR PRODUCTO */}
+            <div className={`${isDark ? 'bg-gray-800 border-gray-700' : 'bg-white border-slate-200'} rounded-xl shadow-sm border p-5`}>
+              <h3 className={`text-xs font-bold ${isDark ? 'text-gray-500' : 'text-slate-400'} uppercase tracking-wider mb-4`}>Agregar Item</h3>
+
+              <button onClick={() => setIsProductModalOpen(true)} disabled={!proveedor}
+                className={`w-full py-4 border-2 border-dashed ${isDark ? 'border-indigo-700 bg-indigo-900/20 hover:bg-indigo-900/30 text-indigo-400' : 'border-indigo-200 bg-indigo-50/50 hover:bg-indigo-50 text-indigo-600'} rounded-xl flex flex-col items-center justify-center gap-1 font-bold transition-all mb-4 group disabled:opacity-50 disabled:cursor-not-allowed`}>
+                {productoActual ? (
+                  <>
+                    <IoMdCheckmark className="text-2xl text-emerald-500" />
+                    <span className={`${heading} text-sm`}>{productoActual.nombre}</span>
+                  </>
+                ) : (
+                  <>
+                    <IoIosSearch className="text-2xl group-hover:scale-110 transition-transform" />
+                    <span className="text-sm">{proveedor ? "Buscar en Catalogo" : "Seleccione Proveedor Primero"}</span>
+                  </>
+                )}
               </button>
-              <button 
-                className="px-6 py-3 bg-green-600 text-white rounded-lg hover:bg-green-700 flex items-center transition-all shadow-lg font-medium disabled:opacity-50 disabled:cursor-not-allowed"
-                onClick={registrarCompra}
-                disabled={productosEnCompra.length === 0 || !proveedor || !almacen || alertaCapacidad.includes('no tiene suficiente')}
-              >
-                <IoMdCheckmark className="mr-2 w-5 h-5" /> Registrar Compra
+
+              {productoActual?.unidadMedida && productoActual.unidadMedida !== 'UNIDAD' && (
+                <div className={`mb-3 px-3 py-1.5 rounded-lg text-xs font-semibold text-center ${isDark ? 'bg-indigo-900/30 text-indigo-300 border border-indigo-700/40' : 'bg-indigo-50 text-indigo-600 border border-indigo-200'}`}>
+                  Unidad: {productoActual.unidadMedida}
+                </div>
+              )}
+
+              <div className="flex gap-3 mb-4">
+                <div className="w-1/2">
+                  <label className={`text-xs font-bold ${isDark ? 'text-gray-500' : 'text-slate-400'} block mb-1`}>Precio</label>
+                  <div className={`w-full p-2.5 ${isDark ? 'bg-gray-700 text-gray-400' : 'bg-slate-100 text-slate-500'} rounded-lg font-mono text-center text-sm`}>
+                    {productoActual ? `S/ ${productoActual.precio_compra}` : '-'}
+                  </div>
+                </div>
+                <div className="w-1/2">
+                  <label className={`text-xs font-bold ${isDark ? 'text-gray-500' : 'text-slate-400'} block mb-1`}>Cantidad {productoActual?.unidadMedida && productoActual.unidadMedida !== 'UNIDAD' ? `(${productoActual.unidadMedida})` : ''}</label>
+                  <input type="number" min="1" value={cantidad} onChange={(e) => setCantidad(Number(e.target.value))} disabled={!productoActual}
+                    className={`w-full p-2.5 ${isDark ? 'bg-gray-700 border-gray-600 text-gray-100' : 'bg-white border-slate-200 text-slate-800'} border rounded-lg font-bold text-center text-sm focus:ring-2 focus:ring-indigo-500 outline-none`} />
+                </div>
+              </div>
+
+              <button onClick={añadirProductoAlCarrito} disabled={!productoActual || cantidad <= 0}
+                className={`w-full py-3 ${isDark ? 'bg-indigo-600 hover:bg-indigo-700 shadow-lg shadow-indigo-900/30' : 'bg-slate-800 hover:bg-slate-900 shadow-lg shadow-slate-200'} text-white rounded-lg font-bold transition-all flex items-center justify-center gap-2 active:scale-95 disabled:opacity-50 disabled:shadow-none`}>
+                <IoMdAdd /> Anadir a la lista
               </button>
+            </div>
+
+            {/* 2. TOTALES */}
+            <div className={`${isDark ? 'bg-gray-800 border-gray-700' : 'bg-white border-slate-200'} rounded-xl shadow-sm border p-6`}>
+              <h3 className={`text-xs font-bold ${isDark ? 'text-gray-500' : 'text-slate-400'} uppercase tracking-wider mb-4 border-b ${isDark ? 'border-gray-700' : 'border-slate-100'} pb-2`}>Resumen Financiero</h3>
+
+              <div className="space-y-3 mb-6">
+                <div className={`flex justify-between text-sm ${textTertiary}`}>
+                  <span>Subtotal</span>
+                  <span className={`font-mono ${isDark ? 'text-gray-300' : 'text-slate-700'}`}>S/ {subtotalBruto.toFixed(2)}</span>
+                </div>
+                <div className={`flex justify-between text-sm ${textTertiary}`}>
+                  <span>IGV (18%)</span>
+                  <span className={`font-mono ${isDark ? 'text-gray-300' : 'text-slate-700'}`}>S/ {igv.toFixed(2)}</span>
+                </div>
+              </div>
+
+              <div className={`${isDark ? 'bg-gray-700 border-gray-600' : 'bg-slate-50 border-slate-200'} rounded-xl p-4 border`}>
+                <div className="text-center">
+                  <span className="text-xs font-bold text-indigo-600 uppercase tracking-wider block mb-1">Total a Pagar</span>
+                  <span className={`text-3xl font-extrabold ${heading} block`}>S/ {totalAPagar.toFixed(2)}</span>
+                </div>
+              </div>
+
+              <div className="mt-4">
+                <label className={`text-xs font-bold ${isDark ? 'text-gray-500' : 'text-slate-400'} block mb-1`}>Observaciones</label>
+                <textarea
+                  className={`w-full p-2.5 ${isDark ? 'bg-gray-700 border-gray-600 text-gray-200 focus:bg-gray-600' : 'bg-slate-50 border-slate-200 text-slate-700 focus:bg-white'} border rounded-lg text-sm focus:ring-2 focus:ring-indigo-500 outline-none resize-none`}
+                  rows={3}
+                  placeholder="Comentarios adicionales..."
+                  value={observaciones}
+                  onChange={(e) => setObservaciones(e.target.value)}
+                ></textarea>
+              </div>
             </div>
           </div>
         </div>
       </div>
 
-      {/* Modal de Cancelar */}
-      {showCancelModal && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-lg max-w-md w-full">
-            <div className="p-6">
-              <div className="flex items-center gap-3 mb-4">
-                <div className="bg-yellow-100 p-2 rounded-full">
-                  <IoIosWarning className="w-6 h-6 text-yellow-600" />
-                </div>
-                <div>
-                  <h3 className="text-lg font-semibold text-gray-900">Cancelar Compra</h3>
-                  <p className="text-sm text-gray-600">¿Estás seguro de que quieres cancelar? Se perderán todos los datos.</p>
-                </div>
+      {/* --- MODAL DE BUSQUEDA (Estilo Galeria) --- */}
+      {isProductModalOpen && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
+          <div className="absolute inset-0 bg-slate-900/40 backdrop-blur-sm transition-opacity" onClick={() => setIsProductModalOpen(false)}></div>
+          <div className={`relative ${isDark ? 'bg-gray-800' : 'bg-white'} w-full max-w-5xl max-h-[85vh] rounded-2xl shadow-2xl flex flex-col overflow-hidden animate-fadeInUp`}>
+            {/* Header Modal */}
+            <div className={`p-5 border-b ${isDark ? 'border-gray-700 bg-gray-800' : 'border-slate-100 bg-white'} z-10 flex gap-4 items-center`}>
+              <div className="relative flex-1">
+                <IoIosSearch className={`absolute left-3 top-3 ${isDark ? 'text-gray-500' : 'text-slate-400'}`} />
+                <input type="text" placeholder="Buscar por nombre o SKU..." autoFocus
+                  className={`w-full pl-10 pr-4 py-2.5 ${isDark ? 'bg-gray-700 text-gray-200 placeholder-gray-500' : 'bg-slate-50 text-slate-700'} border-none rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none`}
+                  value={filtroProductoModal} onChange={(e) => setFiltroProductoModal(e.target.value)}
+                />
               </div>
-              <div className="flex gap-3 justify-end">
-                <button
-                  onClick={() => setShowCancelModal(false)}
-                  className="px-4 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 transition-colors"
-                >
-                  Continuar
-                </button>
-                <button
-                  onClick={cancelarCompra}
-                  className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 flex items-center gap-2 transition-colors"
-                >
-                  <IoIosWarning className="w-4 h-4" />
-                  Sí, Cancelar
-                </button>
-              </div>
+              <button onClick={() => setIsProductModalOpen(false)} className={`p-2 ${isDark ? 'hover:bg-gray-700 text-gray-500' : 'hover:bg-slate-100 text-slate-400'} rounded-full`}>
+                <IoMdCloseCircle className="text-2xl" />
+              </button>
+            </div>
+
+            {/* Grid Productos */}
+            <div className={`flex-1 overflow-y-auto p-6 ${isDark ? 'bg-gray-900/50' : 'bg-slate-50/50'}`}>
+              {loadingData ? (
+                <div className="flex justify-center items-center h-40"><div className="animate-spin rounded-full h-8 w-8 border-b-2 border-indigo-600"></div></div>
+              ) : (
+                <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
+                  {productosDisponibles.filter(p => (p.nombre.toLowerCase().includes(filtroProductoModal.toLowerCase()) || p.codigo.toLowerCase().includes(filtroProductoModal.toLowerCase()))).map(prod => (
+                    <div key={prod.id} onClick={() => handleSelectProductFromModal(prod)}
+                      className={`${isDark ? 'bg-gray-800 border-gray-700 hover:border-indigo-500' : 'bg-white border-slate-200 hover:border-indigo-500'} rounded-xl border p-3 hover:shadow-md cursor-pointer transition-all group relative`}>
+                      {productosEnCompra.some(x => x.id_producto === prod.productoId) && (
+                        <div className="absolute top-2 right-2 bg-emerald-500 text-white rounded-full p-1 z-10 shadow-sm"><IoMdCheckmark /></div>
+                      )}
+                      <div className={`aspect-square ${isDark ? 'bg-gray-700' : 'bg-slate-100'} rounded-lg mb-3 overflow-hidden flex items-center justify-center`}>
+                        {prod.imagen ? <img src={`${API_URL}${prod.imagen}`} className="w-full h-full object-cover group-hover:scale-105 transition-transform" /> : <IoMdImage className={`text-3xl ${isDark ? 'text-gray-500' : 'text-slate-300'}`} />}
+                      </div>
+                      <h4 className={`font-bold ${isDark ? 'text-gray-200' : 'text-slate-700'} text-sm line-clamp-2 leading-tight mb-1`}>{prod.nombre}</h4>
+                      <div className="flex justify-between items-center mt-2">
+                        <div className="flex items-center gap-1.5">
+                          <span className={`text-xs ${isDark ? 'text-gray-500' : 'text-slate-400'}`}>{prod.codigo}</span>
+                          {prod.unidadMedida && prod.unidadMedida !== 'UNIDAD' && (
+                            <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded ${isDark ? 'bg-gray-700 text-gray-300' : 'bg-slate-100 text-slate-600'}`}>{prod.unidadMedida}</span>
+                          )}
+                        </div>
+                        <span className={`text-sm font-bold text-indigo-600 ${isDark ? 'bg-indigo-900/40' : 'bg-indigo-50'} px-2 py-0.5 rounded`}>S/ {prod.precio_compra}</span>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
           </div>
         </div>
       )}
+
+      {/* --- MODAL BARCODE --- */}
+      {barcodeModalOpen && currentBarcodeData && (
+        <div className="fixed inset-0 z-[120] flex items-center justify-center p-4">
+          <div className="absolute inset-0 bg-slate-900/50 backdrop-blur-sm" onClick={() => setBarcodeModalOpen(false)}></div>
+          <div className={`relative ${isDark ? 'bg-gray-800' : 'bg-white'} rounded-2xl shadow-xl max-w-sm w-full p-6 animate-zoomIn text-center`}>
+            <h3 className={`text-lg font-bold ${heading} mb-1`}>{currentBarcodeData.nombre}</h3>
+            <p className={`text-sm ${textTertiary} mb-6 font-mono tracking-wider`}>{currentBarcodeData.codigoBarras}</p>
+            <div className={`border ${isDark ? 'border-gray-700 bg-gray-900' : 'border-slate-100 bg-white'} rounded-xl p-4 mb-6 shadow-inner flex justify-center`}>
+              <img src={`https://barcode.tec-it.com/barcode.ashx?data=${currentBarcodeData.codigoBarras}&code=Code128&translate-esc=on`} alt="barcode" className="max-w-full h-auto" />
+            </div>
+            <div className="flex gap-3">
+              <button onClick={copyBarcode} className={`flex-1 py-2.5 ${isDark ? 'bg-gray-700 hover:bg-gray-600 text-gray-300' : 'bg-slate-100 hover:bg-slate-200 text-slate-600'} font-bold rounded-lg transition-colors flex items-center justify-center gap-2`}><IoMdCopy /> Copiar</button>
+              <button onClick={printBarcode} className="flex-1 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white font-bold rounded-lg shadow-lg shadow-indigo-200 transition-colors flex items-center justify-center gap-2"><IoMdPrint /> Imprimir</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* --- MODAL CANCELAR --- */}
+      {showCancelModal && (
+        <div className="fixed inset-0 z-[130] bg-slate-900/50 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className={`${isDark ? 'bg-gray-800' : 'bg-white'} rounded-2xl shadow-2xl max-w-sm w-full p-6 text-center animate-zoomIn`}>
+            <div className="w-16 h-16 bg-amber-100 text-amber-500 rounded-full flex items-center justify-center mx-auto mb-4 text-3xl"><IoIosWarning /></div>
+            <h3 className={`text-xl font-bold ${heading} mb-2`}>Cancelar esta compra?</h3>
+            <p className={`${textTertiary} text-sm mb-6`}>Si sales ahora, perderas todos los productos agregados a la lista.</p>
+            <div className="flex gap-3">
+              <button onClick={() => setShowCancelModal(false)} className={`flex-1 py-3 border ${isDark ? 'border-gray-600 text-gray-300 hover:bg-gray-700' : 'border-slate-200 text-slate-600 hover:bg-slate-50'} font-bold rounded-xl`}>Continuar editando</button>
+              <button onClick={() => navigate('/compras')} className="flex-1 py-3 bg-rose-500 text-white font-bold rounded-xl hover:bg-rose-600 shadow-lg shadow-rose-200">Si, Salir</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* --- MODAL CONFIRMACION DE GUARDADO --- */}
+      {showConfirmModal && (
+        <div className="fixed inset-0 z-[140] bg-slate-900/50 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className={`${isDark ? 'bg-gray-800' : 'bg-white'} rounded-2xl shadow-2xl max-w-sm w-full p-6 animate-zoomIn`}>
+
+            <div className="text-center mb-6">
+              <div className="w-16 h-16 bg-indigo-100 text-indigo-600 rounded-full flex items-center justify-center mx-auto mb-4">
+                <IoMdCheckmark className="text-3xl" />
+              </div>
+              <h3 className={`text-xl font-bold ${heading} mb-1`}>Confirmar Registro</h3>
+              <p className={`${textTertiary} text-sm`}>Estas seguro de registrar esta compra por <br/> <strong className={heading}>S/ {totalAPagar.toFixed(2)}</strong>?</p>
+            </div>
+
+            <div className="flex flex-col gap-3">
+              <button
+                onClick={registrarCompra}
+                disabled={isSaving}
+                className="w-full py-3.5 bg-indigo-600 hover:bg-indigo-700 text-white font-bold rounded-xl shadow-lg shadow-indigo-200 transition-all flex items-center justify-center gap-2 disabled:opacity-70"
+              >
+                {isSaving ? 'Guardando...' : 'Si, Guardar Compra'}
+              </button>
+              <button
+                onClick={() => setShowConfirmModal(false)}
+                className={`w-full py-3.5 ${isDark ? 'text-gray-400 hover:bg-gray-700' : 'text-slate-500 hover:bg-slate-50'} font-bold rounded-xl transition-colors`}
+              >
+                Revisar detalles
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
     </div>
   );
 }
