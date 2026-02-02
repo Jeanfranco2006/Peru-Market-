@@ -134,10 +134,11 @@ public class ProveedorController {
             @RequestParam("sku") String sku,
             @RequestParam("precio_compra") BigDecimal precioCompra,
             @RequestParam("peso_kg") BigDecimal pesoKg,
+            @RequestParam(value = "unidad_medida", required = false, defaultValue = "UNIDAD") String unidadMedida,
             @RequestParam(value = "imagen", required = false) MultipartFile imagen
     ) {
         try {
-            proveedorService.registrarProductoDesdeProveedor(id, nombre, sku, precioCompra, pesoKg, imagen);
+            proveedorService.registrarProductoDesdeProveedor(id, nombre, sku, precioCompra, pesoKg, unidadMedida, imagen);
             
             // Retornamos un JSON (Map) para que React reciba un objeto válido
             Map<String, String> response = new HashMap<>();

@@ -25,9 +25,11 @@ public class ProductoResponse {
     private Integer stockMinimo;
     private Integer stockMaximo;
     private String ubicacionPrincipal;
+    private Integer almacenId;
     private String almacenNombre; // Nombre del almacén principal
-    
+
     // De Proveedor (Asumiendo que obtenemos el proveedor principal, simplificado)
+    private Integer proveedorId;
     private String proveedorRazonSocial;
     
     // Simulación de Barcode (Debería ser un campo en Producto/CodigoBarras)

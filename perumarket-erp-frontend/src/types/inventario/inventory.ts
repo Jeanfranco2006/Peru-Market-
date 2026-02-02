@@ -16,7 +16,10 @@ export interface Product {
   pesoKg: number;
   unidadMedida: string;
   ubicacionPrincipal: string;
+  categoriaId: number | null;
+  almacenId: number | null;
   almacenNombre: string;
+  proveedorId: number | null;
   proveedorRazonSocial: string;
   precioCompra: number;
 

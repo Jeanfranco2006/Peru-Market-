@@ -1,381 +1,523 @@
+import { useState, useEffect, useMemo } from 'react';
 import { Link } from 'react-router-dom';
-import { useCallback, useEffect, useState, useRef } from 'react';
 import {
-  IoMdArrowBack,
-  IoIosCloudUpload,
-  IoIosCash,
-  IoIosCube,
-  IoIosBarcode,
-  IoIosCheckmarkCircle,
-  IoIosWarning,
-  IoIosSave,
-  IoMdSearch,
-  IoMdLocate,
-  IoIosList
+    IoIosArrowBack, IoIosCube, IoIosSearch, IoIosImage,
+    IoIosCheckmarkCircle, IoIosPricetag, IoIosCamera,
+    IoMdClose, IoMdWarning, IoMdCheckmarkCircle, IoMdCreate
 } from 'react-icons/io';
+import { useThemeClasses } from '../../hooks/useThemeClasses';
+import { inventoryService } from '../../services/inventario/inventoryService';
+import { productService } from '../../services/inventario/productService';
+import type { Product } from '../../types/inventario/inventory';
+import type { Option } from '../../types/inventario/product';
 
-import { useProductForm } from '../../hooks/inventario/useProductForm';
-import { useProductOptions } from '../../hooks/inventario/useProductOptions';
-import type { ProductoFormData } from '../../types/inventario/product';
-
-interface ProductoPendiente {
-  id_producto: number;
-  nombre: string;
-  peso_kg: number;
-  precio_compra: number;
-  cantidad_comprada: number;
-  id_proveedor: number;
-  nombre_proveedor: string;
-  imagen?: string;
-  sku_sugerido?: string;
-}
+const UNIDADES_MEDIDA = [
+    { valor: 'UNIDAD', etiqueta: 'Unidad (und)' },
+    { valor: 'CAJA', etiqueta: 'Caja' },
+    { valor: 'PAQUETE', etiqueta: 'Paquete' },
+    { valor: 'DOCENA', etiqueta: 'Docena (12 und)' },
+    { valor: 'KG', etiqueta: 'Kilogramo (kg)' },
+    { valor: 'GRAMO', etiqueta: 'Gramo (g)' },
+    { valor: 'LITRO', etiqueta: 'Litro (L)' },
+    { valor: 'MILILITRO', etiqueta: 'Mililitro (mL)' },
+    { valor: 'METRO', etiqueta: 'Metro (m)' },
+    { valor: 'GALON', etiqueta: 'Galón (gal)' },
+    { valor: 'SACO', etiqueta: 'Saco' },
+    { valor: 'BOLSA', etiqueta: 'Bolsa' },
+    { valor: 'LIBRA', etiqueta: 'Libra (lb)' },
+    { valor: 'ROLLO', etiqueta: 'Rollo' },
+    { valor: 'PAR', etiqueta: 'Par' },
+];
 
 export default function InventoryAddProduct() {
-  const [showCancelModal, setShowCancelModal] = useState(false);
-  const [notification, setNotification] = useState<{show: boolean; message: string; type: 'success' | 'error'}>({ show: false, message: '', type: 'success' });
-  const [productosPendientes, setProductosPendientes] = useState<ProductoPendiente[]>([]);
-  const [loadingProductos, setLoadingProductos] = useState(false);
-  
-  const [displayProveedor, setDisplayProveedor] = useState<string>('-');
+    const { isDark, pageBg, heading, textTertiary, colors } = useThemeClasses();
 
-  const {
-    formData,
-    setFormData,
-    handleChange,
-    handleSubmit,
-    handleImageUpload,
-    clearImage,
-    fileInputRef,
-    imagePreview,
-    validationErrors,
-    barcodeImageUrl,
-    generateBarcode,
-    generateSKU,
-  } = useProductForm();
+    const [products, setProducts] = useState<Product[]>([]);
+    const [loading, setLoading] = useState(true);
+    const [search, setSearch] = useState('');
+    const [showOnlyPending, setShowOnlyPending] = useState(true);
 
-  const handleLoadError = useCallback((message: string) => {
-    setNotification({ show: true, message, type: 'error' });
-  }, []);
+    // Edit modal
+    const [editing, setEditing] = useState<Product | null>(null);
+    const [editForm, setEditForm] = useState({
+        precioVenta: 0,
+        precioCompra: 0,
+        stockMinimo: 0,
+        stockMaximo: 0,
+        descripcion: '',
+        ubicacion: '',
+        unidadMedida: 'UNIDAD',
+    });
+    const [imageFile, setImageFile] = useState<File | null>(null);
+    const [imagePreview, setImagePreview] = useState('');
+    const [saving, setSaving] = useState(false);
+    const [saveSuccess, setSaveSuccess] = useState<number | null>(null);
+    const [error, setError] = useState<string | null>(null);
 
-  const { categorias, almacenes, proveedores, loadingOptions } = useProductOptions(handleLoadError);
+    // Options
+    const [categorias, setCategorias] = useState<Option[]>([]);
+    const [almacenes, setAlmacenes] = useState<Option[]>([]);
+    const [proveedores, setProveedores] = useState<Option[]>([]);
 
-  // --- EFECTOS ---
+    useEffect(() => {
+        const load = async () => {
+            setLoading(true);
+            try {
+                const [prods, opts] = await Promise.all([
+                    inventoryService.getAllProducts(),
+                    productService.fetchOptions()
+                ]);
+                setProducts(prods);
+                setCategorias(opts.categorias);
+                setAlmacenes(opts.almacenes);
+                setProveedores(opts.proveedores);
+            } catch (err) {
+                console.error('Error:', err);
+            } finally {
+                setLoading(false);
+            }
+        };
+        load();
+    }, []);
 
-  // 1. Forzar Unidad a KG
-  useEffect(() => {
-    if (formData.unidadMedida !== 'KG') {
-      setFormData(prev => ({ ...prev, unidadMedida: 'KG' }));
-    }
-  }, [formData.unidadMedida, setFormData]);
+    const needsConfig = (p: Product) => !p.precioVenta || p.precioVenta <= 0;
 
-  // 2. Cargar productos agrupados (COMPLETADOS)
-  useEffect(() => {
-    if (formData.almacenId) {
-      setLoadingProductos(true);
-      
-      // Llamamos al mismo endpoint, pero el Backend ahora filtra por 'COMPLETADA'
-      fetch(`http://localhost:8080/api/compras/pendientes/${formData.almacenId}`) 
-        .then(res => {
-          if (!res.ok) throw new Error("Error de conexión");
-          return res.json();
-        })
-        .then((data: any[]) => {
-          const adaptados = data.map(item => ({
-            id_producto: item.idProducto,
-            nombre: item.nombreProducto,
-            peso_kg: item.pesoKg,
-            precio_compra: item.precioCompra,
-            cantidad_comprada: item.cantidadComprada,
-            id_proveedor: item.idProveedor,
-            nombre_proveedor: item.nombreProveedor,
-            imagen: item.imagen,
-            sku_sugerido: item.skuSugerido
-          }));
-          
-          setProductosPendientes(adaptados);
-        })
-        .catch(err => {
-          console.error(err);
-          setProductosPendientes([]); 
-        })
-        .finally(() => {
-          setLoadingProductos(false);
+    const filtered = useMemo(() => {
+        let list = products;
+        if (showOnlyPending) {
+            list = list.filter(needsConfig);
+        }
+        if (search.trim()) {
+            const q = search.toLowerCase();
+            list = list.filter(p =>
+                p.nombre.toLowerCase().includes(q) ||
+                p.sku.toLowerCase().includes(q) ||
+                p.proveedorRazonSocial?.toLowerCase().includes(q)
+            );
+        }
+        return list;
+    }, [products, search, showOnlyPending]);
+
+    const pendingCount = useMemo(() => products.filter(needsConfig).length, [products]);
+
+    const openEdit = (product: Product) => {
+        setEditing(product);
+        setEditForm({
+            precioVenta: product.precioVenta || 0,
+            precioCompra: product.precioCompra || 0,
+            stockMinimo: product.stockMinimo || 0,
+            stockMaximo: product.stockMaximo || 0,
+            descripcion: product.descripcion || '',
+            ubicacion: product.ubicacionPrincipal || '',
+            unidadMedida: product.unidadMedida || 'UNIDAD',
         });
-    } else {
-      setProductosPendientes([]);
-    }
-  }, [formData.almacenId]);
+        setImageFile(null);
+        setImagePreview('');
+        setError(null);
+    };
 
-  // --- HANDLERS ---
-  const handleProductSelect = (e: React.ChangeEvent<HTMLSelectElement>) => {
-    const prodId = Number(e.target.value);
-    const seleccionado = productosPendientes.find(p => p.id_producto === prodId);
+    const handleSave = async () => {
+        if (!editing) return;
+        if (editForm.precioVenta <= 0) {
+            setError('El precio de venta debe ser mayor a 0');
+            return;
+        }
+        setSaving(true);
+        setError(null);
+        try {
+            await productService.updateProduct(editing.id, {
+                nombre: editing.nombre,
+                descripcion: editForm.descripcion,
+                sku: editing.sku,
+                precioVenta: editForm.precioVenta,
+                precioCompra: editForm.precioCompra,
+                categoriaId: editing.categoriaId,
+                unidadMedida: editForm.unidadMedida || 'UNIDAD',
+                pesoKg: editing.pesoKg || 0,
+                almacenId: editing.almacenId,
+                stockInicial: editing.stockActual || 0,
+                stockMinimo: editForm.stockMinimo,
+                stockMaximo: editForm.stockMaximo,
+                ubicacion: editForm.ubicacion,
+                proveedorId: editing.proveedorId,
+                codigoBarras: editing.codigoBarrasPrincipal || editing.sku,
+                imagen: editing.imagen || '',
+            }, imageFile || undefined);
 
-    if (seleccionado) {
-      setFormData(prev => ({
-        ...prev,
-        nombre: seleccionado.nombre,
-        precioCompra: seleccionado.precio_compra,
-        pesoKg: seleccionado.peso_kg,
-        stockInicial: seleccionado.cantidad_comprada,
-        proveedorId: seleccionado.id_proveedor,
-        sku: generateSKU(seleccionado.nombre)
-      }));
-      setDisplayProveedor(seleccionado.nombre_proveedor);
-    } else {
-      setDisplayProveedor('-');
-    }
-  };
+            // Update local state
+            setProducts(prev => prev.map(p => p.id === editing.id ? {
+                ...p,
+                precioVenta: editForm.precioVenta,
+                precioCompra: editForm.precioCompra,
+                stockMinimo: editForm.stockMinimo,
+                stockMaximo: editForm.stockMaximo,
+                descripcion: editForm.descripcion,
+                ubicacionPrincipal: editForm.ubicacion,
+                unidadMedida: editForm.unidadMedida,
+            } : p));
 
-  const handleCancel = () => window.history.back();
-  
-  const almacenesSeguros = almacenes || [];
-  const categoriasSeguras = categorias || [];
+            setSaveSuccess(editing.id);
+            setTimeout(() => setSaveSuccess(null), 2000);
+            setEditing(null);
+        } catch (err: any) {
+            const msg = err?.body?.message || err?.body?.error || 'Error al guardar';
+            setError(typeof msg === 'string' ? msg : JSON.stringify(msg));
+        } finally {
+            setSaving(false);
+        }
+    };
 
-  const renderError = (f: keyof ProductoFormData) => 
-    validationErrors && validationErrors[f] ? <p className="text-red-500 text-xs mt-1 font-medium">{validationErrors[f]}</p> : null;
+    const handleImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+        const file = e.target.files?.[0];
+        if (file) {
+            setImageFile(file);
+            const reader = new FileReader();
+            reader.onload = () => setImagePreview(reader.result as string);
+            reader.readAsDataURL(file);
+        }
+    };
 
-  if (loadingOptions) {
-    return <div className="flex h-screen items-center justify-center text-indigo-600 animate-pulse font-bold">Cargando sistema...</div>;
-  }
+    const getImageUrl = (imagePath: string) => {
+        if (!imagePath) return '';
+        if (imagePath.startsWith('data:') || imagePath.startsWith('http')) return imagePath;
+        if (imagePath.startsWith('/api/')) return `http://localhost:8080${imagePath}`;
+        const cleanPath = imagePath.startsWith('/') ? imagePath : `/${imagePath}`;
+        return `http://localhost:8080/api${cleanPath}`;
+    };
 
-  return (
-    <div className="min-h-screen bg-gray-50 font-sans text-slate-600">
-      
-      {/* Notificaciones */}
-      {notification.show && (
-        <div className={`fixed top-4 right-4 z-50 px-6 py-4 rounded-lg shadow-xl flex items-center gap-3 text-white animate-fade-in ${notification.type === 'success' ? 'bg-indigo-600' : 'bg-red-500'}`}>
-          {notification.type === 'success' ? <IoIosCheckmarkCircle className="w-6 h-6" /> : <IoIosWarning className="w-6 h-6" />}
-          <span className="font-medium">{notification.message}</span>
-          <button onClick={() => setNotification({ ...notification, show: false })} className="ml-2 opacity-80 hover:opacity-100">✕</button>
-        </div>
-      )}
+    const cardBase = `rounded-2xl border p-5 ${isDark ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-200 shadow-sm'}`;
+    const inputClass = `w-full px-3.5 py-2.5 rounded-xl border text-sm transition-all focus:outline-none focus:ring-2 ${isDark ? 'bg-gray-700 border-gray-600 text-gray-200 placeholder-gray-500 focus:ring-gray-500/30' : 'bg-white border-gray-200 text-gray-800 placeholder-gray-400 focus:ring-indigo-500/20'}`;
+    const labelClass = `block text-xs font-semibold uppercase tracking-wide mb-1.5 ${isDark ? 'text-gray-400' : 'text-gray-500'}`;
 
-      {/* Modal Cancelar */}
-      {showCancelModal && (
-        <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-xl shadow-2xl max-w-sm w-full p-6">
-            <h3 className="text-lg font-bold text-slate-800 mb-2">¿Cancelar recepción?</h3>
-            <p className="text-sm text-slate-500 mb-6">Los datos no guardados se perderán.</p>
-            <div className="flex justify-end gap-3">
-              <button type="button" onClick={() => setShowCancelModal(false)} className="px-4 py-2 text-slate-600 hover:bg-slate-100 rounded-lg font-medium transition-colors">Volver</button>
-              <button type="button" onClick={handleCancel} className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 font-medium transition-colors">Sí, cancelar</button>
+    if (loading) return (
+        <div className={`min-h-screen flex items-center justify-center ${pageBg}`}>
+            <div className="flex flex-col items-center">
+                <div className="w-12 h-12 rounded-2xl flex items-center justify-center mb-4" style={{ backgroundColor: colors[100] }}>
+                    <IoIosCube className="w-6 h-6 animate-pulse" style={{ color: colors[600] }} />
+                </div>
+                <p className={`text-sm font-medium ${textTertiary}`}>Cargando productos...</p>
             </div>
-          </div>
         </div>
-      )}
+    );
 
-      <form id="product-form" onSubmit={handleSubmit}>
-        
-        {/* HEADER */}
-        <div className="bg-white border-b border-gray-200 px-6 py-4 flex flex-col sm:flex-row justify-between items-center gap-4 sticky top-0 z-30 shadow-sm">
-          <div className="flex items-center gap-4 w-full sm:w-auto">
-            <Link to="/inventario" className="p-2 hover:bg-gray-100 rounded-full text-slate-400 transition-colors">
-              <IoMdArrowBack className="w-6 h-6" />
-            </Link>
-            <div>
-              <h1 className="text-xl font-bold text-slate-800">Recepción de Producto</h1>
-              <p className="text-xs text-slate-500 uppercase tracking-wide">Ingreso de mercadería comprada</p>
-            </div>
-          </div>
-          
-          <div className="flex items-center gap-3 w-full sm:w-auto justify-end">
-            <button type="button" onClick={() => setShowCancelModal(true)} className="px-5 py-2 text-sm font-medium text-slate-500 hover:text-slate-800 transition-colors">Cancelar</button>
-            <button type="submit" className="bg-indigo-600 hover:bg-indigo-700 text-white px-6 py-2 rounded-lg text-sm font-bold shadow-md shadow-indigo-200 transition-all flex items-center gap-2">
-              <IoIosSave className="w-4 h-4" /> Guardar en Inventario
-            </button>
-          </div>
-        </div>
+    return (
+        <div className={`min-h-screen pb-20 ${pageBg}`}>
 
-        {/* CONTENIDO PRINCIPAL */}
-        <div className="max-w-[1600px] mx-auto p-6 grid grid-cols-1 lg:grid-cols-12 gap-6">
+            {/* EDIT MODAL */}
+            {editing && (
+                <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-[100] p-4" onClick={() => setEditing(null)}>
+                    <div className={`rounded-2xl shadow-2xl max-w-lg w-full max-h-[90vh] overflow-y-auto ${isDark ? 'bg-gray-800' : 'bg-white'}`} onClick={e => e.stopPropagation()}>
+                        {/* Modal header */}
+                        <div className={`sticky top-0 p-4 border-b flex justify-between items-center z-10 ${isDark ? 'border-gray-700 bg-gray-800' : 'border-gray-100 bg-white'}`}>
+                            <div>
+                                <h3 className={`font-bold ${isDark ? 'text-gray-200' : 'text-gray-800'}`}>Configurar Producto</h3>
+                                <p className={`text-xs ${isDark ? 'text-gray-500' : 'text-gray-400'}`}>SKU: {editing.sku}</p>
+                            </div>
+                            <button onClick={() => setEditing(null)} className={`p-1.5 rounded-lg transition-colors ${isDark ? 'hover:bg-gray-700 text-gray-400' : 'hover:bg-gray-100 text-gray-500'}`}>
+                                <IoMdClose className="w-5 h-5" />
+                            </button>
+                        </div>
 
-          {/* === COLUMNA IZQUIERDA (8/12) === */}
-          <div className="lg:col-span-8 space-y-6">
-            
-            {/* 1. SELECCIÓN */}
-            <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
-              <div className="border-l-4 border-indigo-500 p-6">
-                <h3 className="text-sm font-bold text-indigo-900 uppercase tracking-wider mb-6 flex items-center gap-2">
-                  <IoIosList className="w-5 h-5 text-indigo-500" /> 1. Selección de Mercadería
-                </h3>
-                
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                  {/* Almacén */}
-                  <div className="md:col-span-2">
-                    <label className="block text-xs font-bold text-slate-500 uppercase mb-2">Almacén de Destino <span className="text-red-500">*</span></label>
-                    <select 
-                      name="almacenId" 
-                      required 
-                      value={formData.almacenId || ''} 
-                      onChange={handleChange} 
-                      className="w-full bg-slate-50 border border-gray-200 rounded-lg px-4 py-3 text-slate-700 focus:bg-white focus:ring-2 focus:ring-indigo-500"
-                    >
-                      <option value="">Seleccionar Almacén</option>
-                      {almacenesSeguros.map(a => <option key={a.id} value={a.id}>{a.nombre}</option>)}
-                    </select>
-                  </div>
+                        <div className="p-5 space-y-4">
+                            {/* Product info */}
+                            <div className={`flex items-center gap-4 p-3 rounded-xl ${isDark ? 'bg-gray-900/40' : 'bg-gray-50'}`}>
+                                <div className={`w-16 h-16 rounded-xl overflow-hidden shrink-0 flex items-center justify-center ${isDark ? 'bg-gray-700' : 'bg-gray-100'}`}>
+                                    {editing.imagen ? (
+                                        <img src={getImageUrl(editing.imagen)} alt={editing.nombre} className="w-full h-full object-contain" />
+                                    ) : (
+                                        <IoIosImage className={`w-6 h-6 ${isDark ? 'text-gray-500' : 'text-gray-400'}`} />
+                                    )}
+                                </div>
+                                <div className="flex-1 min-w-0">
+                                    <h4 className={`font-bold truncate ${isDark ? 'text-gray-200' : 'text-gray-800'}`}>{editing.nombre}</h4>
+                                    <div className={`text-xs space-y-0.5 ${isDark ? 'text-gray-400' : 'text-gray-500'}`}>
+                                        <p>Proveedor: <span className="font-medium">{editing.proveedorRazonSocial || 'N/A'}</span></p>
+                                        <p>Stock actual: <span className="font-bold" style={{ color: colors[600] }}>{editing.stockActual}</span> &middot; Almacén: {editing.almacenNombre}</p>
+                                    </div>
+                                </div>
+                            </div>
 
-                  {/* Producto Agrupado */}
-                  <div className="md:col-span-2">
-                    <label className="block text-xs font-bold text-slate-500 uppercase mb-2">Seleccione Producto <span className="text-red-500">*</span></label>
-                    <div className="relative">
-                      <select 
-                        onChange={handleProductSelect} 
-                        disabled={!formData.almacenId || loadingProductos}
-                        defaultValue=""
-                        className="w-full bg-slate-50 border border-gray-200 rounded-lg pl-4 pr-10 py-3 text-slate-700 focus:bg-white focus:ring-2 focus:ring-indigo-500 disabled:opacity-50 appearance-none cursor-pointer"
-                      >
-                        <option value="" disabled>
-                          {loadingProductos ? 'Buscando compras completadas...' : formData.almacenId ? '-- Seleccione producto --' : '-- Seleccione almacén primero --'}
-                        </option>
-                        {productosPendientes.map((p, idx) => (
-                          <option key={`${p.id_producto}-${idx}`} value={p.id_producto}>
-                             {p.nombre} (Cant: {p.cantidad_comprada}, Prov: {p.nombre_proveedor})
-                          </option>
-                        ))}
-                      </select>
-                      <div className="absolute right-3 top-3.5 pointer-events-none text-gray-400">
-                          <IoMdSearch className="w-5 h-5" />
-                      </div>
+                            {error && (
+                                <div className={`p-3 rounded-xl border flex items-center gap-2 text-sm ${isDark ? 'bg-red-900/20 border-red-800/50 text-red-400' : 'bg-red-50 border-red-200 text-red-600'}`}>
+                                    <IoMdWarning className="w-4 h-4 shrink-0" /> {error}
+                                </div>
+                            )}
+
+                            {/* Prices */}
+                            <div>
+                                <h5 className={`text-xs font-bold uppercase tracking-wide mb-3 flex items-center gap-1.5 ${isDark ? 'text-gray-300' : 'text-gray-700'}`}>
+                                    <IoIosPricetag className="w-3.5 h-3.5" /> Precios
+                                </h5>
+                                <div className="grid grid-cols-2 gap-3">
+                                    <div>
+                                        <label className={labelClass}>Precio Compra (S/)</label>
+                                        <input className={inputClass} type="number" step="0.01" min="0"
+                                            value={editForm.precioCompra || ''} onChange={e => setEditForm(prev => ({ ...prev, precioCompra: parseFloat(e.target.value) || 0 }))} />
+                                    </div>
+                                    <div>
+                                        <label className={labelClass}>Precio Venta (S/) *</label>
+                                        <input className={`${inputClass} ring-2 ${editForm.precioVenta > 0 ? 'ring-emerald-500/20' : 'ring-amber-500/30'}`}
+                                            type="number" step="0.01" min="0" placeholder="Obligatorio"
+                                            value={editForm.precioVenta || ''} onChange={e => setEditForm(prev => ({ ...prev, precioVenta: parseFloat(e.target.value) || 0 }))} />
+                                    </div>
+                                </div>
+                                {editForm.precioCompra > 0 && editForm.precioVenta > 0 && (
+                                    <div className={`mt-2 text-xs ${isDark ? 'text-gray-400' : 'text-gray-500'}`}>
+                                        Margen: <span className={`font-bold ${((editForm.precioVenta - editForm.precioCompra) / editForm.precioCompra * 100) > 20 ? 'text-emerald-500' : 'text-amber-500'}`}>
+                                            {((editForm.precioVenta - editForm.precioCompra) / editForm.precioCompra * 100).toFixed(1)}%
+                                        </span>
+                                        {' '}&middot; Ganancia: <span className="font-bold text-emerald-500">S/ {(editForm.precioVenta - editForm.precioCompra).toFixed(2)}</span>
+                                    </div>
+                                )}
+                            </div>
+
+                            {/* Stock limits */}
+                            <div>
+                                <h5 className={`text-xs font-bold uppercase tracking-wide mb-3 ${isDark ? 'text-gray-300' : 'text-gray-700'}`}>Límites de Stock</h5>
+                                <div className="grid grid-cols-2 gap-3">
+                                    <div>
+                                        <label className={labelClass}>Stock Mínimo</label>
+                                        <input className={inputClass} type="number" min="0"
+                                            value={editForm.stockMinimo || ''} onChange={e => setEditForm(prev => ({ ...prev, stockMinimo: parseInt(e.target.value) || 0 }))} />
+                                    </div>
+                                    <div>
+                                        <label className={labelClass}>Stock Máximo</label>
+                                        <input className={inputClass} type="number" min="0"
+                                            value={editForm.stockMaximo || ''} onChange={e => setEditForm(prev => ({ ...prev, stockMaximo: parseInt(e.target.value) || 0 }))} />
+                                    </div>
+                                </div>
+                            </div>
+
+                            {/* Unidad de medida */}
+                            <div>
+                                <h5 className={`text-xs font-bold uppercase tracking-wide mb-3 ${isDark ? 'text-gray-300' : 'text-gray-700'}`}>Unidad de Medida</h5>
+                                <select
+                                    className={inputClass}
+                                    value={editForm.unidadMedida}
+                                    onChange={e => setEditForm(prev => ({ ...prev, unidadMedida: e.target.value }))}
+                                >
+                                    {UNIDADES_MEDIDA.map(u => (
+                                        <option key={u.valor} value={u.valor}>{u.etiqueta}</option>
+                                    ))}
+                                </select>
+                            </div>
+
+                            {/* Description & Location */}
+                            <div>
+                                <label className={labelClass}>Descripción</label>
+                                <textarea className={`${inputClass} resize-none`} rows={2} placeholder="Descripción del producto..."
+                                    value={editForm.descripcion} onChange={e => setEditForm(prev => ({ ...prev, descripcion: e.target.value }))} />
+                            </div>
+                            <div>
+                                <label className={labelClass}>Ubicación en almacén</label>
+                                <input className={inputClass} placeholder="Ej: Pasillo A, Estante 3"
+                                    value={editForm.ubicacion} onChange={e => setEditForm(prev => ({ ...prev, ubicacion: e.target.value }))} />
+                            </div>
+
+                            {/* Image upload */}
+                            <div>
+                                <label className={labelClass}>Cambiar imagen</label>
+                                <div className="flex items-center gap-3">
+                                    {imagePreview ? (
+                                        <div className="relative w-16 h-16 rounded-xl overflow-hidden border">
+                                            <img src={imagePreview} className="w-full h-full object-contain" />
+                                            <button type="button" onClick={() => { setImageFile(null); setImagePreview(''); }}
+                                                className="absolute top-0.5 right-0.5 p-0.5 rounded bg-black/50 text-white">
+                                                <IoMdClose className="w-3 h-3" />
+                                            </button>
+                                        </div>
+                                    ) : (
+                                        <label className={`cursor-pointer flex items-center gap-2 px-4 py-2.5 rounded-xl border text-sm transition-all ${isDark ? 'border-gray-600 text-gray-400 hover:bg-gray-700' : 'border-gray-200 text-gray-500 hover:bg-gray-50'}`}>
+                                            <IoIosCamera className="w-4 h-4" /> Subir imagen
+                                            <input type="file" accept="image/*" className="hidden" onChange={handleImageChange} />
+                                        </label>
+                                    )}
+                                </div>
+                            </div>
+                        </div>
+
+                        {/* Modal footer */}
+                        <div className={`sticky bottom-0 p-4 border-t flex gap-3 ${isDark ? 'border-gray-700 bg-gray-800' : 'border-gray-100 bg-white'}`}>
+                            <button onClick={() => setEditing(null)} className={`flex-1 py-2.5 rounded-xl border font-medium text-sm transition-all ${isDark ? 'border-gray-600 text-gray-300 hover:bg-gray-700' : 'border-gray-200 text-gray-600 hover:bg-gray-50'}`}>
+                                Cancelar
+                            </button>
+                            <button onClick={handleSave} disabled={saving}
+                                className="flex-1 py-2.5 rounded-xl text-white font-semibold text-sm transition-all shadow-sm disabled:opacity-50 flex items-center justify-center gap-2"
+                                style={{ backgroundColor: colors[600] }}>
+                                {saving ? (
+                                    <><div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" /> Guardando...</>
+                                ) : (
+                                    <><IoMdCheckmarkCircle className="w-4 h-4" /> Guardar Cambios</>
+                                )}
+                            </button>
+                        </div>
                     </div>
-                  </div>
-
-                  {/* Info Proveedores */}
-                  <div className="md:col-span-2 bg-indigo-50 rounded-lg p-4 border border-indigo-100">
-                    <span className="text-[10px] font-bold text-indigo-400 uppercase block mb-1">Proveedor(es) Referencial(es)</span>
-                    <span className="text-sm font-semibold text-indigo-900 block truncate" title={displayProveedor}>
-                      {displayProveedor}
-                    </span>
-                  </div>
                 </div>
-              </div>
-            </div>
+            )}
 
-            {/* 2. CLASIFICACIÓN */}
-            <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
-              <h3 className="text-sm font-bold text-slate-800 uppercase tracking-wider mb-6 flex items-center gap-2 border-b border-gray-100 pb-3">
-                <IoIosCube className="w-5 h-5 text-indigo-500" /> 2. Clasificación y Ubicación
-              </h3>
-              
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                <div>
-                  <label className="block text-xs font-bold text-slate-500 uppercase mb-2">Categoría <span className="text-red-500">*</span></label>
-                  <select name="categoriaId" required value={formData.categoriaId || ''} onChange={handleChange} className="w-full bg-slate-50 border border-gray-200 rounded-lg px-4 py-3 text-slate-700 focus:ring-2 focus:ring-indigo-500">
-                    <option value="">Seleccionar...</option>
-                    {categoriasSeguras.map(c => <option key={c.id} value={c.id}>{c.nombre}</option>)}
-                  </select>
-                  {renderError('categoriaId')}
+            <div className="max-w-6xl mx-auto px-4 sm:px-6 pt-6">
+
+                {/* Header */}
+                <div className="flex items-center gap-3 mb-6">
+                    <Link to="/inventario" className={`p-2 rounded-xl transition-colors ${isDark ? 'hover:bg-gray-700 text-gray-400' : 'hover:bg-gray-100 text-gray-500'}`}>
+                        <IoIosArrowBack className="w-5 h-5" />
+                    </Link>
+                    <div className="flex-1">
+                        <h1 className={`text-xl sm:text-2xl font-extrabold tracking-tight ${heading}`}>Configurar Productos</h1>
+                        <p className={`text-sm ${textTertiary}`}>Asigna precios de venta y detalles a tus productos comprados</p>
+                    </div>
                 </div>
 
-                <div>
-                  <label className="block text-xs font-bold text-slate-500 uppercase mb-2">SKU (Auto)</label>
-                  <input type="text" name="sku" required value={formData.sku} className="w-full bg-gray-100 border border-gray-200 rounded-lg px-4 py-3 text-slate-500 font-mono cursor-not-allowed" readOnly />
+                {/* Info banner */}
+                {pendingCount > 0 && (
+                    <div className={`mb-5 p-4 rounded-2xl border flex items-start gap-3 ${isDark ? 'bg-amber-900/10 border-amber-700/30' : 'bg-amber-50 border-amber-200'}`}>
+                        <IoMdWarning className={`w-5 h-5 shrink-0 mt-0.5 ${isDark ? 'text-amber-400' : 'text-amber-600'}`} />
+                        <div>
+                            <p className={`text-sm font-semibold ${isDark ? 'text-amber-300' : 'text-amber-800'}`}>
+                                {pendingCount} producto{pendingCount > 1 ? 's' : ''} sin precio de venta
+                            </p>
+                            <p className={`text-xs mt-0.5 ${isDark ? 'text-amber-400/70' : 'text-amber-600'}`}>
+                                Estos productos necesitan un precio de venta para poder venderse
+                            </p>
+                        </div>
+                    </div>
+                )}
+
+                {/* Filter bar */}
+                <div className={`rounded-2xl border p-2 mb-6 flex flex-col sm:flex-row gap-2 ${isDark ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-200 shadow-sm'}`}>
+                    <div className="flex-1 relative">
+                        <IoIosSearch className={`w-5 h-5 absolute left-3 top-1/2 -translate-y-1/2 ${isDark ? 'text-gray-500' : 'text-gray-400'}`} />
+                        <input
+                            placeholder="Buscar producto, SKU o proveedor..."
+                            className={`w-full pl-10 pr-4 py-2.5 bg-transparent rounded-xl text-sm focus:outline-none ${isDark ? 'text-gray-200 placeholder-gray-500' : 'text-gray-800 placeholder-gray-400'}`}
+                            value={search} onChange={e => setSearch(e.target.value)}
+                        />
+                    </div>
+                    <div className={`hidden sm:block w-px my-1 ${isDark ? 'bg-gray-700' : 'bg-gray-200'}`} />
+                    <div className="flex gap-1.5 p-0.5">
+                        <button onClick={() => setShowOnlyPending(true)}
+                            className={`px-4 py-2 rounded-lg text-xs font-semibold transition-all ${showOnlyPending ? (isDark ? 'bg-gray-700 text-amber-400' : 'bg-amber-50 text-amber-700') : (isDark ? 'text-gray-400' : 'text-gray-500')}`}>
+                            Pendientes ({pendingCount})
+                        </button>
+                        <button onClick={() => setShowOnlyPending(false)}
+                            className={`px-4 py-2 rounded-lg text-xs font-semibold transition-all ${!showOnlyPending ? (isDark ? 'bg-gray-700 text-white' : 'bg-gray-100 text-gray-800') : (isDark ? 'text-gray-400' : 'text-gray-500')}`}>
+                            Todos ({products.length})
+                        </button>
+                    </div>
                 </div>
 
-                {/* --- CAMPOS RESTAURADOS --- */}
-                <div className="md:col-span-2 grid grid-cols-2 gap-4">
-                   <div>
-                      <label className="block text-xs font-bold text-slate-500 uppercase mb-2">Stock Mínimo</label>
-                      <input type="number" name="stockMinimo" value={formData.stockMinimo} onChange={handleChange} className="w-full bg-slate-50 border border-gray-200 rounded-lg px-4 py-3 focus:ring-2 focus:ring-indigo-500" placeholder="10" />
-                   </div>
-                   <div>
-                      <label className="block text-xs font-bold text-slate-500 uppercase mb-2">Stock Máximo</label>
-                      <input type="number" name="stockMaximo" value={formData.stockMaximo} onChange={handleChange} className="w-full bg-slate-50 border border-gray-200 rounded-lg px-4 py-3 focus:ring-2 focus:ring-indigo-500" placeholder="1000" />
-                   </div>
-                </div>
-
-                <div className="md:col-span-2">
-                   <label className="block text-xs font-bold text-slate-500 uppercase mb-2">Ubicación Física</label>
-                   <div className="relative">
-                     <IoMdLocate className="absolute left-3 top-3.5 text-gray-400" />
-                     <input type="text" name="ubicacion" value={formData.ubicacion} onChange={handleChange} className="w-full bg-slate-50 border border-gray-200 rounded-lg pl-10 pr-4 py-3 focus:ring-2 focus:ring-indigo-500" placeholder="Ej: Pasillo A, Estante 3" />
-                   </div>
-                </div>
-
-                 <div className="md:col-span-2">
-                  <label className="block text-xs font-bold text-slate-500 uppercase mb-2">Descripción</label>
-                  <textarea name="descripcion" rows={2} value={formData.descripcion} onChange={handleChange} className="w-full bg-slate-50 border border-gray-200 rounded-lg px-4 py-3 text-slate-700 focus:ring-2 focus:ring-indigo-500" placeholder="Detalles adicionales..."></textarea>
-                </div>
-              </div>
-            </div>
-
-            {/* 3. RESUMEN */}
-            <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6 opacity-90">
-              <h3 className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-4 border-b border-gray-100 pb-2">Resumen de Recepción</h3>
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
-                 <div className="bg-gray-50 p-3 rounded-lg border border-gray-100">
-                    <span className="block text-[10px] text-gray-400 uppercase font-bold mb-1">Stock Total</span>
-                    <strong className="text-indigo-600 font-bold text-lg">{formData.stockInicial || 0}</strong>
-                 </div>
-                 <div className="bg-gray-50 p-3 rounded-lg border border-gray-100">
-                    <span className="block text-[10px] text-gray-400 uppercase font-bold mb-1">Peso (Kg)</span>
-                    <strong className="text-slate-700 font-bold">{formData.pesoKg ? Number(formData.pesoKg).toFixed(3) : '0.00'}</strong>
-                 </div>
-                 <div className="bg-gray-50 p-3 rounded-lg border border-gray-100">
-                    <span className="block text-[10px] text-gray-400 uppercase font-bold mb-1">Costo Unit.</span>
-                    <strong className="text-slate-700 font-bold">S/ {formData.precioCompra ? Number(formData.precioCompra).toFixed(2) : '0.00'}</strong>
-                 </div>
-                 <div className="bg-gray-50 p-3 rounded-lg border border-gray-100">
-                    <span className="block text-[10px] text-gray-400 uppercase font-bold mb-1">Unidad</span>
-                    <strong className="text-slate-700 font-bold">KG</strong>
-                 </div>
-              </div>
-            </div>
-          </div>
-
-          {/* COLUMNA DERECHA (4/12) */}
-          <div className="lg:col-span-4 space-y-6">
-            
-            {/* Precio Venta */}
-            <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
-               <h3 className="text-xs font-bold text-indigo-600 uppercase tracking-wider mb-6 flex items-center gap-2">
-                 <IoIosCash className="w-4 h-4" /> Precio Venta
-               </h3>
-               <div className="bg-indigo-50 p-5 rounded-xl border border-indigo-100 text-center">
-                  <label className="block text-xs font-bold text-indigo-800 uppercase mb-2">Público (S/) <span className="text-red-500">*</span></label>
-                  <input type="number" step="0.01" name="precioVenta" required value={formData.precioVenta} onChange={handleChange} className="w-full bg-white border border-indigo-200 rounded-xl px-4 py-3 text-center font-black text-slate-800 text-2xl focus:ring-4 focus:ring-indigo-100 outline-none" placeholder="0.00" />
-                  {renderError('precioVenta')}
-               </div>
-            </div>
-
-            {/* Imagen */}
-            <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
-              <h3 className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-4 border-b border-gray-100 pb-2">Imagen</h3>
-              <div className="border-2 border-dashed border-indigo-100 hover:border-indigo-300 rounded-xl p-6 text-center cursor-pointer transition-all bg-white hover:bg-indigo-50" onClick={() => fileInputRef.current?.click()}>
-                {imagePreview ? (
-                   <div className="relative">
-                      <img src={imagePreview} alt="Preview" className="w-full h-48 object-contain rounded-md" />
-                      <button type="button" onClick={(e) => { e.stopPropagation(); clearImage(); }} className="mt-2 text-xs text-red-500 hover:underline">Eliminar imagen</button>
-                   </div>
+                {/* Product grid */}
+                {filtered.length === 0 ? (
+                    <div className={`text-center py-16 rounded-2xl border-2 border-dashed ${isDark ? 'border-gray-700' : 'border-gray-200'}`}>
+                        <IoIosCheckmarkCircle className={`w-12 h-12 mx-auto mb-3 ${isDark ? 'text-emerald-500/30' : 'text-emerald-300'}`} />
+                        <h3 className={`font-semibold mb-1 ${heading}`}>
+                            {showOnlyPending ? 'Todos los productos tienen precio' : 'No hay productos'}
+                        </h3>
+                        <p className={`text-sm ${textTertiary}`}>
+                            {showOnlyPending ? 'No hay productos pendientes de configurar' : 'Aún no tienes productos en inventario'}
+                        </p>
+                    </div>
                 ) : (
-                  <div className="py-4">
-                    <IoIosCloudUpload className="w-10 h-10 text-indigo-200 mx-auto mb-2" />
-                    <span className="text-indigo-600 text-sm font-bold">Subir Foto</span>
-                  </div>
-                )}
-                <input ref={fileInputRef} accept="image/*" className="hidden" type="file" onChange={handleImageUpload} />
-              </div>
-            </div>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                        {filtered.map(product => {
+                            const isPending = needsConfig(product);
+                            const justSaved = saveSuccess === product.id;
 
-             {/* CODIGO BARRAS (BLOQUEADO) */}
-             <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
-                <label className="block text-xs font-bold text-slate-500 uppercase mb-2">Código Barras</label>
-                <div className="flex gap-2">
-                   <input type="text" name="codigoBarras" value={formData.codigoBarras} readOnly className="w-full bg-gray-100 border border-gray-200 rounded-lg px-3 py-3 text-sm font-mono text-gray-500 cursor-not-allowed text-center tracking-widest" placeholder="Generar" />
-                </div>
-                
-                <button type="button" onClick={generateBarcode} className="mt-3 text-[10px] text-indigo-500 hover:text-indigo-700 underline w-full text-center">Generar código</button>
-                
-                {formData.codigoBarras && barcodeImageUrl && (
-                   <div className="mt-4 text-center border-t border-gray-50 pt-3">
-                      <img src={barcodeImageUrl} alt="Barcode" className="h-12 w-auto mx-auto" />
-                   </div>
+                            return (
+                                <div key={product.id}
+                                    onClick={() => openEdit(product)}
+                                    className={`group rounded-2xl border cursor-pointer transition-all duration-300 overflow-hidden ${justSaved
+                                        ? (isDark ? 'border-emerald-500 bg-emerald-900/10' : 'border-emerald-400 bg-emerald-50')
+                                        : isPending
+                                            ? (isDark ? 'border-amber-700/50 bg-gray-800 hover:border-amber-500/50' : 'border-amber-200 bg-white hover:border-amber-300')
+                                            : (isDark ? 'border-gray-700 bg-gray-800 hover:border-gray-600' : 'border-gray-200 bg-white hover:border-gray-300')
+                                    } hover:shadow-lg ${isDark ? 'hover:shadow-black/20' : 'hover:shadow-gray-200/50'}`}
+                                >
+                                    <div className="flex gap-4 p-4">
+                                        {/* Image */}
+                                        <div className={`w-20 h-20 rounded-xl overflow-hidden shrink-0 flex items-center justify-center ${isDark ? 'bg-gray-700/50' : 'bg-gray-50'}`}>
+                                            {product.imagen ? (
+                                                <img src={getImageUrl(product.imagen)} alt={product.nombre}
+                                                    className={`w-full h-full object-contain p-1 ${isDark ? '' : 'mix-blend-multiply'}`}
+                                                    onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }} />
+                                            ) : (
+                                                <IoIosImage className={`w-8 h-8 ${isDark ? 'text-gray-600' : 'text-gray-300'}`} />
+                                            )}
+                                        </div>
+
+                                        {/* Info */}
+                                        <div className="flex-1 min-w-0">
+                                            <h3 className={`font-bold text-sm line-clamp-1 mb-0.5 ${isDark ? 'text-gray-200' : 'text-gray-800'}`}>
+                                                {product.nombre}
+                                            </h3>
+                                            <p className={`text-xs mb-2 ${isDark ? 'text-gray-500' : 'text-gray-400'}`}>
+                                                SKU: {product.sku} &middot; {product.proveedorRazonSocial || 'Sin proveedor'}
+                                                {product.unidadMedida && product.unidadMedida !== 'UNIDAD' && (
+                                                    <> &middot; <span className="font-medium">{product.unidadMedida}</span></>
+                                                )}
+                                            </p>
+
+                                            <div className="flex items-center gap-3">
+                                                {/* Precio compra */}
+                                                <div>
+                                                    <span className={`text-[10px] uppercase font-medium ${isDark ? 'text-gray-500' : 'text-gray-400'}`}>Compra</span>
+                                                    <p className={`text-sm font-bold ${isDark ? 'text-gray-300' : 'text-gray-700'}`}>
+                                                        S/ {product.precioCompra?.toFixed(2) || '0.00'}
+                                                    </p>
+                                                </div>
+
+                                                {/* Arrow */}
+                                                <span className={`text-lg ${isDark ? 'text-gray-600' : 'text-gray-300'}`}>&rarr;</span>
+
+                                                {/* Precio venta */}
+                                                <div>
+                                                    <span className={`text-[10px] uppercase font-medium ${isDark ? 'text-gray-500' : 'text-gray-400'}`}>Venta</span>
+                                                    {isPending ? (
+                                                        <p className="text-sm font-bold text-amber-500">Sin precio</p>
+                                                    ) : (
+                                                        <p className="text-sm font-bold text-emerald-500">S/ {product.precioVenta.toFixed(2)}</p>
+                                                    )}
+                                                </div>
+
+                                                {/* Stock */}
+                                                <div className="ml-auto text-right">
+                                                    <span className={`text-[10px] uppercase font-medium ${isDark ? 'text-gray-500' : 'text-gray-400'}`}>Stock</span>
+                                                    <p className={`text-sm font-bold ${isDark ? 'text-gray-200' : 'text-gray-800'}`}>{product.stockActual}</p>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    {/* Status footer */}
+                                    <div className={`px-4 py-2 border-t flex items-center justify-between ${justSaved
+                                        ? (isDark ? 'border-emerald-800 bg-emerald-900/20' : 'border-emerald-200 bg-emerald-50')
+                                        : isPending
+                                            ? (isDark ? 'border-amber-800/30 bg-amber-900/10' : 'border-amber-100 bg-amber-50/50')
+                                            : (isDark ? 'border-gray-700 bg-gray-900/30' : 'border-gray-100 bg-gray-50/50')
+                                    }`}>
+                                        {justSaved ? (
+                                            <span className="text-xs font-semibold text-emerald-500 flex items-center gap-1">
+                                                <IoMdCheckmarkCircle className="w-3.5 h-3.5" /> Guardado correctamente
+                                            </span>
+                                        ) : isPending ? (
+                                            <span className="text-xs font-semibold text-amber-500 flex items-center gap-1">
+                                                <IoMdWarning className="w-3.5 h-3.5" /> Pendiente de configurar
+                                            </span>
+                                        ) : (
+                                            <span className={`text-xs font-medium flex items-center gap-1 ${isDark ? 'text-gray-500' : 'text-gray-400'}`}>
+                                                <IoMdCheckmarkCircle className="w-3.5 h-3.5" /> Configurado
+                                            </span>
+                                        )}
+                                        <span className={`text-xs font-medium flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity ${isDark ? 'text-gray-400' : 'text-gray-500'}`}>
+                                            <IoMdCreate className="w-3 h-3" /> Editar
+                                        </span>
+                                    </div>
+                                </div>
+                            );
+                        })}
+                    </div>
                 )}
-             </div>
-          </div>
+            </div>
         </div>
-      </form>
-    </div>
-  );
+    );
 }

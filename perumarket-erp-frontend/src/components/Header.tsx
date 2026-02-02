@@ -1,6 +1,8 @@
 import { useState, useEffect, useRef } from "react";
+import { useNavigate } from "react-router-dom";
 import { FiUser, FiLogOut, FiSettings, FiChevronDown, FiBell } from "react-icons/fi";
 import ModalConfirmarLogout from "./modals/ModalConfirmarLogout";
+import { useTheme } from "../context/ThemeContext";
 
 interface UserInfo {
   id: number;
@@ -20,32 +22,27 @@ interface AuthData {
 }
 
 export default function Header() {
+  const { mode, colors } = useTheme();
+  const isDark = mode === "dark";
+
   const [user, setUser] = useState<UserInfo | null>(null);
   const [showDropdown, setShowDropdown] = useState(false);
   const [showLogoutModal, setShowLogoutModal] = useState(false);
-  
-  // Referencia para detectar clicks fuera del dropdown
+  const navigate = useNavigate();
   const dropdownRef = useRef<HTMLDivElement>(null);
 
-  // Cargar información del usuario desde localStorage
   useEffect(() => {
-    const loadUserData = () => {
-      try {
-        const authData = localStorage.getItem('auth');
-        if (authData) {
-          const parsedData: AuthData = JSON.parse(authData);
-          if (parsedData.user) {
-            setUser(parsedData.user);
-          }
-        }
-      } catch (error) {
-        console.error('❌ Error cargando datos del usuario:', error);
+    try {
+      const authData = localStorage.getItem('auth');
+      if (authData) {
+        const parsedData: AuthData = JSON.parse(authData);
+        if (parsedData.user) setUser(parsedData.user);
       }
-    };
-    loadUserData();
+    } catch (error) {
+      console.error('Error cargando datos del usuario:', error);
+    }
   }, []);
 
-  // Cerrar dropdown al hacer click fuera
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
       if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
@@ -62,8 +59,7 @@ export default function Header() {
   };
 
   const confirmLogout = () => {
-    // Limpieza completa
-    localStorage.clear(); 
+    localStorage.clear();
     setShowLogoutModal(false);
     window.location.href = "/login";
   };
@@ -77,97 +73,103 @@ export default function Header() {
     if (!user) return "U";
     const nombres = user.nombres.split(' ');
     const apellidos = user.apellidos.split(' ');
-    
     let iniciales = '';
     if (nombres.length > 0) iniciales += nombres[0].charAt(0);
     if (apellidos.length > 0) iniciales += apellidos[0].charAt(0);
-    
     return iniciales.toUpperCase() || "U";
   };
 
   return (
     <>
-      {/* HEADER BLANCO */}
-      <header className="w-full bg-white h-[70px] flex justify-end items-center px-6 border-b border-gray-100 sticky top-0 z-20">
-        
+      <header className={`w-full h-[70px] flex justify-end items-center px-6 border-b sticky top-0 z-20 transition-colors duration-300 ${
+        isDark ? "bg-gray-900 border-gray-700" : "bg-white border-gray-100"
+      }`}>
         <div className="flex items-center gap-6">
-          
-          {/* Botón de Notificaciones (Decorativo/Profesional) */}
-          <button className="relative p-2 text-gray-400 hover:text-amber-500 hover:bg-amber-50 rounded-full transition-all duration-200">
+          {/* Notifications */}
+          <button className={`relative p-2 rounded-full transition-all duration-200 ${
+            isDark ? "text-gray-400 hover:bg-gray-800" : "text-gray-400 hover:bg-gray-50"
+          }`}
+            style={{ ['--hover-color' as any]: colors[500] }}
+          >
             <FiBell className="w-5 h-5" />
-            <span className="absolute top-2 right-2 w-2 h-2 bg-red-500 rounded-full border border-white"></span>
+            <span className="absolute top-2 right-2 w-2 h-2 rounded-full border" style={{ backgroundColor: colors[500], borderColor: isDark ? '#111827' : '#ffffff' }}></span>
           </button>
 
-          {/* Divisor Vertical */}
-          <div className="h-8 w-[1px] bg-gray-100 hidden md:block"></div>
+          <div className={`h-8 w-[1px] hidden md:block ${isDark ? "bg-gray-700" : "bg-gray-100"}`}></div>
 
-          {/* Sección de Usuario */}
+          {/* User section */}
           <div className="relative" ref={dropdownRef}>
             <button
               onClick={() => setShowDropdown(!showDropdown)}
-              className="flex items-center gap-3 p-1.5 pl-3 rounded-full hover:bg-gray-50 border border-transparent hover:border-gray-100 transition-all duration-200 group"
+              className={`flex items-center gap-3 p-1.5 pl-3 rounded-full border border-transparent transition-all duration-200 group ${
+                isDark ? "hover:bg-gray-800 hover:border-gray-700" : "hover:bg-gray-50 hover:border-gray-100"
+              }`}
             >
-              {/* Texto: Nombre y Rol */}
               <div className="text-right hidden md:block mr-1">
-                <span className="text-gray-700 font-bold text-sm block leading-tight">
+                <span className={`font-bold text-sm block leading-tight ${isDark ? "text-gray-200" : "text-gray-700"}`}>
                   {getNombreCompleto()}
                 </span>
-                <span className="text-amber-500 text-[10px] font-bold tracking-wider uppercase block mt-0.5">
+                <span className="text-[10px] font-bold tracking-wider uppercase block mt-0.5" style={{ color: colors[500] }}>
                   {user?.rol || "USUARIO"}
                 </span>
               </div>
 
-              {/* Avatar */}
-              <div className="w-10 h-10 rounded-full bg-gradient-to-br from-amber-400 to-amber-600 flex items-center justify-center text-white font-bold text-sm shadow-md shadow-amber-500/20 group-hover:shadow-lg group-hover:scale-105 transition-all duration-300">
+              <div className="w-10 h-10 rounded-full flex items-center justify-center text-white font-bold text-sm shadow-md group-hover:shadow-lg group-hover:scale-105 transition-all duration-300"
+                style={{ background: `linear-gradient(135deg, ${colors[400]}, ${colors[600]})`, boxShadow: `0 4px 12px -2px ${colors[500]}40` }}>
                 {user?.nombres ? getIniciales() : <FiUser className="w-5 h-5" />}
               </div>
 
-              {/* Icono Chevron */}
-              <FiChevronDown 
-                className={`w-4 h-4 text-gray-400 transition-transform duration-300 ${showDropdown ? 'rotate-180 text-amber-500' : ''}`} 
+              <FiChevronDown
+                className={`w-4 h-4 transition-transform duration-300 ${showDropdown ? 'rotate-180' : ''} ${isDark ? "text-gray-400" : "text-gray-400"}`}
+                style={showDropdown ? { color: colors[500] } : {}}
               />
             </button>
 
-            {/* --- DROPDOWN MENU --- */}
             {showDropdown && (
-              <div className="absolute right-0 top-[110%] w-64 bg-white rounded-2xl shadow-[0_10px_40px_-10px_rgba(0,0,0,0.08)] border border-gray-100 py-2 animate-fadeIn origin-top-right overflow-hidden">
-                
-                {/* Header del Dropdown (Móvil) */}
-                <div className="px-5 py-4 border-b border-gray-50 md:hidden bg-gray-50/50">
-                  <p className="text-sm font-bold text-gray-800 truncate">{getNombreCompleto()}</p>
-                  <p className="text-xs text-gray-500 truncate mt-0.5">@{user?.username}</p>
+              <div className={`absolute right-0 top-[110%] w-64 rounded-2xl shadow-[0_10px_40px_-10px_rgba(0,0,0,0.15)] border py-2 animate-fadeIn origin-top-right overflow-hidden ${
+                isDark ? "bg-gray-800 border-gray-700" : "bg-white border-gray-100"
+              }`}>
+                {/* Mobile header */}
+                <div className={`px-5 py-4 border-b md:hidden ${isDark ? "border-gray-700 bg-gray-700/50" : "border-gray-50 bg-gray-50/50"}`}>
+                  <p className={`text-sm font-bold truncate ${isDark ? "text-gray-200" : "text-gray-800"}`}>{getNombreCompleto()}</p>
+                  <p className={`text-xs truncate mt-0.5 ${isDark ? "text-gray-400" : "text-gray-500"}`}>@{user?.username}</p>
                 </div>
 
-                {/* Opciones */}
                 <div className="p-2 space-y-1">
                   <button
-                    onClick={() => { setShowDropdown(false); /* Navegar a perfil */ }}
-                    className="w-full flex items-center gap-3 px-3 py-2.5 text-sm text-gray-600 font-medium rounded-xl hover:bg-amber-50 hover:text-amber-700 transition-colors group"
+                    onClick={() => { setShowDropdown(false); navigate("/settings"); }}
+                    className={`w-full flex items-center gap-3 px-3 py-2.5 text-sm font-medium rounded-xl transition-colors group ${
+                      isDark ? "text-gray-300 hover:bg-gray-700" : "text-gray-600 hover:bg-gray-50"
+                    }`}
                   >
-                    <div className="p-2 bg-gray-100 text-gray-500 rounded-lg group-hover:bg-amber-100 group-hover:text-amber-600 transition-colors">
+                    <div className={`p-2 rounded-lg transition-colors ${isDark ? "bg-gray-700 text-gray-400 group-hover:text-gray-200" : "bg-gray-100 text-gray-500"}`}
+                      style={{ ['--group-hover-bg' as any]: colors[100] }}>
                       <FiUser size={16} />
                     </div>
                     <span>Mi Perfil</span>
                   </button>
 
                   <button
-                    onClick={() => { setShowDropdown(false); /* Navegar a config */ }}
-                    className="w-full flex items-center gap-3 px-3 py-2.5 text-sm text-gray-600 font-medium rounded-xl hover:bg-amber-50 hover:text-amber-700 transition-colors group"
+                    onClick={() => { setShowDropdown(false); navigate("/settings"); }}
+                    className={`w-full flex items-center gap-3 px-3 py-2.5 text-sm font-medium rounded-xl transition-colors group ${
+                      isDark ? "text-gray-300 hover:bg-gray-700" : "text-gray-600 hover:bg-gray-50"
+                    }`}
                   >
-                    <div className="p-2 bg-gray-100 text-gray-500 rounded-lg group-hover:bg-amber-100 group-hover:text-amber-600 transition-colors">
+                    <div className={`p-2 rounded-lg transition-colors ${isDark ? "bg-gray-700 text-gray-400 group-hover:text-gray-200" : "bg-gray-100 text-gray-500"}`}>
                       <FiSettings size={16} />
                     </div>
                     <span>Configuración</span>
                   </button>
                 </div>
 
-                {/* Footer Dropdown */}
-                <div className="border-t border-gray-100 mx-2 my-1 pt-1">
+                <div className={`border-t mx-2 my-1 pt-1 ${isDark ? "border-gray-700" : "border-gray-100"}`}>
                   <button
                     onClick={handleLogout}
-                    className="w-full flex items-center gap-3 px-3 py-2.5 text-sm text-red-500 font-medium rounded-xl hover:bg-red-50 transition-colors group"
+                    className={`w-full flex items-center gap-3 px-3 py-2.5 text-sm font-medium rounded-xl transition-colors group ${
+                      isDark ? "text-red-400 hover:bg-red-900/20" : "text-red-500 hover:bg-red-50"
+                    }`}
                   >
-                    <div className="p-2 bg-red-50 text-red-500 rounded-lg group-hover:bg-white group-hover:shadow-sm transition-all">
+                    <div className={`p-2 rounded-lg transition-all ${isDark ? "bg-red-900/30 text-red-400" : "bg-red-50 text-red-500"}`}>
                       <FiLogOut size={16} />
                     </div>
                     <span>Cerrar Sesión</span>
@@ -178,7 +180,6 @@ export default function Header() {
           </div>
         </div>
 
-        {/* Modal de confirmación */}
         <ModalConfirmarLogout
           isOpen={showLogoutModal}
           onConfirm={confirmLogout}

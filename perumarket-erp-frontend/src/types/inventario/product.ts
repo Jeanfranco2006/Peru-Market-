@@ -24,6 +24,19 @@ export interface ProductoFormData {
   
 }
 
+export interface CatalogoProducto {
+  productoId: number;
+  nombre: string;
+  sku: string;
+  precioCompra: number;
+  pesoKg: number;
+  imagen: string | null;
+  proveedorId: number;
+  proveedorNombre: string;
+  cantidadComprada?: number;
+  origen: 'catalogo' | 'compra';
+}
+
 export type NotificationType = 'success' | 'error';
 
 export interface NotificationState {

@@ -16,6 +16,7 @@ import org.springframework.web.multipart.MultipartFile;
 
 import com.perumarket.erp.exception.DataIntegrityViolationException;
 import com.perumarket.erp.exception.ResourceNotFoundException;
+import com.perumarket.erp.models.dto.CatalogoProductoDTO;
 import com.perumarket.erp.models.dto.MovimientoInventarioDTO;
 import com.perumarket.erp.models.dto.ProductoRequest;
 import com.perumarket.erp.models.dto.ProductoResponse;
@@ -196,6 +197,25 @@ if (imagen != null && !imagen.isEmpty()) {
 }
 
 
+    // --- Catálogo de Productos de Proveedores ---
+    @Transactional(readOnly = true)
+    public List<CatalogoProductoDTO> obtenerProductosCatalogo() {
+        List<ProveedorProducto> relaciones = proveedorProductoRepository.findAllCatalogoWithProveedores();
+        return relaciones.stream().map(pp -> {
+            CatalogoProductoDTO dto = new CatalogoProductoDTO();
+            dto.setProductoId(pp.getProducto().getId());
+            dto.setNombre(pp.getProducto().getNombre());
+            dto.setSku(pp.getProducto().getSku());
+            dto.setPrecioCompra(pp.getPrecioCompra());
+            dto.setPesoKg(pp.getProducto().getPesoKg());
+            dto.setImagen(pp.getProducto().getImagen());
+            dto.setUnidadMedida(pp.getProducto().getUnidadMedida() != null ? pp.getProducto().getUnidadMedida().name() : "UNIDAD");
+            dto.setProveedorId(pp.getProveedor().getId());
+            dto.setProveedorNombre(pp.getProveedor().getRazonSocial());
+            return dto;
+        }).collect(Collectors.toList());
+    }
+
     // --- Lógica para Listar Productos (Necesario para Inventory.tsx) ---
 
     /**
@@ -269,6 +289,7 @@ List<Producto> productos = productoRepository.findByEstado(EstadoProducto.ACTIVO
 
         // Mapeo Categoría
         if (producto.getCategoria() != null) {
+            dto.setCategoriaId(producto.getCategoria().getId());
             dto.setCategoriaNombre(producto.getCategoria().getNombre());
         }
 
@@ -279,6 +300,7 @@ List<Producto> productos = productoRepository.findByEstado(EstadoProducto.ACTIVO
             dto.setStockMaximo(inventario.getStockMaximo());
             dto.setUbicacionPrincipal(inventario.getUbicacion());
             if (inventario.getAlmacen() != null) {
+                dto.setAlmacenId(inventario.getAlmacen().getId());
                 dto.setAlmacenNombre(inventario.getAlmacen().getNombre());
             }
         } else {
@@ -291,6 +313,7 @@ List<Producto> productos = productoRepository.findByEstado(EstadoProducto.ACTIVO
 
         // Mapeo Proveedor
         if (proveedor != null) {
+            dto.setProveedorId(proveedor.getId());
             dto.setProveedorRazonSocial(proveedor.getRazonSocial());
         } else {
             dto.setProveedorRazonSocial("Desconocido");
@@ -462,28 +485,42 @@ public ProductoResponse actualizarProducto(Integer id, ProductoRequest request, 
                 .sorted((m1, m2) -> m2.getFechaMovimiento().compareTo(m1.getFechaMovimiento()))
                 .collect(Collectors.toList());
     }
-/*traer productos a modulo ventas con img*/
+/*traer productos a modulo ventas con img - solo los que tienen inventario en el almacen*/
     @Transactional(readOnly = true)
-    public List<ProductoResponse> obtenerProductosParaVenta() {
+    public List<ProductoResponse> obtenerProductosParaVenta(Integer almacenId) {
         List<Producto> productos = productoRepository.findByEstado(EstadoProducto.ACTIVO);
 
-        return productos.stream().map(producto -> {
-            // Inventario principal
-            Optional<Inventario> inventarioOpt = inventarioRepository.findByProductoId(producto.getId()).stream()
-                    .findFirst();
-            Inventario inventario = inventarioOpt.orElse(null);
+        return productos.stream()
+            .filter(producto -> {
+                if (almacenId != null) {
+                    // Solo productos con inventario en el almacén específico
+                    return inventarioRepository.findByProductoIdAndAlmacenId(producto.getId(), almacenId).isPresent();
+                }
+                // Sin filtro de almacén, solo verificar que tenga algún inventario
+                return !inventarioRepository.findByProductoId(producto.getId()).isEmpty();
+            })
+            .map(producto -> {
+                // Inventario del almacén específico o el primero disponible
+                Inventario inventario;
+                if (almacenId != null) {
+                    inventario = inventarioRepository.findByProductoIdAndAlmacenId(producto.getId(), almacenId)
+                            .orElse(null);
+                } else {
+                    inventario = inventarioRepository.findByProductoId(producto.getId()).stream()
+                            .findFirst().orElse(null);
+                }
 
-            // Proveedor principal
-            Optional<ProveedorProducto> ppOpt = proveedorProductoRepository
-                    .findByProductoIdAndEsPrincipalTrue(producto.getId());
-            Proveedor proveedor = ppOpt.flatMap(p -> Optional.of(p.getProveedor())).orElse(null);
+                // Proveedor principal
+                Optional<ProveedorProducto> ppOpt = proveedorProductoRepository
+                        .findByProductoIdAndEsPrincipalTrue(producto.getId());
+                Proveedor proveedor = ppOpt.flatMap(p -> Optional.of(p.getProveedor())).orElse(null);
 
-            // Código de barras principal
-            Optional<CodigoBarras> cbOpt = codigoBarrasRepository.findByProductoIdAndEsPrincipalTrue(producto.getId());
-            CodigoBarras codigoBarras = cbOpt.orElse(null);
+                // Código de barras principal
+                Optional<CodigoBarras> cbOpt = codigoBarrasRepository.findByProductoIdAndEsPrincipalTrue(producto.getId());
+                CodigoBarras codigoBarras = cbOpt.orElse(null);
 
-            return mapToResponseDTO(producto, inventario, proveedor, codigoBarras);
-        }).collect(Collectors.toList());
+                return mapToResponseDTO(producto, inventario, proveedor, codigoBarras);
+            }).collect(Collectors.toList());
     }
 
     /**
@@ -538,6 +575,35 @@ public ProductoResponse actualizarProducto(Integer id, ProductoRequest request, 
 
         // F. FINALMENTE: El Producto
         productoRepository.deleteById(id);
+    }
+
+    // --- Generar código de barras para un producto ---
+    @Transactional
+    public ProductoResponse generarCodigoBarras(Integer productoId, String codigo) {
+        Producto producto = productoRepository.findById(productoId)
+                .orElseThrow(() -> new ResourceNotFoundException("Producto", "id", productoId.toString()));
+
+        // Verificar que el código no esté ya en uso
+        if (codigoBarrasRepository.findByCodigo(codigo).isPresent()) {
+            throw new DataIntegrityViolationException("El código de barras '" + codigo + "' ya está registrado.");
+        }
+
+        // Si ya tiene un código principal, actualizarlo; sino, crear uno nuevo
+        Optional<CodigoBarras> existente = codigoBarrasRepository.findByProductoIdAndEsPrincipalTrue(productoId);
+        CodigoBarras cb;
+        if (existente.isPresent()) {
+            cb = existente.get();
+            cb.setCodigo(codigo);
+        } else {
+            cb = new CodigoBarras();
+            cb.setCodigo(codigo);
+            cb.setProducto(producto);
+            cb.setEsPrincipal(true);
+        }
+        codigoBarrasRepository.save(cb);
+
+        // Retornar producto actualizado
+        return obtenerProductoPorId(productoId);
     }
 
 }

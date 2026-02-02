@@ -34,7 +34,7 @@ public class Producto {
     private Integer stock;
     
     @Enumerated(EnumType.STRING)
-    @Column(name = "unidad_medida", columnDefinition = "ENUM('UNIDAD','CAJA','PAQUETE','KG','LITRO') DEFAULT 'UNIDAD'")
+    @Column(name = "unidad_medida", length = 20)
     private UnidadMedida unidadMedida;
 
     @Column(name = "peso_kg", precision = 10, scale = 3)
@@ -68,7 +68,7 @@ public class Producto {
     }
     
     public enum UnidadMedida {
-        UNIDAD, CAJA, PAQUETE, KG, LITRO
+        UNIDAD, CAJA, PAQUETE, DOCENA, KG, GRAMO, LITRO, MILILITRO, METRO, GALON, SACO, BOLSA, LIBRA, ROLLO, PAR
     }
 
     @PrePersist

@@ -8,15 +8,8 @@ import com.perumarket.erp.models.dto.DetalleVentaDTO;
 import com.perumarket.erp.models.dto.DetalleVentaResponseDTO;
 import com.perumarket.erp.models.dto.VentaDTO;
 import com.perumarket.erp.models.dto.VentaResponseDTO;
-import com.perumarket.erp.models.entity.DetalleVenta;
-import com.perumarket.erp.models.entity.Inventario;
-import com.perumarket.erp.models.entity.Producto;
-import com.perumarket.erp.models.entity.Usuario;
-import com.perumarket.erp.models.entity.Venta;
-import com.perumarket.erp.repository.InventarioRepository;
-import com.perumarket.erp.repository.ProductoRepository;
-import com.perumarket.erp.repository.UsuarioRepository;
-import com.perumarket.erp.repository.VentaRepository;
+import com.perumarket.erp.models.entity.*;
+import com.perumarket.erp.repository.*;
 
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -31,6 +24,10 @@ public class VentaService {
     private final InventarioRepository inventarioRepository;
     private final UsuarioRepository usuarioRepository;
     private final ProductoRepository productoRepository;
+    private final MovimientoInventarioRepository movimientoInventarioRepository;
+    private final AlmacenRepository almacenRepository;
+    private final ClienteRepository clienteRepository;
+    private final EnvioRepository envioRepository;
 
     @Transactional
     public Venta procesarVenta(VentaDTO dto) {
@@ -45,7 +42,12 @@ public class VentaService {
         venta.setDescuentoTotal(dto.getDescuentoTotal() != null ? dto.getDescuentoTotal() : 0.0);
         venta.setIgv(dto.getIgv());
         venta.setTotal(dto.getTotal());
-        venta.setEstado(Venta.EstadoVenta.PENDIENTE);
+        // Si la venta tiene envio, queda PENDIENTE; sino, COMPLETADA
+        if (dto.getConEnvio() != null && dto.getConEnvio()) {
+            venta.setEstado(Venta.EstadoVenta.PENDIENTE);
+        } else {
+            venta.setEstado(Venta.EstadoVenta.COMPLETADA);
+        }
         venta.setFecha(LocalDateTime.now());
 
         List<DetalleVenta> detalles = new ArrayList<>();
@@ -66,14 +68,36 @@ public class VentaService {
                                     ", Cantidad solicitada: " + det.getCantidad());
                 }
 
-                inventario.setStockActual(inventario.getStockActual() - det.getCantidad());
+                int stockAnterior = inventario.getStockActual();
+                int stockNuevo = stockAnterior - det.getCantidad();
+                inventario.setStockActual(stockNuevo);
                 inventarioRepository.save(inventario);
 
-                // --- AGREGAR ESTO: Actualizar también el stock global en la tabla PRODUCTO ---
+                // Crear movimiento de inventario (SALIDA por venta)
                 Producto producto = inventario.getProducto();
+                Almacen almacen = almacenRepository.findById(dto.getIdAlmacen())
+                        .orElse(null);
+                if (almacen != null) {
+                    MovimientoInventario movimiento = new MovimientoInventario();
+                    movimiento.setInventario(inventario);
+                    movimiento.setProducto(producto);
+                    movimiento.setAlmacen(almacen);
+                    movimiento.setTipoMovimiento(MovimientoInventario.TipoMovimiento.SALIDA);
+                    movimiento.setCantidad(det.getCantidad());
+                    movimiento.setStockAnterior(stockAnterior);
+                    movimiento.setStockNuevo(stockNuevo);
+                    movimiento.setMotivo("Salida por venta");
+                    if (dto.getIdUsuario() != null) {
+                        movimiento.setIdUsuario(dto.getIdUsuario().intValue());
+                    }
+                    movimientoInventarioRepository.save(movimiento);
+                }
+
+                // Actualizar stock global del producto
                 int stockGlobalActual = producto.getStock() != null ? producto.getStock() : 0;
-                // Evitamos que el stock global sea negativo
                 int nuevoStockGlobal = Math.max(0, stockGlobalActual - det.getCantidad());
+                producto.setStock(nuevoStockGlobal);
+                productoRepository.save(producto);
 
                 DetalleVenta detalleVenta = new DetalleVenta();
                 detalleVenta.setIdProducto(det.getIdProducto());
@@ -86,7 +110,19 @@ public class VentaService {
         }
 
         venta.setDetalles(detalles);
-        return ventaRepository.save(venta);
+        ventaRepository.save(venta);
+
+        // Si tiene envio, crear envio automaticamente
+        if (dto.getConEnvio() != null && dto.getConEnvio() && dto.getDireccionEnvio() != null) {
+            Envio envio = new Envio();
+            envio.setIdVenta(venta.getId());
+            envio.setDireccionEnvio(dto.getDireccionEnvio());
+            envio.setFechaEnvio(java.time.LocalDate.now());
+            envio.setEstado(Envio.EstadoEnvio.PENDIENTE);
+            envioRepository.save(envio);
+        }
+
+        return venta;
     }
 
     @Transactional(readOnly = true)
@@ -123,7 +159,32 @@ public class VentaService {
         ventaDTO.setIdCliente(venta.getIdCliente());
         ventaDTO.setIdAlmacen(venta.getIdAlmacen());
         ventaDTO.setEstado(venta.getEstado().name());
+        ventaDTO.setFecha(venta.getFecha());
+        ventaDTO.setFechaCreacion(venta.getFechaCreacion());
         ventaDTO.setDetalles(detallesDTO);
+
+        // Nombre del usuario
+        if (venta.getUsuario() != null && venta.getUsuario().getPersona() != null) {
+            Persona personaUsuario = venta.getUsuario().getPersona();
+            ventaDTO.setNombreUsuario(personaUsuario.getNombres() + " " + personaUsuario.getApellidoPaterno());
+        }
+
+        // Nombre del cliente
+        if (venta.getIdCliente() != null) {
+            clienteRepository.findById(venta.getIdCliente().longValue()).ifPresent(cliente -> {
+                if (cliente.getPersona() != null) {
+                    Persona personaCliente = cliente.getPersona();
+                    ventaDTO.setNombreCliente(personaCliente.getNombres() + " " + personaCliente.getApellidoPaterno());
+                }
+            });
+        }
+
+        // Nombre del almacén
+        if (venta.getIdAlmacen() != null) {
+            almacenRepository.findById(venta.getIdAlmacen()).ifPresent(almacen -> {
+                ventaDTO.setNombreAlmacen(almacen.getNombre());
+            });
+        }
 
         return ventaDTO;
     }
@@ -133,5 +194,18 @@ public class VentaService {
         return ventaRepository.findAll().stream()
                 .map(v -> obtenerVentaConDetallesConImagen(v.getId()))
                 .toList();
+    }
+
+    @Transactional
+    public Venta actualizarEstadoVenta(Integer id, String nuevoEstado) {
+        Venta venta = ventaRepository.findById(id)
+                .orElseThrow(() -> new RuntimeException("Venta no encontrada ID: " + id));
+        try {
+            Venta.EstadoVenta estado = Venta.EstadoVenta.valueOf(nuevoEstado);
+            venta.setEstado(estado);
+            return ventaRepository.save(venta);
+        } catch (IllegalArgumentException e) {
+            throw new RuntimeException("Estado invalido: " + nuevoEstado);
+        }
     }
 }

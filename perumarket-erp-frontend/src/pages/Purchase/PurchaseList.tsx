@@ -1,303 +1,372 @@
-import { Link, useParams } from 'react-router-dom';
-import { useState, useEffect } from 'react';
-import { 
-  IoMdArrowRoundBack, IoMdPrint, IoMdTime, IoMdCalendar, 
-  IoIosBusiness, IoIosPerson, IoIosCall, IoIosMail, IoMdPin, 
-  IoIosListBox, IoMdCart
+import { Link } from 'react-router-dom';
+import { useState, useMemo, useEffect } from 'react';
+import {
+  IoMdAdd, IoIosEye, IoIosSearch,
+  IoIosDocument, IoIosCash, IoIosCalendar,
+  IoMdArrowRoundBack, IoMdCreate, IoMdClose, IoMdCheckmarkCircle
 } from "react-icons/io";
 import { api } from '../../services/api';
+import { useThemeClasses } from '../../hooks/useThemeClasses';
 
 // --- INTERFACES ---
-interface Producto {
-  id: number;
-  nombre: string;
-  sku: string;
-  unidadMedida: string;
-}
-
-interface DetalleCompra {
-  id: number;
-  cantidad: number;
-  precioUnitario: number; 
-  subtotal: number;
-  producto: Producto;
-}
-
-interface CompraDetail {
+interface Compra {
   id: number;
   numeroComprobante: string;
   tipoComprobante: string;
   fechaCompra: string;
-  estado: string;
-  metodoPago: string;
-  observaciones: string;
-  subtotal: number;
-  igv: number;
   total: number;
-  proveedor: { 
-    razonSocial: string; 
-    ruc: string; 
-    telefono?: string;
-    correo?: string;
-    direccion?: string;
-  };
-  almacen: { 
-    nombre: string; 
-    direccion: string; 
-  };
-  usuario: {
-    username: string;
-  };
-  detalles: DetalleCompra[];
+  estado: string;
+  proveedor: { razonSocial: string; };
+  almacen: { nombre: string; };
 }
 
-export default function PurchaseHistory() {
-  const { id } = useParams();
-  const [compra, setCompra] = useState<CompraDetail | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState('');
+// --- ESTILOS DE ESTADO ---
+const getStatusStylesLight = (status: string) => {
+  const s = status ? status.toUpperCase() : '';
+  switch (s) {
+    case 'COMPLETADA':
+    case 'COMPLETADO': return 'bg-emerald-50 text-emerald-700 border-emerald-200 ring-1 ring-emerald-600/20';
+    case 'PENDIENTE': return 'bg-amber-50 text-amber-700 border-amber-200 ring-1 ring-amber-600/20';
+    case 'ANULADA':
+    case 'CANCELADO': return 'bg-rose-50 text-rose-700 border-rose-200 ring-1 ring-rose-600/20';
+    default: return 'bg-slate-50 text-slate-700 border-slate-200 ring-1 ring-slate-600/20';
+  }
+};
 
+const getStatusStylesDark = (status: string) => {
+  const s = status ? status.toUpperCase() : '';
+  switch (s) {
+    case 'COMPLETADA':
+    case 'COMPLETADO': return 'bg-emerald-900/40 text-emerald-400 border-emerald-700 ring-1 ring-emerald-500/20';
+    case 'PENDIENTE': return 'bg-amber-900/40 text-amber-400 border-amber-700 ring-1 ring-amber-500/20';
+    case 'ANULADA':
+    case 'CANCELADO': return 'bg-rose-900/40 text-rose-400 border-rose-700 ring-1 ring-rose-500/20';
+    default: return 'bg-gray-700 text-gray-400 border-gray-600 ring-1 ring-gray-500/20';
+  }
+};
+
+const getInitials = (name: string) => {
+    return name ? name.substring(0, 2).toUpperCase() : '??';
+};
+
+export default function PurchaseList() {
+  const { isDark, heading, textTertiary, tableHeader, tableHeaderText, emptyState } = useThemeClasses();
+
+  const getStatusStyles = isDark ? getStatusStylesDark : getStatusStylesLight;
+
+  // --- ESTADOS ---
+  const [compras, setCompras] = useState<Compra[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [searchTerm, setSearchTerm] = useState('');
+  const [filterEstado, setFilterEstado] = useState('all');
+
+  // Estados del Modal
+  const [modalOpen, setModalOpen] = useState(false);
+  const [selectedCompra, setSelectedCompra] = useState<Compra | null>(null);
+  const [nuevoEstado, setNuevoEstado] = useState('');
+  const [savingState, setSavingState] = useState(false);
+
+  // --- CARGAR DATOS ---
   useEffect(() => {
-    const fetchDetalle = async () => {
+    const fetchCompras = async () => {
       try {
-        const response = await api.get(`/compras/${id}`);
-        setCompra(response.data);
-      } catch (err) {
-        console.error("Error al cargar detalle:", err);
-        setError('No se pudo cargar la información de la compra.');
+        setLoading(true);
+        const response = await api.get('/compras');
+        const dataOrdenada = response.data.sort((a: Compra, b: Compra) => b.id - a.id);
+        setCompras(dataOrdenada);
+      } catch (error) {
+        console.error("Error al cargar historial:", error);
       } finally {
         setLoading(false);
       }
     };
-    if (id) fetchDetalle();
-  }, [id]);
+    fetchCompras();
+  }, []);
 
-  // --- HELPERS ---
-  const getStatusStyles = (status: string) => {
-    const s = status ? status.toUpperCase() : '';
-    switch (s) {
-      case 'COMPLETADO': case 'APROBADO': return 'bg-emerald-100 text-emerald-700 border-emerald-200';
-      case 'PENDIENTE': return 'bg-amber-100 text-amber-700 border-amber-200';
-      case 'CANCELADO': return 'bg-rose-100 text-rose-700 border-rose-200';
-      default: return 'bg-slate-100 text-slate-700 border-slate-200';
+  // --- HANDLERS DEL MODAL ---
+  const abrirModalEstado = (compra: Compra) => {
+    setSelectedCompra(compra);
+    setNuevoEstado(compra.estado);
+    setModalOpen(true);
+  };
+
+  const guardarEstado = async () => {
+    if (!selectedCompra) return;
+    setSavingState(true);
+    try {
+        await api.patch(`/compras/${selectedCompra.id}/estado`, null, {
+            params: { estado: nuevoEstado }
+        });
+
+        setCompras(compras.map(c =>
+            c.id === selectedCompra.id ? { ...c, estado: nuevoEstado } : c
+        ));
+
+        setModalOpen(false);
+        alert("Estado actualizado correctamente");
+    } catch (error) {
+        console.error("Error cambiando estado:", error);
+        alert("No se pudo actualizar el estado.");
+    } finally {
+        setSavingState(false);
     }
   };
 
-  const formatDate = (dateString: string) => {
-    if (!dateString) return '-';
-    return new Date(dateString).toLocaleDateString('es-PE', {
-        day: '2-digit', month: 'long', year: 'numeric', hour: '2-digit', minute: '2-digit'
+  // --- FILTROS Y CALCULOS ---
+  const comprasFiltradas = useMemo(() => {
+    return compras.filter(compra => {
+      const term = searchTerm.toLowerCase();
+      const matchSearch =
+        (compra.numeroComprobante || '').toLowerCase().includes(term) ||
+        (compra.proveedor?.razonSocial || '').toLowerCase().includes(term);
+
+      const matchEstado = filterEstado === 'all' || compra.estado === filterEstado;
+
+      return matchSearch && matchEstado;
+    });
+  }, [searchTerm, filterEstado, compras]);
+
+  const totalCompras = compras.reduce((sum, c) => sum + c.total, 0);
+  const comprasCompletadas = compras.filter(c => c.estado === 'COMPLETADA' || c.estado === 'COMPLETADO').length;
+  const comprasPendientes = compras.filter(c => c.estado === 'PENDIENTE').length;
+
+  const formatearFecha = (fecha: string) => {
+    if (!fecha) return '-';
+    return new Date(fecha).toLocaleDateString('es-PE', {
+        day: '2-digit', month: 'short', year: 'numeric'
     });
   };
 
-  const formatCurrency = (amount: number) => {
-      return new Intl.NumberFormat('es-PE', { style: 'currency', currency: 'PEN' }).format(amount);
-  };
-
   if (loading) return (
-    <div className="min-h-screen flex items-center justify-center bg-slate-50">
+    <div className={`flex h-screen items-center justify-center ${isDark ? 'bg-gray-900' : 'bg-gray-50'}`}>
         <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-indigo-600"></div>
     </div>
   );
 
-  if (error || !compra) return (
-    <div className="min-h-screen flex flex-col items-center justify-center bg-slate-50 text-slate-500 gap-4">
-        <h2 className="text-xl font-bold text-slate-700">Ups, algo salió mal</h2>
-        <p>{error || 'Compra no encontrada'}</p>
-        <Link to="/compras" className="text-indigo-600 hover:underline">Volver al listado</Link>
-    </div>
-  );
-
   return (
-    <div className="bg-slate-100 min-h-screen pb-20 print:bg-white print:pb-0 font-sans text-slate-600">
-      
-      {/* --- HEADER DE NAVEGACIÓN (Oculto al imprimir) --- */}
-      <div className="print:hidden sticky top-0 z-20 bg-slate-100/90 backdrop-blur border-b border-slate-200 mb-8">
-        <div className="max-w-5xl mx-auto px-4 sm:px-6 py-4 flex justify-between items-center">
-             <Link to="/compras" className="flex items-center gap-2 text-slate-500 hover:text-indigo-600 transition-colors font-medium">
-                <IoMdArrowRoundBack className="text-xl" /> Volver al Historial
-             </Link>
-             <button 
-                onClick={() => window.print()}
-                className="flex items-center gap-2 px-4 py-2 bg-slate-800 text-white rounded-lg shadow hover:bg-slate-900 transition-all font-bold text-sm"
-             >
-                <IoMdPrint className="text-lg"/> Imprimir Comprobante
-             </button>
-        </div>
+    <div className={`min-h-screen ${isDark ? 'bg-gray-900 text-gray-300' : 'bg-slate-50/50 text-slate-600'} pb-20 font-sans relative`}>
+
+      {/* HEADER */}
+      <div className={`${isDark ? 'bg-gray-800 border-gray-700' : 'bg-white border-slate-200'} border-b sticky top-0 z-10`}>
+          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div className="flex flex-col sm:flex-row justify-between items-center py-4 gap-4">
+                <div className="flex items-center gap-4 w-full sm:w-auto">
+                    <Link to="/" className={`p-2 rounded-lg ${isDark ? 'hover:bg-gray-700 text-gray-400' : 'hover:bg-slate-100 text-slate-500'} transition-colors`}>
+                        <IoMdArrowRoundBack className="h-6 w-6" />
+                    </Link>
+                    <div>
+                        <h1 className={`text-2xl font-bold ${heading}`}>Registro de Compras</h1>
+                        <p className={`text-sm ${textTertiary}`}>Gestiona tus adquisiciones y proveedores</p>
+                    </div>
+                </div>
+
+                <Link to="/compras/nueva"
+                    className="group relative inline-flex items-center justify-center px-5 py-2.5 text-sm font-medium text-white transition-all duration-200 bg-indigo-600 rounded-lg hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-600 shadow-sm shadow-indigo-200">
+                    <IoMdAdd className="mr-2 w-5 h-5 group-hover:scale-110 transition-transform" />
+                    Nueva Compra
+                </Link>
+            </div>
+          </div>
       </div>
 
-      {/* --- DOCUMENTO (Simulación de Hoja A4) --- */}
-      <div className="max-w-5xl mx-auto bg-white shadow-2xl print:shadow-none print:border-none rounded-xl overflow-hidden border border-slate-200">
-        
-        {/* CABECERA DEL DOCUMENTO */}
-        <div className="bg-slate-50 px-8 py-10 border-b border-slate-200 print:bg-white print:px-0">
-            <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-6">
-                
-                {/* Logo y Título */}
-                <div className="flex items-center gap-4">
-                    <div className="w-16 h-16 bg-indigo-600 rounded-xl flex items-center justify-center text-white text-3xl shadow-lg shadow-indigo-200 print:hidden">
-                        <IoMdCart />
-                    </div>
-                    <div>
-                        <h1 className="text-2xl font-extrabold text-slate-800 uppercase tracking-tight">
-                            {compra.tipoComprobante}
-                        </h1>
-                        <p className="text-indigo-600 font-mono font-bold text-lg">
-                            #{compra.numeroComprobante}
-                        </p>
-                    </div>
-                </div>
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
 
-                {/* Estado y Fechas */}
-                <div className="text-right">
-                    <div className={`inline-block px-4 py-1.5 rounded-full text-sm font-bold border mb-3 ${getStatusStyles(compra.estado)}`}>
-                        {compra.estado}
-                    </div>
-                    <div className="text-sm text-slate-500 flex flex-col gap-1">
-                        <span className="flex items-center justify-end gap-2">
-                             <IoMdCalendar/> {formatDate(compra.fechaCompra)}
-                        </span>
-                        <span className="flex items-center justify-end gap-2 font-mono text-xs uppercase">
-                             <IoMdTime/> Operador: {compra.usuario?.username}
-                        </span>
-                    </div>
-                </div>
-            </div>
+        {/* STATS CARDS */}
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
+          <div className={`${isDark ? 'bg-gray-800 border-gray-700' : 'bg-white border-slate-100'} rounded-xl p-6 shadow-sm border flex items-center gap-4`}>
+            <div className={`p-3 ${isDark ? 'bg-blue-900/30 text-blue-400' : 'bg-blue-50 text-blue-600'} rounded-lg`}><IoIosDocument className="w-6 h-6"/></div>
+            <div><p className={`text-xs font-medium ${textTertiary} uppercase`}>Operaciones</p><p className={`text-2xl font-bold ${heading}`}>{compras.length}</p></div>
+          </div>
+          <div className={`${isDark ? 'bg-gray-800 border-gray-700' : 'bg-white border-slate-100'} rounded-xl p-6 shadow-sm border flex items-center gap-4`}>
+            <div className={`p-3 ${isDark ? 'bg-emerald-900/30 text-emerald-400' : 'bg-emerald-50 text-emerald-600'} rounded-lg`}><IoIosCash className="w-6 h-6"/></div>
+            <div><p className={`text-xs font-medium ${textTertiary} uppercase`}>Total Invertido</p><p className={`text-2xl font-bold ${heading}`}>S/ {totalCompras.toLocaleString('es-PE', {minimumFractionDigits: 2})}</p></div>
+          </div>
+          <div className={`${isDark ? 'bg-gray-800 border-gray-700' : 'bg-white border-slate-100'} rounded-xl p-6 shadow-sm border flex items-center gap-4`}>
+            <div className={`p-3 ${isDark ? 'bg-indigo-900/30 text-indigo-400' : 'bg-indigo-50 text-indigo-600'} rounded-lg`}><IoIosCalendar className="w-6 h-6"/></div>
+            <div><p className={`text-xs font-medium ${textTertiary} uppercase`}>Completadas</p><p className={`text-2xl font-bold ${heading}`}>{comprasCompletadas}</p></div>
+          </div>
+          <div className={`${isDark ? 'bg-gray-800 border-gray-700' : 'bg-white border-slate-100'} rounded-xl p-6 shadow-sm border flex items-center gap-4`}>
+            <div className={`p-3 ${isDark ? 'bg-amber-900/30 text-amber-400' : 'bg-amber-50 text-amber-600'} rounded-lg`}><IoIosCalendar className="w-6 h-6"/></div>
+            <div><p className={`text-xs font-medium ${textTertiary} uppercase`}>Pendientes</p><p className={`text-2xl font-bold ${heading}`}>{comprasPendientes}</p></div>
+          </div>
         </div>
 
-        {/* CUERPO DEL DOCUMENTO */}
-        <div className="p-8 print:px-0">
-            
-            {/* Grid de Información (Proveedor / Envío) */}
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-10 mb-10 border-b border-slate-100 pb-10">
-                
-                {/* PROVEEDOR */}
-                <div>
-                    <h3 className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-4 flex items-center gap-2">
-                        <IoIosBusiness className="text-lg"/> Datos del Proveedor
-                    </h3>
-                    <div className="bg-slate-50 rounded-xl p-5 border border-slate-100 print:border-0 print:p-0 print:bg-white">
-                        <p className="text-lg font-bold text-slate-800 mb-1">{compra.proveedor?.razonSocial}</p>
-                        <p className="text-sm text-slate-500 font-mono mb-3">RUC: {compra.proveedor?.ruc}</p>
-                        
-                        <div className="space-y-1.5 text-sm text-slate-600">
-                             {compra.proveedor?.direccion && (
-                                <p className="flex items-start gap-2"><IoMdPin className="mt-1 text-slate-400"/> {compra.proveedor.direccion}</p>
-                             )}
-                             {compra.proveedor?.telefono && (
-                                <p className="flex items-center gap-2"><IoIosCall className="text-slate-400"/> {compra.proveedor.telefono}</p>
-                             )}
-                             {compra.proveedor?.correo && (
-                                <p className="flex items-center gap-2"><IoIosMail className="text-slate-400"/> {compra.proveedor.correo}</p>
-                             )}
-                        </div>
-                    </div>
+        {/* TABLA PRINCIPAL */}
+        <div className={`${isDark ? 'bg-gray-800 border-gray-700' : 'bg-white border-slate-200'} rounded-xl shadow-sm border overflow-hidden`}>
+
+            {/* Filtros */}
+            <div className={`p-5 border-b ${isDark ? 'border-gray-700 bg-gray-800/80' : 'border-slate-100 bg-slate-50/50'} flex flex-col md:flex-row justify-between items-center gap-4`}>
+                <div className="relative w-full md:w-96">
+                    <IoIosSearch className={`w-5 h-5 absolute left-3 top-1/2 -translate-y-1/2 ${isDark ? 'text-gray-500' : 'text-slate-400'}`} />
+                    <input type="text" placeholder='Buscar por N comprobante o proveedor...'
+                        className={`w-full pl-10 pr-4 py-2.5 ${isDark ? 'bg-gray-700 border-gray-600 text-gray-200 placeholder-gray-500' : 'bg-white border-slate-200 text-slate-700'} border rounded-lg text-sm focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 transition-all`}
+                        value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)}
+                    />
                 </div>
 
-                {/* DESTINO / ALMACEN */}
-                <div>
-                    <h3 className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-4 flex items-center gap-2">
-                        <IoMdPin className="text-lg"/> Punto de Entrega
-                    </h3>
-                    <div className="space-y-4">
-                        <div className="border-l-4 border-indigo-500 pl-4 py-1">
-                            <p className="text-lg font-bold text-slate-800">{compra.almacen?.nombre}</p>
-                            <p className="text-sm text-slate-500">{compra.almacen?.direccion || 'Dirección no especificada'}</p>
-                        </div>
-                        
-                        <div className="bg-amber-50 rounded-lg p-4 border border-amber-100">
-                            <h4 className="text-xs font-bold text-amber-600 uppercase mb-1">Método de Pago</h4>
-                            <p className="text-sm font-semibold text-amber-800">{compra.metodoPago}</p>
-                        </div>
-
-                        {compra.observaciones && (
-                             <div className="text-sm text-slate-500 bg-slate-50 p-3 rounded border border-slate-100 italic">
-                                "{compra.observaciones}"
-                             </div>
-                        )}
-                    </div>
+                <div className="flex items-center gap-2 w-full md:w-auto">
+                    <span className={`text-sm ${textTertiary} hidden sm:block`}>Estado:</span>
+                    <select className={`w-full md:w-auto border ${isDark ? 'border-gray-600 bg-gray-700 text-gray-200' : 'border-slate-200 bg-white text-slate-700'} rounded-lg px-3 py-2.5 text-sm focus:border-indigo-500 outline-none cursor-pointer`}
+                        value={filterEstado} onChange={(e) => setFilterEstado(e.target.value)}>
+                        <option value="all">Todos</option>
+                        <option value="COMPLETADA">Completada</option>
+                        <option value="PENDIENTE">Pendiente</option>
+                        <option value="ANULADA">Anulada</option>
+                    </select>
                 </div>
             </div>
 
-            {/* TABLA DE PRODUCTOS */}
-            <div className="mb-8">
-                 <h3 className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-4 flex items-center gap-2">
-                    <IoIosListBox className="text-lg"/> Detalle de Ítems
-                </h3>
-                
-                <div className="overflow-hidden rounded-lg border border-slate-200">
-                    <table className="w-full text-left text-sm">
-                        <thead className="bg-slate-100 text-slate-500 font-bold uppercase text-xs">
-                            <tr>
-                                <th className="px-5 py-3 text-center w-16">#</th>
-                                <th className="px-5 py-3">Descripción</th>
-                                <th className="px-5 py-3 text-center">Unidad</th>
-                                <th className="px-5 py-3 text-right">Precio</th>
-                                <th className="px-5 py-3 text-center">Cant.</th>
-                                <th className="px-5 py-3 text-right">Total</th>
-                            </tr>
-                        </thead>
-                        <tbody className="divide-y divide-slate-100">
-                            {compra.detalles?.map((item, index) => (
-                                <tr key={item.id} className="hover:bg-slate-50 print:hover:bg-white">
-                                    <td className="px-5 py-4 text-center text-slate-400 font-mono text-xs">
-                                        {(index + 1).toString().padStart(2, '0')}
+            {/* Listado */}
+            <div className="overflow-x-auto">
+                <table className={`min-w-full divide-y ${isDark ? 'divide-gray-700' : 'divide-slate-200'}`}>
+                    <thead className={tableHeader}>
+                        <tr>
+                            <th className={`px-6 py-4 text-left text-xs font-semibold ${tableHeaderText} uppercase tracking-wider`}>Comprobante</th>
+                            <th className={`px-6 py-4 text-left text-xs font-semibold ${tableHeaderText} uppercase tracking-wider`}>Proveedor</th>
+                            <th className={`px-6 py-4 text-left text-xs font-semibold ${tableHeaderText} uppercase tracking-wider`}>Almacen</th>
+                            <th className={`px-6 py-4 text-left text-xs font-semibold ${tableHeaderText} uppercase tracking-wider`}>Fecha</th>
+                            <th className={`px-6 py-4 text-right text-xs font-semibold ${tableHeaderText} uppercase tracking-wider`}>Total</th>
+                            <th className={`px-6 py-4 text-center text-xs font-semibold ${tableHeaderText} uppercase tracking-wider`}>Estado</th>
+                            <th className={`px-6 py-4 text-center text-xs font-semibold ${tableHeaderText} uppercase tracking-wider`}>Accion</th>
+                        </tr>
+                    </thead>
+                    <tbody className={`${isDark ? 'bg-gray-800' : 'bg-white'} divide-y ${isDark ? 'divide-gray-700' : 'divide-slate-100'}`}>
+                        {comprasFiltradas.length === 0 ? (
+                            <tr><td colSpan={7} className={`px-6 py-12 text-center ${emptyState}`}>No se encontraron registros.</td></tr>
+                        ) : (
+                            comprasFiltradas.map((compra) => (
+                                <tr key={compra.id} className={`${isDark ? 'hover:bg-gray-700/50' : 'hover:bg-slate-50/80'} transition-colors duration-150 group`}>
+                                    <td className="px-6 py-4 whitespace-nowrap">
+                                        <div className="text-sm font-semibold text-indigo-600">{compra.numeroComprobante || 'S/N'}</div>
+                                        <div className={`text-xs ${isDark ? 'text-gray-500' : 'text-slate-400'}`}>{compra.tipoComprobante}</div>
                                     </td>
-                                    <td className="px-5 py-4">
-                                        <p className="font-bold text-slate-700">{item.producto?.nombre}</p>
-                                        <p className="text-xs text-slate-400 font-mono">SKU: {item.producto?.sku}</p>
+                                    <td className="px-6 py-4 whitespace-nowrap">
+                                        <div className="flex items-center">
+                                            <div className={`h-8 w-8 rounded-full ${isDark ? 'bg-indigo-900/40 text-indigo-400' : 'bg-indigo-100 text-indigo-600'} flex items-center justify-center text-xs font-bold mr-3`}>
+                                                {getInitials(compra.proveedor?.razonSocial)}
+                                            </div>
+                                            <div className={`text-sm font-medium ${isDark ? 'text-gray-300' : 'text-slate-700'}`}>
+                                                {compra.proveedor?.razonSocial || 'Desconocido'}
+                                            </div>
+                                        </div>
                                     </td>
-                                    <td className="px-5 py-4 text-center text-slate-500 text-xs">
-                                        <span className="bg-slate-100 px-2 py-1 rounded">{item.producto?.unidadMedida}</span>
+                                    <td className={`px-6 py-4 whitespace-nowrap text-sm ${textTertiary}`}>{compra.almacen?.nombre || '-'}</td>
+                                    <td className={`px-6 py-4 whitespace-nowrap text-sm ${textTertiary}`}>{formatearFecha(compra.fechaCompra)}</td>
+                                    <td className={`px-6 py-4 whitespace-nowrap text-sm text-right font-bold ${isDark ? 'text-gray-200' : 'text-slate-700'}`}>S/ {compra.total?.toFixed(2)}</td>
+
+                                    <td className="px-6 py-4 whitespace-nowrap text-center">
+                                        <button
+                                          onClick={() => abrirModalEstado(compra)}
+                                          className={`inline-flex px-2.5 py-0.5 rounded-full text-xs font-medium border cursor-pointer hover:scale-105 transition-transform ${getStatusStyles(compra.estado)}`}
+                                        >
+                                            {compra.estado}
+                                        </button>
                                     </td>
-                                    <td className="px-5 py-4 text-right font-mono text-slate-600">
-                                        {formatCurrency(item.precioUnitario)}
-                                    </td>
-                                    <td className="px-5 py-4 text-center font-bold text-slate-800">
-                                        {item.cantidad}
-                                    </td>
-                                    <td className="px-5 py-4 text-right font-bold font-mono text-slate-800">
-                                        {formatCurrency(item.subtotal)}
+
+                                    <td className="px-6 py-4 whitespace-nowrap text-center">
+                                        <div className="flex items-center justify-center gap-2">
+                                            <button
+                                                onClick={() => abrirModalEstado(compra)}
+                                                className={`${isDark ? 'text-gray-500 hover:text-indigo-400 hover:bg-indigo-900/30' : 'text-slate-400 hover:text-indigo-600 hover:bg-indigo-50'} transition-colors p-2 rounded-full`}
+                                                title="Cambiar Estado"
+                                            >
+                                                <IoMdCreate className="w-5 h-5" />
+                                            </button>
+
+                                            <Link to={`/compras/historial/${compra.id}`}
+                                                className={`${isDark ? 'text-gray-500 hover:text-emerald-400 hover:bg-emerald-900/30' : 'text-slate-400 hover:text-emerald-600 hover:bg-emerald-50'} transition-colors p-2 rounded-full`}
+                                                title="Ver Detalle"
+                                            >
+                                                <IoIosEye className="w-5 h-5" />
+                                            </Link>
+                                        </div>
                                     </td>
                                 </tr>
-                            ))}
-                        </tbody>
-                    </table>
-                </div>
-            </div>
-
-            {/* TOTALES */}
-            <div className="flex flex-col items-end border-t border-slate-200 pt-6">
-                <div className="w-full sm:w-80 space-y-3">
-                    <div className="flex justify-between text-slate-500 text-sm">
-                        <span>Subtotal Base</span>
-                        <span className="font-mono">{formatCurrency(compra.subtotal)}</span>
-                    </div>
-                    <div className="flex justify-between text-slate-500 text-sm">
-                        <span>Impuestos (IGV 18%)</span>
-                        <span className="font-mono">{formatCurrency(compra.igv)}</span>
-                    </div>
-                    <div className="border-t border-slate-200 my-2"></div>
-                    <div className="flex justify-between items-center">
-                        <span className="text-base font-bold text-slate-800 uppercase">Total a Pagar</span>
-                        <span className="text-2xl font-extrabold text-indigo-600 font-mono">
-                            {formatCurrency(compra.total)}
-                        </span>
-                    </div>
-                </div>
-            </div>
-
-            {/* FOOTER DEL DOCUMENTO */}
-            <div className="mt-12 pt-6 border-t border-dashed border-slate-300 text-center">
-                <p className="text-xs text-slate-400 mb-1">
-                    Este documento es un comprobante de gestión interna y no reemplaza a la factura electrónica oficial SUNAT.
-                </p>
-                <p className="text-xs font-mono text-slate-300">
-                    ID Transacción: {compra.id} | Generado el {new Date().toLocaleString()}
-                </p>
+                            ))
+                        )}
+                    </tbody>
+                </table>
             </div>
         </div>
       </div>
+
+      {/* --- MODAL FLOTANTE PARA CAMBIAR ESTADO --- */}
+      {modalOpen && selectedCompra && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+            <div className="absolute inset-0 bg-slate-900/50 backdrop-blur-sm transition-opacity" onClick={() => setModalOpen(false)}></div>
+
+            <div className={`relative ${isDark ? 'bg-gray-800' : 'bg-white'} rounded-xl shadow-2xl w-full max-w-sm overflow-hidden animate-fadeInUp`}>
+                {/* Modal Header */}
+                <div className={`px-6 py-4 border-b ${isDark ? 'border-gray-700 bg-gray-800/80' : 'border-slate-100 bg-slate-50'} flex justify-between items-center`}>
+                    <h3 className={`font-bold ${heading} flex items-center gap-2`}>
+                        <IoMdCreate className="text-indigo-500"/> Actualizar Estado
+                    </h3>
+                    <button onClick={() => setModalOpen(false)} className={`${isDark ? 'text-gray-500 hover:text-red-400' : 'text-slate-400 hover:text-red-500'} transition-colors`}>
+                        <IoMdClose size={22} />
+                    </button>
+                </div>
+
+                {/* Modal Body */}
+                <div className="p-6">
+                    <div className={`mb-5 ${isDark ? 'bg-indigo-900/30 border-indigo-700' : 'bg-indigo-50 border-indigo-100'} p-3 rounded-lg border`}>
+                        <p className={`text-xs ${isDark ? 'text-indigo-400' : 'text-indigo-500'} uppercase font-bold mb-1`}>Comprobante Seleccionado</p>
+                        <p className={`font-mono font-bold ${heading} text-lg`}>{selectedCompra.numeroComprobante}</p>
+                    </div>
+
+                    <p className={`text-sm font-medium ${isDark ? 'text-gray-300' : 'text-slate-700'} mb-3`}>Selecciona el nuevo estado:</p>
+
+                    <div className="space-y-2">
+                        {['PENDIENTE', 'COMPLETADA', 'ANULADA'].map((estado) => (
+                            <label key={estado}
+                                className={`flex items-center p-3 border rounded-xl cursor-pointer transition-all duration-200 ${
+                                    nuevoEstado === estado
+                                    ? `border-indigo-500 ${isDark ? 'bg-indigo-900/30' : 'bg-indigo-50'} shadow-sm ring-1 ring-indigo-500`
+                                    : `${isDark ? 'border-gray-600 hover:border-gray-500 hover:bg-gray-700' : 'border-slate-200 hover:border-slate-300 hover:bg-slate-50'}`
+                                }`}
+                            >
+                                <input
+                                    type="radio"
+                                    name="estado"
+                                    value={estado}
+                                    checked={nuevoEstado === estado}
+                                    onChange={(e) => setNuevoEstado(e.target.value)}
+                                    className="w-4 h-4 text-indigo-600 focus:ring-indigo-500 border-gray-300"
+                                />
+                                <span className={`ml-3 text-sm font-semibold ${isDark ? 'text-gray-300' : 'text-slate-700'} capitalize`}>
+                                    {estado.toLowerCase()}
+                                </span>
+                                {nuevoEstado === estado && (
+                                    <IoMdCheckmarkCircle className="ml-auto text-indigo-600 text-xl animate-scaleIn" />
+                                )}
+                            </label>
+                        ))}
+                    </div>
+                </div>
+
+                {/* Modal Footer */}
+                <div className={`px-6 py-4 ${isDark ? 'bg-gray-800/80 border-gray-700' : 'bg-slate-50 border-slate-100'} border-t flex justify-end gap-3`}>
+                    <button
+                        onClick={() => setModalOpen(false)}
+                        className={`px-4 py-2.5 text-sm font-bold ${isDark ? 'text-gray-400 hover:text-gray-200 hover:bg-gray-700' : 'text-slate-500 hover:text-slate-700 hover:bg-slate-200/50'} rounded-lg transition-all`}
+                    >
+                        Cancelar
+                    </button>
+                    <button
+                        onClick={guardarEstado}
+                        disabled={savingState}
+                        className="px-5 py-2.5 text-sm font-bold text-white bg-indigo-600 hover:bg-indigo-700 rounded-lg shadow-lg shadow-indigo-200 transition-all disabled:opacity-70 disabled:shadow-none flex items-center gap-2"
+                    >
+                        {savingState ? (
+                            <>Wait...</>
+                        ) : (
+                            <>Confirmar</>
+                        )}
+                    </button>
+                </div>
+            </div>
+        </div>
+      )}
+
     </div>
   );
 }

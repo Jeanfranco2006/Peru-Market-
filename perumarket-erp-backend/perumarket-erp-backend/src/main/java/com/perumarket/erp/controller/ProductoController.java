@@ -1,5 +1,6 @@
 package com.perumarket.erp.controller;
 
+import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
 
@@ -13,10 +14,12 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RequestPart; // NECESARIO PARA LISTAR
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.multipart.MultipartFile;
 
+import com.perumarket.erp.models.dto.CatalogoProductoDTO;
 import com.perumarket.erp.models.dto.MovimientoInventarioDTO;
 import com.perumarket.erp.models.dto.ProductoRequest;
 import com.perumarket.erp.models.dto.ProductoResponse;
@@ -69,6 +72,13 @@ public ResponseEntity<?> crearProducto(
         Producto productoCreado = productoService.crearProductoYStockInicial(request);
         return new ResponseEntity<>(productoCreado, HttpStatus.CREATED);
     } */
+
+    // ENDPOINT PARA OBTENER CATALOGO DE PRODUCTOS DE PROVEEDORES
+    @GetMapping("/catalogo")
+    public ResponseEntity<List<CatalogoProductoDTO>> obtenerCatalogo() {
+        List<CatalogoProductoDTO> catalogo = productoService.obtenerProductosCatalogo();
+        return ResponseEntity.ok(catalogo);
+    }
 
     // 3. 🆕 ENDPOINT PARA OBTENER UN PRODUCTO POR ID (GET /productos/{id})
     // Necesario para precargar el formulario de edición
@@ -150,9 +160,56 @@ public ResponseEntity<ProductoResponse> actualizarStockProducto(
     ProductoResponse productoActualizado = productoService.actualizarStock(id, nuevoStock);
     return ResponseEntity.ok(productoActualizado);
 }
+// ENDPOINT PARA GENERAR CÓDIGO DE BARRAS
+@PatchMapping("/{id}/barcode")
+public ResponseEntity<?> generarCodigoBarras(
+        @PathVariable Integer id,
+        @RequestBody Map<String, String> body) {
+    try {
+        String codigo = body.get("codigoBarras");
+        if (codigo == null || codigo.isBlank()) {
+            return ResponseEntity.badRequest().body(Map.of("error", "El código de barras es requerido"));
+        }
+        ProductoResponse productoActualizado = productoService.generarCodigoBarras(id, codigo);
+        return ResponseEntity.ok(productoActualizado);
+    } catch (Exception e) {
+        return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                .body(Map.of("error", e.getMessage()));
+    }
+}
+
+@GetMapping("/unidades-medida")
+public ResponseEntity<List<Map<String, String>>> obtenerUnidadesMedida() {
+    List<Map<String, String>> unidades = Arrays.stream(Producto.UnidadMedida.values())
+            .map(u -> Map.of("valor", u.name(), "etiqueta", obtenerEtiquetaUnidad(u)))
+            .toList();
+    return ResponseEntity.ok(unidades);
+}
+
+private String obtenerEtiquetaUnidad(Producto.UnidadMedida unidad) {
+    return switch (unidad) {
+        case UNIDAD -> "Unidad (und)";
+        case CAJA -> "Caja";
+        case PAQUETE -> "Paquete";
+        case DOCENA -> "Docena (12 und)";
+        case KG -> "Kilogramo (kg)";
+        case GRAMO -> "Gramo (g)";
+        case LITRO -> "Litro (L)";
+        case MILILITRO -> "Mililitro (mL)";
+        case METRO -> "Metro (m)";
+        case GALON -> "Galón (gal)";
+        case SACO -> "Saco";
+        case BOLSA -> "Bolsa";
+        case LIBRA -> "Libra (lb)";
+        case ROLLO -> "Rollo";
+        case PAR -> "Par";
+    };
+}
+
 @GetMapping("/venta")
-public ResponseEntity<List<ProductoResponse>> obtenerProductosParaVenta() {
-    List<ProductoResponse> productos = productoService.obtenerProductosParaVenta();
+public ResponseEntity<List<ProductoResponse>> obtenerProductosParaVenta(
+        @RequestParam(required = false) Integer almacenId) {
+    List<ProductoResponse> productos = productoService.obtenerProductosParaVenta(almacenId);
     return ResponseEntity.ok(productos);
 }
 

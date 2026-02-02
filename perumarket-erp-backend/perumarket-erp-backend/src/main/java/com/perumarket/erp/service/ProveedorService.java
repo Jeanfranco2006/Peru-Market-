@@ -54,17 +54,19 @@ public class ProveedorService {
             dto.setImagen(p.getImagen());
             dto.setPrecio_compra(pp.getPrecioCompra());
             dto.setPeso_kg(p.getPesoKg());
+            dto.setUnidadMedida(p.getUnidadMedida() != null ? p.getUnidadMedida().name() : "UNIDAD");
             respuesta.add(dto);
         }
         return respuesta;
     }
 
     @Transactional
-    public void registrarProductoDesdeProveedor(Integer proveedorId, 
-                                                String nombre, 
-                                                String sku, 
-                                                BigDecimal precioCompra, 
-                                                BigDecimal pesoKg, 
+    public void registrarProductoDesdeProveedor(Integer proveedorId,
+                                                String nombre,
+                                                String sku,
+                                                BigDecimal precioCompra,
+                                                BigDecimal pesoKg,
+                                                String unidadMedida,
                                                 MultipartFile imagen) {
         
         Proveedor proveedor = proveedorRepository.findById(proveedorId)
@@ -83,7 +85,11 @@ public class ProveedorService {
         
         producto.setPrecioCompra(precioCompra);
         producto.setPesoKg(pesoKg);
-        producto.setUnidadMedida(Producto.UnidadMedida.UNIDAD);
+        try {
+            producto.setUnidadMedida(Producto.UnidadMedida.valueOf(unidadMedida));
+        } catch (IllegalArgumentException e) {
+            producto.setUnidadMedida(Producto.UnidadMedida.UNIDAD);
+        }
         producto.setRequiereCodigoBarras(true);
         
         // Asignar primera categoría disponible (fix temporal)

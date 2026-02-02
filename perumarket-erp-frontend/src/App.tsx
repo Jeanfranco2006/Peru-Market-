@@ -7,6 +7,7 @@ import ProtectedRoute from "./components/ProtectedRoute";
 import Accesos from "./pages/accesos/Accesos";
 import Proveedores from "./pages/proveedores/proveedores";
 import VentasList from "./pages/ventas/ventaslist";
+import VentasHistorial from "./pages/Ventas/VentasHistorial";
 import PedidosList from "./pages/pedidos/pedidosList";
 import Reportes from "./pages/reportes/reportes";
 import Inventory from "./pages/Inventory/Inventory";
@@ -14,10 +15,9 @@ import InventoryAddProduct from "./pages/Inventory/InventoryAddProduct";
 import InventoryMovements from "./pages/Inventory/InventoryMovements";
 import WarehouseManagement from "./pages/Inventory/InventoryAlmacenes";
 import InventoryAddAlmacenes from "./pages/Inventory/InventoryAddAlmacenes";
-import InventoryEditProduct from "./pages/Inventory/InventoryEditProduct";
 import Envios from "./pages/envios/envios";
-import PurchaseHistory from "./pages/Purchase/PurchaseList";
-import PurchaseList from "./pages/Purchase/PurchaseHistory";
+import PurchaseList from "./pages/Purchase/PurchaseList";
+import PurchaseHistory from "./pages/Purchase/PurchaseHistory";
 import NewPurchase from "./pages/Purchase/Purchase";
 import InventoryStockPorAlmacen from "./pages/Inventory/InventoryStockPorAlmacen";
 import AppClientes from "./pages/Clients/AppClients";
@@ -25,25 +25,26 @@ import AppEmployees from "./pages/employees/AppEmployees";
 // Importa el nuevo componente de prueba
 import TestConnection from "./pages/TestConnection";
 import Unauthorized from "./pages/Unauthorized"; // Asegúrate de crear esta página
+import Settings from "./pages/configuracion/Settings";
+import { useTheme } from "./context/ThemeContext";
 
 function App() {
   const location = useLocation();
-  const hideLayout = location.pathname === "/login" || 
-                     location.pathname === "/" || 
+  const { mode } = useTheme();
+  const isDark = mode === "dark";
+  const hideLayout = location.pathname === "/login" ||
+                     location.pathname === "/" ||
                      location.pathname === "/unauthorized";
 
   return (
-    <div className="flex h-screen overflow-hidden">
+    <div className={`flex h-screen overflow-hidden transition-colors duration-300 ${isDark ? "bg-gray-900" : "bg-white"}`}>
 
-      {/* Mostrar Sidebar solo si NO estamos en Login o Unauthorized */}
       {!hideLayout && <Sidebar />}
 
-      <div className="flex-1 flex flex-col overflow-hidden">
-        {/* Header también oculto en Login y Unauthorized */}
+      <div className={`flex-1 flex flex-col overflow-hidden transition-colors duration-300 ${isDark ? "bg-gray-900" : ""}`}>
         {!hideLayout && <Header />}
 
-        {/* Contenedor principal sin padding cuando es login o unauthorized */}
-        <div className={hideLayout ? "" : "p-4 overflow-auto flex-1"}>
+        <div className={hideLayout ? "" : `p-4 overflow-auto flex-1 transition-colors duration-300 ${isDark ? "bg-gray-900" : ""}`}>
 
           <Routes>
             {/* Redirección por defecto al login */}
@@ -108,6 +109,15 @@ function App() {
               path="/ventas"
               element={
                 <ProtectedRoute requiredModule="Ventas">
+                  <VentasHistorial />
+                </ProtectedRoute>
+              }
+            />
+
+            <Route
+              path="/ventas/nueva"
+              element={
+                <ProtectedRoute requiredModule="Ventas">
                   <VentasList />
                 </ProtectedRoute>
               }
@@ -141,7 +151,7 @@ function App() {
               }
             />
 
-            <Route 
+            <Route
               path="/inventario/nuevo"
               element={
                 <ProtectedRoute requiredModule="Inventario">
@@ -150,16 +160,7 @@ function App() {
               }
             />
 
-            <Route 
-              path="/inventario/editar/:id"
-              element={
-                <ProtectedRoute requiredModule="Inventario">
-                  <InventoryEditProduct />
-                </ProtectedRoute>
-              }
-            />
-
-            <Route 
+            <Route
               path="/inventario/movimientos/:id"
               element={
                 <ProtectedRoute requiredModule="Inventario">
@@ -229,6 +230,16 @@ function App() {
               element={
                 <ProtectedRoute requiredModule="Compras">
                   <NewPurchase />
+                </ProtectedRoute>
+              }
+            />
+
+            {/* RUTA DE CONFIGURACIÓN */}
+            <Route
+              path="/settings"
+              element={
+                <ProtectedRoute>
+                  <Settings />
                 </ProtectedRoute>
               }
             />

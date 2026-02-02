@@ -24,17 +24,20 @@ export const ventaService = {
   // Productos
  async fetchProductos(): Promise<Producto[]> {
     try {
-      const { data } = await api.get('/productos');
+      const idAlmacen = Number(localStorage.getItem("almacenId")) || 1;
+      const { data } = await api.get('/productos/venta', { params: { almacenId: idAlmacen } });
       return data.map((p: any) => ({
         id: p.id,
         nombre: p.nombre,
+        sku: p.sku || '',
         precio: p.precioVenta,
-        imagen: construirUrlImagen(p.imagen), // Usar función helper
+        imagen: construirUrlImagen(p.imagen),
         stock: p.stockActual,
         categoria: {
           id: p.categoriaId ?? 0,
           nombre: p.categoriaNombre ?? "Sin categoría"
-        }
+        },
+        unidadMedida: p.unidadMedida || 'UNIDAD'
       }));
     } catch (error) {
       console.error("Error cargando productos:", error);
@@ -164,9 +167,10 @@ async buscarClientesActivos(texto: string): Promise<Cliente[]> {
 
       const { data } = await api.post('/ventas', datosLimpios);
       return data;
-    } catch (error) {
+    } catch (error: any) {
       console.error("Error procesando venta:", error);
-      throw error;
+      const mensaje = error.response?.data?.error || error.message || "Error al procesar la venta";
+      throw new Error(mensaje);
     }
   },
   
@@ -184,6 +188,27 @@ async buscarClientesActivos(texto: string): Promise<Cliente[]> {
       total: Number(total.toFixed(2)),
       subtotalProduct: Number(subtotalProduct.toFixed(2))
     };
+  },
+
+  // Historial de ventas
+  async fetchVentas(): Promise<any[]> {
+    try {
+      const { data } = await api.get('/ventas');
+      return data;
+    } catch (error) {
+      console.error("Error cargando ventas:", error);
+      throw error;
+    }
+  },
+
+  async fetchVentaPorId(id: number): Promise<any> {
+    try {
+      const { data } = await api.get(`/ventas/${id}`);
+      return data;
+    } catch (error) {
+      console.error(`Error cargando venta ${id}:`, error);
+      throw error;
+    }
   },
 
   // Obtener datos de sesión

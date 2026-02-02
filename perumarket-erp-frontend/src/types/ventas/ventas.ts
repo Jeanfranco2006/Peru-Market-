@@ -5,11 +5,12 @@
  export interface Producto {
   id: number;
   nombre: string;
+  sku?: string;
   precio: number;
   imagen?: string;
   stock: number;
   categoria: categoria;
-  
+  unidadMedida?: string;
 }
 
  export interface ProductoVenta {
@@ -53,6 +54,8 @@ export interface VentaRequest {
     subtotal: number;
   }>;
   pagos: DetallePago[];
+  conEnvio?: boolean;
+  direccionEnvio?: string;
 }
 
 export interface MetodoPago {

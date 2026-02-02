@@ -23,4 +23,7 @@ public interface ProveedorProductoRepository extends JpaRepository<ProveedorProd
     List<ProveedorProducto> findByProductoId(Integer productoId);
     
     void deleteByProductoId(Integer idProducto);
+
+    @Query("SELECT pp FROM ProveedorProducto pp JOIN FETCH pp.producto p JOIN FETCH pp.proveedor pr WHERE p.estado = com.perumarket.erp.models.entity.Producto.EstadoProducto.CATALOGO")
+    List<ProveedorProducto> findAllCatalogoWithProveedores();
 }

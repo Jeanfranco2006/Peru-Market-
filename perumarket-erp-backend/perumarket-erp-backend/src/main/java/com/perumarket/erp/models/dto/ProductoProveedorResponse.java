@@ -13,4 +13,5 @@ public class ProductoProveedorResponse {
     private BigDecimal peso_kg;
     private BigDecimal descuento;
     private String imagen;
+    private String unidadMedida;
 }

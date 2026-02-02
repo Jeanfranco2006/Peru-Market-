@@ -2,6 +2,7 @@ import { useState } from "react";
 import ClienteForm from "../Clients/ClientFrom";
 import { FaUserPlus } from "react-icons/fa";
 import type { Cliente } from "../../types/clientes/Client";
+import { useThemeClasses } from '../../hooks/useThemeClasses';
 
 interface Props {
   isOpen: boolean;
@@ -11,6 +12,8 @@ interface Props {
 
 export default function ModalCliente({ isOpen, onClose, onRegistrar }: Props) {
   if (!isOpen) return null;
+
+  const { isDark, colors, heading } = useThemeClasses();
 
   const [cliente, setCliente] = useState<Cliente>({
     tipo: "NATURAL",
@@ -64,12 +67,12 @@ export default function ModalCliente({ isOpen, onClose, onRegistrar }: Props) {
   };
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
-      <div className="bg-white rounded-lg shadow-xl w-full max-w-2xl max-h-[90vh] overflow-y-auto">
+    <div className={`fixed inset-0 ${isDark ? 'bg-black/70' : 'bg-black bg-opacity-50'} flex items-center justify-center p-4 z-50`}>
+      <div className={`${isDark ? 'bg-gray-800' : 'bg-white'} rounded-lg shadow-xl w-full max-w-2xl max-h-[90vh] overflow-y-auto`}>
 
-        <div className="p-4 border-b flex items-center gap-2">
-          <FaUserPlus className="text-blue-600" />
-          <h2 className="text-lg font-bold">Registrar Cliente</h2>
+        <div className={`p-4 ${isDark ? 'border-gray-700' : 'border-b'} border-b flex items-center gap-2`}>
+          <FaUserPlus style={{ color: colors[500] }} />
+          <h2 className={`text-lg font-bold ${heading}`}>Registrar Cliente</h2>
         </div>
 
         <ClienteForm

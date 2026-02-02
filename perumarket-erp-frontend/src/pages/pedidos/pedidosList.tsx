@@ -1,7 +1,8 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import PedidoDetalle from './PedidoDetalle';
-import { FaPlus, FaEye, FaFilter, FaCalendarAlt, FaShoppingCart, FaClock, FaCheckCircle, FaTimesCircle, FaEdit } from 'react-icons/fa';
+import { FaEye, FaFilter, FaCalendarAlt, FaShoppingCart, FaClock, FaCheckCircle, FaTimesCircle, FaEdit } from 'react-icons/fa';
+import { useThemeClasses } from '../../hooks/useThemeClasses';
 
 interface ProductoPedido {
   id: number;
@@ -22,10 +23,12 @@ interface Pedido {
 
 const PedidosList: React.FC = () => {
   const navigate = useNavigate();
+  const { isDark, heading, textTertiary, tableHeader, tableHeaderText, emptyState } = useThemeClasses();
+
   const [pedidos, setPedidos] = useState<Pedido[]>([
     {
       id: 1,
-      cliente: "Juan Pérez",
+      cliente: "Juan Perez",
       fechaPedido: "2024-01-15",
       estado: "procesando",
       total: 250.00,
@@ -36,7 +39,7 @@ const PedidosList: React.FC = () => {
     },
     {
       id: 2,
-      cliente: "María López",
+      cliente: "Maria Lopez",
       fechaPedido: "2024-01-14",
       estado: "pendiente",
       total: 480.00,
@@ -47,7 +50,7 @@ const PedidosList: React.FC = () => {
     },
     {
       id: 3,
-      cliente: "Carlos Rodríguez",
+      cliente: "Carlos Rodriguez",
       fechaPedido: "2024-01-16",
       estado: "completado",
       total: 350.00,
@@ -58,12 +61,12 @@ const PedidosList: React.FC = () => {
     },
     {
       id: 4,
-      cliente: "Ana García",
+      cliente: "Ana Garcia",
       fechaPedido: "2024-01-13",
       estado: "cancelado",
       total: 180.00,
       productos: [
-        { id: 3, nombre: "Atún en Lata - Caja x 48 und", precio: 180.00, cantidad: 1, subtotal: 180.00 }
+        { id: 3, nombre: "Atun en Lata - Caja x 48 und", precio: 180.00, cantidad: 1, subtotal: 180.00 }
       ]
     }
   ]);
@@ -73,18 +76,25 @@ const PedidosList: React.FC = () => {
   const [pedidoEditando, setPedidoEditando] = useState<Pedido | null>(null);
   const [nuevoEstado, setNuevoEstado] = useState<string>('');
 
-  // Calcular estadísticas de pedidos
   const totalPedidos = pedidos.length;
   const pedidosPendientes = pedidos.filter(p => p.estado === 'pendiente').length;
   const pedidosProcesando = pedidos.filter(p => p.estado === 'procesando').length;
   const pedidosCompletados = pedidos.filter(p => p.estado === 'completado').length;
-  const pedidosCancelados = pedidos.filter(p => p.estado === 'cancelado').length;
 
-  const pedidosFiltrados = pedidos.filter(pedido => 
+  const pedidosFiltrados = pedidos.filter(pedido =>
     filtroEstado === 'todos' || pedido.estado === filtroEstado
   );
 
   const getEstadoColor = (estado: string) => {
+    if (isDark) {
+      switch (estado) {
+        case 'completado': return 'bg-green-900/30 text-green-400';
+        case 'procesando': return 'bg-blue-900/30 text-blue-400';
+        case 'pendiente': return 'bg-yellow-900/30 text-yellow-400';
+        case 'cancelado': return 'bg-red-900/30 text-red-400';
+        default: return 'bg-gray-700 text-gray-400';
+      }
+    }
     switch (estado) {
       case 'completado': return 'bg-green-100 text-green-800';
       case 'procesando': return 'bg-blue-100 text-blue-800';
@@ -104,18 +114,13 @@ const PedidosList: React.FC = () => {
     }
   };
 
-  // Función para redirigir a ventas
-  const irAVentas = () => {
-    navigate('/ventas');
-  };
+  const irAVentas = () => { navigate('/ventas'); };
 
-  // Función para abrir modal de edición de estado
   const abrirEditarEstado = (pedido: Pedido) => {
     setPedidoEditando(pedido);
     setNuevoEstado(pedido.estado);
   };
 
-  // Función para actualizar el estado del pedido
   const actualizarEstadoPedido = () => {
     if (pedidoEditando && nuevoEstado) {
       setPedidos(pedidos.map(pedido =>
@@ -123,8 +128,6 @@ const PedidosList: React.FC = () => {
           ? { ...pedido, estado: nuevoEstado as Pedido['estado'] }
           : pedido
       ));
-      
-      // Aquí podrías guardar en localStorage o hacer una llamada a la API
       const pedidosGuardados = JSON.parse(localStorage.getItem('pedidos') || '[]');
       const nuevosPedidos = pedidosGuardados.map((pedido: Pedido) =>
         pedido.id === pedidoEditando.id
@@ -132,30 +135,27 @@ const PedidosList: React.FC = () => {
           : pedido
       );
       localStorage.setItem('pedidos', JSON.stringify(nuevosPedidos));
-      
       setPedidoEditando(null);
       setNuevoEstado('');
-      
       alert(`Estado del pedido #${pedidoEditando.id} actualizado a: ${getEstadoTexto(nuevoEstado)}`);
     }
   };
 
-  // Función para cerrar modal de edición
   const cerrarEditarEstado = () => {
     setPedidoEditando(null);
     setNuevoEstado('');
   };
 
   return (
-    <div className="p-6 bg-gray-50 min-h-screen">
+    <div className={`p-6 ${isDark ? 'bg-gray-900' : 'bg-gray-50'} min-h-screen`}>
       <div className="max-w-7xl mx-auto">
         {/* Header */}
         <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-6">
           <div>
-            <h1 className="text-2xl sm:text-3xl font-bold text-gray-800">MIS PEDIDOS</h1>
-            <p className="text-gray-600 mt-1">Gestiona y monitorea todos tus pedidos</p>
+            <h1 className={`text-2xl sm:text-3xl font-bold ${heading}`}>MIS PEDIDOS</h1>
+            <p className={`${textTertiary} mt-1`}>Gestiona y monitorea todos tus pedidos</p>
           </div>
-          <button 
+          <button
             onClick={irAVentas}
             className="flex items-center bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors w-full sm:w-auto justify-center"
           >
@@ -166,72 +166,68 @@ const PedidosList: React.FC = () => {
 
         {/* Cards de Resumen */}
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
-          {/* Card Total Pedidos */}
-          <div className="bg-white rounded-lg shadow p-4 border-l-4 border-blue-500">
+          <div className={`${isDark ? 'bg-gray-800 border-gray-700' : 'bg-white'} rounded-lg shadow p-4 border-l-4 border-blue-500`}>
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm font-medium text-gray-600">Total Pedidos</p>
-                <p className="text-2xl font-bold text-gray-800">{totalPedidos}</p>
+                <p className={`text-sm font-medium ${textTertiary}`}>Total Pedidos</p>
+                <p className={`text-2xl font-bold ${heading}`}>{totalPedidos}</p>
               </div>
-              <div className="bg-blue-100 p-3 rounded-full">
-                <FaShoppingCart className="text-blue-600 text-xl" />
+              <div className={`${isDark ? 'bg-blue-900/30' : 'bg-blue-100'} p-3 rounded-full`}>
+                <FaShoppingCart className={`${isDark ? 'text-blue-400' : 'text-blue-600'} text-xl`} />
               </div>
             </div>
-            <p className="text-xs text-gray-500 mt-2">Todos los pedidos registrados</p>
+            <p className={`text-xs ${isDark ? 'text-gray-500' : 'text-gray-500'} mt-2`}>Todos los pedidos registrados</p>
           </div>
 
-          {/* Card Pendientes */}
-          <div className="bg-white rounded-lg shadow p-4 border-l-4 border-yellow-500">
+          <div className={`${isDark ? 'bg-gray-800 border-gray-700' : 'bg-white'} rounded-lg shadow p-4 border-l-4 border-yellow-500`}>
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm font-medium text-gray-600">Pendientes</p>
-                <p className="text-2xl font-bold text-gray-800">{pedidosPendientes}</p>
+                <p className={`text-sm font-medium ${textTertiary}`}>Pendientes</p>
+                <p className={`text-2xl font-bold ${heading}`}>{pedidosPendientes}</p>
               </div>
-              <div className="bg-yellow-100 p-3 rounded-full">
-                <FaClock className="text-yellow-600 text-xl" />
+              <div className={`${isDark ? 'bg-yellow-900/30' : 'bg-yellow-100'} p-3 rounded-full`}>
+                <FaClock className={`${isDark ? 'text-yellow-400' : 'text-yellow-600'} text-xl`} />
               </div>
             </div>
-            <p className="text-xs text-gray-500 mt-2">Esperando procesamiento</p>
+            <p className={`text-xs ${isDark ? 'text-gray-500' : 'text-gray-500'} mt-2`}>Esperando procesamiento</p>
           </div>
 
-          {/* Card En Proceso */}
-          <div className="bg-white rounded-lg shadow p-4 border-l-4 border-blue-500">
+          <div className={`${isDark ? 'bg-gray-800 border-gray-700' : 'bg-white'} rounded-lg shadow p-4 border-l-4 border-blue-500`}>
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm font-medium text-gray-600">En Proceso</p>
-                <p className="text-2xl font-bold text-gray-800">{pedidosProcesando}</p>
+                <p className={`text-sm font-medium ${textTertiary}`}>En Proceso</p>
+                <p className={`text-2xl font-bold ${heading}`}>{pedidosProcesando}</p>
               </div>
-              <div className="bg-blue-100 p-3 rounded-full">
-                <FaClock className="text-blue-600 text-xl" />
+              <div className={`${isDark ? 'bg-blue-900/30' : 'bg-blue-100'} p-3 rounded-full`}>
+                <FaClock className={`${isDark ? 'text-blue-400' : 'text-blue-600'} text-xl`} />
               </div>
             </div>
-            <p className="text-xs text-gray-500 mt-2">En preparación y envío</p>
+            <p className={`text-xs ${isDark ? 'text-gray-500' : 'text-gray-500'} mt-2`}>En preparacion y envio</p>
           </div>
 
-          {/* Card Completados */}
-          <div className="bg-white rounded-lg shadow p-4 border-l-4 border-green-500">
+          <div className={`${isDark ? 'bg-gray-800 border-gray-700' : 'bg-white'} rounded-lg shadow p-4 border-l-4 border-green-500`}>
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm font-medium text-gray-600">Completados</p>
-                <p className="text-2xl font-bold text-gray-800">{pedidosCompletados}</p>
+                <p className={`text-sm font-medium ${textTertiary}`}>Completados</p>
+                <p className={`text-2xl font-bold ${heading}`}>{pedidosCompletados}</p>
               </div>
-              <div className="bg-green-100 p-3 rounded-full">
-                <FaCheckCircle className="text-green-600 text-xl" />
+              <div className={`${isDark ? 'bg-green-900/30' : 'bg-green-100'} p-3 rounded-full`}>
+                <FaCheckCircle className={`${isDark ? 'text-green-400' : 'text-green-600'} text-xl`} />
               </div>
             </div>
-            <p className="text-xs text-gray-500 mt-2">Entregados satisfactoriamente</p>
+            <p className={`text-xs ${isDark ? 'text-gray-500' : 'text-gray-500'} mt-2`}>Entregados satisfactoriamente</p>
           </div>
         </div>
 
         {/* Filtros */}
-        <div className="bg-white p-4 rounded-lg shadow mb-6">
+        <div className={`${isDark ? 'bg-gray-800 border border-gray-700' : 'bg-white'} p-4 rounded-lg shadow mb-6`}>
           <div className="flex flex-col sm:flex-row gap-4">
             <div className="flex items-center">
-              <FaFilter className="text-gray-400 mr-2" />
-              <select 
+              <FaFilter className={isDark ? 'text-gray-500 mr-2' : 'text-gray-400 mr-2'} />
+              <select
                 value={filtroEstado}
                 onChange={(e) => setFiltroEstado(e.target.value)}
-                className="border border-gray-300 rounded px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                className={`border ${isDark ? 'border-gray-600 bg-gray-700 text-gray-200' : 'border-gray-300 bg-white text-gray-800'} rounded px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500`}
               >
                 <option value="todos">Todos los estados</option>
                 <option value="pendiente">Pendientes</option>
@@ -240,21 +236,21 @@ const PedidosList: React.FC = () => {
                 <option value="cancelado">Cancelados</option>
               </select>
             </div>
-            
+
             <div className="flex items-center">
-              <FaCalendarAlt className="text-gray-400 mr-2" />
-              <input 
+              <FaCalendarAlt className={isDark ? 'text-gray-500 mr-2' : 'text-gray-400 mr-2'} />
+              <input
                 type="date"
-                className="border border-gray-300 rounded px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                className={`border ${isDark ? 'border-gray-600 bg-gray-700 text-gray-200' : 'border-gray-300 bg-white text-gray-800'} rounded px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500`}
                 placeholder="Fecha desde"
               />
             </div>
 
             <div className="flex items-center">
-              <FaCalendarAlt className="text-gray-400 mr-2" />
-              <input 
+              <FaCalendarAlt className={isDark ? 'text-gray-500 mr-2' : 'text-gray-400 mr-2'} />
+              <input
                 type="date"
-                className="border border-gray-300 rounded px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                className={`border ${isDark ? 'border-gray-600 bg-gray-700 text-gray-200' : 'border-gray-300 bg-white text-gray-800'} rounded px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500`}
                 placeholder="Fecha hasta"
               />
             </div>
@@ -263,7 +259,7 @@ const PedidosList: React.FC = () => {
 
         {/* Resumen de Filtrado */}
         <div className="mb-4">
-          <p className="text-sm text-gray-600">
+          <p className={`text-sm ${textTertiary}`}>
             Mostrando <span className="font-semibold">{pedidosFiltrados.length}</span> de <span className="font-semibold">{totalPedidos}</span> pedidos
             {filtroEstado !== 'todos' && (
               <span> - Filtrado por: <span className="font-semibold capitalize">{filtroEstado}</span></span>
@@ -272,51 +268,39 @@ const PedidosList: React.FC = () => {
         </div>
 
         {/* Tabla de pedidos */}
-        <div className="bg-white rounded-lg shadow overflow-hidden">
+        <div className={`${isDark ? 'bg-gray-800 border border-gray-700' : 'bg-white'} rounded-lg shadow overflow-hidden`}>
           {pedidosFiltrados.length === 0 ? (
             <div className="text-center py-8">
-              <FaTimesCircle className="mx-auto text-gray-400 text-4xl mb-3" />
-              <p className="text-gray-500 text-lg">No se encontraron pedidos</p>
-              <p className="text-gray-400 text-sm mt-1">Intenta cambiar los filtros de búsqueda</p>
+              <FaTimesCircle className={`mx-auto ${emptyState} text-4xl mb-3`} />
+              <p className={`${emptyState} text-lg`}>No se encontraron pedidos</p>
+              <p className={`${isDark ? 'text-gray-500' : 'text-gray-400'} text-sm mt-1`}>Intenta cambiar los filtros de busqueda</p>
             </div>
           ) : (
             <div className="overflow-x-auto">
-              <table className="min-w-full divide-y divide-gray-200">
-                <thead className="bg-gray-50">
+              <table className={`min-w-full divide-y ${isDark ? 'divide-gray-700' : 'divide-gray-200'}`}>
+                <thead className={tableHeader}>
                   <tr>
-                    <th className="px-4 sm:px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      ID
-                    </th>
-                    <th className="px-4 sm:px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Cliente
-                    </th>
-                    <th className="px-4 sm:px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Fecha Pedido
-                    </th>
-                    <th className="px-4 sm:px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Estado
-                    </th>
-                    <th className="px-4 sm:px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Total
-                    </th>
-                    <th className="px-4 sm:px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Acciones
-                    </th>
+                    <th className={`px-4 sm:px-6 py-3 text-left text-xs font-medium ${tableHeaderText} uppercase tracking-wider`}>ID</th>
+                    <th className={`px-4 sm:px-6 py-3 text-left text-xs font-medium ${tableHeaderText} uppercase tracking-wider`}>Cliente</th>
+                    <th className={`px-4 sm:px-6 py-3 text-left text-xs font-medium ${tableHeaderText} uppercase tracking-wider`}>Fecha Pedido</th>
+                    <th className={`px-4 sm:px-6 py-3 text-left text-xs font-medium ${tableHeaderText} uppercase tracking-wider`}>Estado</th>
+                    <th className={`px-4 sm:px-6 py-3 text-left text-xs font-medium ${tableHeaderText} uppercase tracking-wider`}>Total</th>
+                    <th className={`px-4 sm:px-6 py-3 text-left text-xs font-medium ${tableHeaderText} uppercase tracking-wider`}>Acciones</th>
                   </tr>
                 </thead>
-                <tbody className="bg-white divide-y divide-gray-200">
+                <tbody className={`${isDark ? 'bg-gray-800' : 'bg-white'} divide-y ${isDark ? 'divide-gray-700' : 'divide-gray-200'}`}>
                   {pedidosFiltrados.map((pedido) => (
-                    <tr key={pedido.id} className="hover:bg-gray-50 transition-colors">
-                      <td className="px-4 sm:px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
+                    <tr key={pedido.id} className={`${isDark ? 'hover:bg-gray-700/50' : 'hover:bg-gray-50'} transition-colors`}>
+                      <td className={`px-4 sm:px-6 py-4 whitespace-nowrap text-sm font-medium ${heading}`}>
                         #{pedido.id.toString().padStart(3, '0')}
                       </td>
-                      <td className="px-4 sm:px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                      <td className={`px-4 sm:px-6 py-4 whitespace-nowrap text-sm ${heading}`}>
                         <div>
                           <p className="font-medium">{pedido.cliente}</p>
-                          <p className="text-xs text-gray-500">{pedido.productos.length} productos</p>
+                          <p className={`text-xs ${isDark ? 'text-gray-500' : 'text-gray-500'}`}>{pedido.productos.length} productos</p>
                         </div>
                       </td>
-                      <td className="px-4 sm:px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                      <td className={`px-4 sm:px-6 py-4 whitespace-nowrap text-sm ${isDark ? 'text-gray-300' : 'text-gray-900'}`}>
                         {new Date(pedido.fechaPedido).toLocaleDateString('es-ES')}
                       </td>
                       <td className="px-4 sm:px-6 py-4 whitespace-nowrap">
@@ -324,22 +308,22 @@ const PedidosList: React.FC = () => {
                           {getEstadoTexto(pedido.estado)}
                         </span>
                       </td>
-                      <td className="px-4 sm:px-6 py-4 whitespace-nowrap text-sm font-semibold text-gray-900">
+                      <td className={`px-4 sm:px-6 py-4 whitespace-nowrap text-sm font-semibold ${heading}`}>
                         S/ {pedido.total.toFixed(2)}
                       </td>
                       <td className="px-4 sm:px-6 py-4 whitespace-nowrap text-sm font-medium">
                         <div className="flex items-center space-x-2">
-                          <button 
+                          <button
                             onClick={() => setPedidoSeleccionado(pedido)}
-                            className="flex items-center text-blue-600 hover:text-blue-900 transition-colors"
+                            className={`flex items-center ${isDark ? 'text-blue-400 hover:text-blue-300' : 'text-blue-600 hover:text-blue-900'} transition-colors`}
                             title="Ver detalles"
                           >
                             <FaEye className="mr-1" />
                             <span className="hidden sm:inline">Ver</span>
                           </button>
-                          <button 
+                          <button
                             onClick={() => abrirEditarEstado(pedido)}
-                            className="flex items-center text-green-600 hover:text-green-900 transition-colors"
+                            className={`flex items-center ${isDark ? 'text-green-400 hover:text-green-300' : 'text-green-600 hover:text-green-900'} transition-colors`}
                             title="Editar estado"
                           >
                             <FaEdit className="mr-1" />
@@ -358,30 +342,30 @@ const PedidosList: React.FC = () => {
         {/* Modal para editar estado del pedido */}
         {pedidoEditando && (
           <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
-            <div className="bg-white rounded-lg shadow-xl w-full max-w-md">
+            <div className={`${isDark ? 'bg-gray-800' : 'bg-white'} rounded-lg shadow-xl w-full max-w-md`}>
               <div className="p-6">
-                <h3 className="text-lg font-bold text-gray-800 mb-4 flex items-center">
+                <h3 className={`text-lg font-bold ${heading} mb-4 flex items-center`}>
                   <FaEdit className="mr-2 text-green-600" />
                   Editar Estado del Pedido
                 </h3>
-                
+
                 <div className="mb-4">
-                  <p className="text-sm text-gray-600 mb-2">
+                  <p className={`text-sm ${textTertiary} mb-2`}>
                     Pedido: <span className="font-semibold">#{pedidoEditando.id.toString().padStart(3, '0')}</span>
                   </p>
-                  <p className="text-sm text-gray-600">
+                  <p className={`text-sm ${textTertiary}`}>
                     Cliente: <span className="font-semibold">{pedidoEditando.cliente}</span>
                   </p>
                 </div>
 
                 <div className="mb-6">
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                  <label className={`block text-sm font-medium ${isDark ? 'text-gray-300' : 'text-gray-700'} mb-2`}>
                     Nuevo Estado
                   </label>
                   <select
                     value={nuevoEstado}
                     onChange={(e) => setNuevoEstado(e.target.value)}
-                    className="w-full border border-gray-300 rounded px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    className={`w-full border ${isDark ? 'border-gray-600 bg-gray-700 text-gray-200' : 'border-gray-300 bg-white text-gray-800'} rounded px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500`}
                   >
                     <option value="pendiente">Pendiente</option>
                     <option value="procesando">Procesando</option>
@@ -393,7 +377,7 @@ const PedidosList: React.FC = () => {
                 <div className="flex gap-3">
                   <button
                     onClick={cerrarEditarEstado}
-                    className="flex-1 bg-gray-500 text-white py-2 rounded hover:bg-gray-600 transition-colors"
+                    className={`flex-1 ${isDark ? 'bg-gray-700 text-gray-300 hover:bg-gray-600' : 'bg-gray-500 text-white hover:bg-gray-600'} py-2 rounded transition-colors`}
                   >
                     Cancelar
                   </button>
@@ -409,11 +393,10 @@ const PedidosList: React.FC = () => {
           </div>
         )}
 
-        {/* Usar el componente PedidoDetalle */}
         {pedidoSeleccionado && (
-          <PedidoDetalle 
-            pedido={pedidoSeleccionado} 
-            onClose={() => setPedidoSeleccionado(null)} 
+          <PedidoDetalle
+            pedido={pedidoSeleccionado}
+            onClose={() => setPedidoSeleccionado(null)}
           />
         )}
       </div>

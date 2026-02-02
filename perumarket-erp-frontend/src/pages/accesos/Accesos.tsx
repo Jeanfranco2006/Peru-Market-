@@ -1,15 +1,17 @@
 // Accesos.tsx - VERSIÓN CON ESTILOS MEJORADOS SIN BORDES
 import { useState, useEffect } from "react";
-import { FiPlus, FiEdit, FiTrash2, FiEye, FiMenu, FiX, FiUser, FiLock, FiSettings, FiShield } from "react-icons/fi";
+import { FiMenu, FiX, FiUser, FiLock, FiSettings } from "react-icons/fi";
 import { ModalDetalles, ModalEditar, ModalConfirmar, ModalPermisos } from "./AccesosModals";
 import { SearchAndFilters } from "./AccesosComponents";
 import { UsuariosTab } from "./AccesosUsuarios";
 import { RolesTab } from "./AccesosRoles";
 import { ModulosTab } from "./AccesosModulos";
 import { accesosService } from "../../services/accesosService";
-import { api } from "../../services/api";
+
+import { useThemeClasses } from "../../hooks/useThemeClasses";
 
 export default function Accesos() {
+  const { isDark, colors, pageBg, heading, textSecondary } = useThemeClasses();
   const [tab, setTab] = useState("usuarios");
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [searchTerm, setSearchTerm] = useState("");
@@ -20,7 +22,6 @@ export default function Accesos() {
   const [usuarios, setUsuarios] = useState<any[]>([]);
   const [roles, setRoles] = useState<any[]>([]);
   const [modulos, setModulos] = useState<any[]>([]);
-  const [roleModulePermissions, setRoleModulePermissions] = useState<any[]>([]);
 
   // Agregar este estado para roles del dropdown
   const [rolesDropdown, setRolesDropdown] = useState<any[]>([]);
@@ -97,8 +98,10 @@ export default function Accesos() {
   ];
 
   // Funciones de utilidad
-  const getEstadoColor = (estado: string) => 
-    estado === 'ACTIVO' ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800';
+  const getEstadoColor = (estado: string) =>
+    estado === 'ACTIVO'
+      ? isDark ? 'bg-green-900/30 text-green-400' : 'bg-green-100 text-green-800'
+      : isDark ? 'bg-red-900/30 text-red-400' : 'bg-red-100 text-red-800';
   
   const getRolColor = (rolNombre: string) => {
     const colors: { [key: string]: string } = {
@@ -626,28 +629,28 @@ export default function Accesos() {
 
   if (loading && usuarios.length === 0) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100 flex items-center justify-center">
+      <div className={`min-h-screen ${pageBg} flex items-center justify-center`}>
         <div className="text-center">
-          <div className="animate-spin rounded-full h-16 w-16 border-b-2 border-blue-600 mx-auto"></div>
-          <p className="mt-4 text-gray-600 text-lg font-medium">Cargando datos...</p>
+          <div className="animate-spin rounded-full h-16 w-16 border-b-2 mx-auto" style={{ borderColor: colors[500] }}></div>
+          <p className={`mt-4 text-lg font-medium ${textSecondary}`}>Cargando datos...</p>
         </div>
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100">
+    <div className={`min-h-screen ${pageBg}`}>
       <div className="p-6">
         {/* Header */}
         <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between mb-8">
           <div>
-            <h1 className="text-4xl font-bold text-gray-900 mb-3">Gestión de Accesos</h1>
-            <p className="text-gray-600 text-lg">Administra usuarios, roles y permisos del sistema</p>
+            <h1 className={`text-4xl font-bold mb-3 ${heading}`}>Gestión de Accesos</h1>
+            <p className={`text-lg ${textSecondary}`}>Administra usuarios, roles y permisos del sistema</p>
           </div>
 
-          <button 
+          <button
             onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
-            className="lg:hidden mt-4 p-3 bg-white rounded-xl shadow-sm hover:shadow-md transition-shadow duration-200 self-start"
+            className={`lg:hidden mt-4 p-3 rounded-xl shadow-sm hover:shadow-md transition-shadow duration-200 self-start ${isDark ? 'bg-gray-800 text-gray-200' : 'bg-white'}`}
           >
             {mobileMenuOpen ? <FiX size={24} /> : <FiMenu size={24} />}
           </button>
@@ -655,21 +658,22 @@ export default function Accesos() {
 
         {/* Tabs */}
         <div className="flex flex-col lg:flex-row gap-3 mb-8">
-          <div className="hidden lg:flex gap-3 bg-white p-3 rounded-2xl shadow-sm">
+          <div className={`hidden lg:flex gap-3 p-3 rounded-2xl shadow-sm ${isDark ? 'bg-gray-800' : 'bg-white'}`}>
             {tabs.map((t) => (
               <button
                 key={t.id}
                 onClick={() => setTab(t.id)}
                 className={`flex items-center gap-3 px-6 py-4 rounded-xl transition-all duration-200 ${
-                  tab === t.id 
-                    ? "bg-gradient-to-r from-blue-600 to-indigo-600 text-white shadow-lg" 
-                    : "text-gray-600 hover:bg-gray-50 hover:shadow-md"
+                  tab === t.id
+                    ? "text-white shadow-lg"
+                    : isDark ? "text-gray-400 hover:bg-gray-700 hover:text-gray-200" : "text-gray-600 hover:bg-gray-50 hover:shadow-md"
                 }`}
+                style={tab === t.id ? { background: `linear-gradient(135deg, ${colors[500]}, ${colors[600]})` } : {}}
               >
                 <t.icon size={20} />
                 <span className="font-semibold">{t.nombre}</span>
                 <span className={`px-3 py-1 rounded-full text-sm font-medium ${
-                  tab === t.id ? "bg-blue-500" : "bg-gray-100 text-gray-700"
+                  tab === t.id ? "bg-white/20" : isDark ? "bg-gray-700 text-gray-300" : "bg-gray-100 text-gray-700"
                 }`}>
                   {t.count}
                 </span>
@@ -679,21 +683,22 @@ export default function Accesos() {
 
           {/* Mobile Tabs */}
           {mobileMenuOpen && (
-            <div className="lg:hidden flex flex-col gap-3 bg-white p-6 rounded-2xl shadow-lg">
+            <div className={`lg:hidden flex flex-col gap-3 p-6 rounded-2xl shadow-lg ${isDark ? 'bg-gray-800' : 'bg-white'}`}>
               {tabs.map((t) => (
                 <button
                   key={t.id}
                   onClick={() => { setTab(t.id); setMobileMenuOpen(false); }}
                   className={`flex items-center gap-3 px-6 py-4 rounded-xl transition-all duration-200 ${
-                    tab === t.id 
-                      ? "bg-gradient-to-r from-blue-600 to-indigo-600 text-white" 
-                      : "text-gray-600 hover:bg-gray-50"
+                    tab === t.id
+                      ? "text-white"
+                      : isDark ? "text-gray-400 hover:bg-gray-700" : "text-gray-600 hover:bg-gray-50"
                   }`}
+                  style={tab === t.id ? { background: `linear-gradient(135deg, ${colors[500]}, ${colors[600]})` } : {}}
                 >
                   <t.icon size={20} />
                   <span className="font-semibold">{t.nombre}</span>
                   <span className={`px-3 py-1 rounded-full text-sm font-medium ${
-                    tab === t.id ? "bg-blue-500" : "bg-gray-100 text-gray-700"
+                    tab === t.id ? "bg-white/20" : isDark ? "bg-gray-700 text-gray-300" : "bg-gray-100 text-gray-700"
                   }`}>
                     {t.count}
                   </span>
@@ -705,10 +710,10 @@ export default function Accesos() {
 
         {/* Loading overlay */}
         {loading && (
-          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 backdrop-blur-sm">
-            <div className="bg-white p-8 rounded-2xl shadow-xl">
-              <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto"></div>
-              <p className="mt-4 text-gray-600 font-medium">Guardando...</p>
+          <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 backdrop-blur-sm">
+            <div className={`p-8 rounded-2xl shadow-xl ${isDark ? 'bg-gray-800' : 'bg-white'}`}>
+              <div className="animate-spin rounded-full h-12 w-12 border-b-2 mx-auto" style={{ borderColor: colors[500] }}></div>
+              <p className={`mt-4 font-medium ${textSecondary}`}>Guardando...</p>
             </div>
           </div>
         )}

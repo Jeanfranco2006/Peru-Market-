@@ -30,6 +30,8 @@ public class CompraService {
     private DetalleCompraRepository detalleCompraRepository;
     @Autowired
     private InventarioRepository inventarioRepository;
+    @Autowired
+    private MovimientoInventarioRepository movimientoInventarioRepository;
 
     public List<ProductoPendienteDTO> obtenerPendientesPorAlmacen(Long almacenId) {
         return detalleCompraRepository.findProductosPendientesPorAlmacen(almacenId);
@@ -80,34 +82,13 @@ public class CompraService {
             Producto prod = productoRepository.findById(dDto.getIdProducto())
                     .orElseThrow(() -> new RuntimeException("Producto no encontrado"));
 
-            // Actualizar Inventario (Stock por Almacén)
-            Optional<Inventario> invOpt = inventarioRepository.findByProductoIdAndAlmacenId(dDto.getIdProducto(), dto.getIdAlmacen());
-            Inventario inventario = invOpt.orElseGet(() -> {
-                Inventario nuevo = new Inventario();
-                nuevo.setProducto(prod);
-                nuevo.setAlmacen(alm);
-                nuevo.setStockActual(0);
-                nuevo.setStockMinimo(10);
-                nuevo.setStockMaximo(1000);
-                return nuevo;
-            });
-
-            inventario.setStockActual(inventario.getStockActual() + dDto.getCantidad());
-            inventarioRepository.save(inventario);
-
-            // Actualizar Producto (Stock Global)
-            int stockGlobal = prod.getStock() != null ? prod.getStock() : 0;
-            prod.setStock(stockGlobal + dDto.getCantidad());
-            prod.setPrecioCompra(dDto.getPrecioUnitario());
-            productoRepository.save(prod);
-
             detalle.setProducto(prod);
             detalle.setCantidad(dDto.getCantidad());
             detalle.setPrecioUnitario(dDto.getPrecioUnitario());
             detalle.setSubtotal(dDto.getSubtotal());
             detalle.setCompra(compra);
-            
-            detalleCompraRepository.save(detalle); 
+
+            detalleCompraRepository.save(detalle);
         }
 
         return compra;
@@ -125,15 +106,74 @@ public class CompraService {
     }
 
     // 4. ACTUALIZAR ESTADO
+    @Transactional
     public Compra actualizarEstado(Integer id, String nuevoEstado) {
         Compra compra = compraRepository.findById(id)
                 .orElseThrow(() -> new RuntimeException("Compra no encontrada"));
-        
+
+        Compra.Estado estadoNuevo;
         try {
-            compra.setEstado(Compra.Estado.valueOf(nuevoEstado));
-            return compraRepository.save(compra);
+            estadoNuevo = Compra.Estado.valueOf(nuevoEstado);
         } catch (IllegalArgumentException e) {
             throw new RuntimeException("Estado inválido proporcionado: " + nuevoEstado);
         }
+
+        compra.setEstado(estadoNuevo);
+        compra = compraRepository.save(compra);
+
+        // Cuando se marca como COMPLETADA, crear inventario y activar productos
+        if (estadoNuevo == Compra.Estado.COMPLETADA) {
+            Almacen almacen = compra.getAlmacen();
+
+            for (DetalleCompra detalle : compra.getDetalles()) {
+                Producto prod = detalle.getProducto();
+
+                // Cambiar estado del producto de CATALOGO a ACTIVO
+                if (prod.getEstado() == Producto.EstadoProducto.CATALOGO) {
+                    prod.setEstado(Producto.EstadoProducto.ACTIVO);
+                }
+
+                // Crear o actualizar Inventario (por almacén)
+                Optional<Inventario> invOpt = inventarioRepository.findByProductoIdAndAlmacenId(
+                        prod.getId(), almacen.getId());
+                Inventario inventario = invOpt.orElseGet(() -> {
+                    Inventario nuevo = new Inventario();
+                    nuevo.setProducto(prod);
+                    nuevo.setAlmacen(almacen);
+                    nuevo.setStockActual(0);
+                    nuevo.setStockMinimo(10);
+                    nuevo.setStockMaximo(1000);
+                    return nuevo;
+                });
+
+                int stockAnterior = inventario.getStockActual();
+                int stockNuevo = stockAnterior + detalle.getCantidad();
+                inventario.setStockActual(stockNuevo);
+                inventarioRepository.save(inventario);
+
+                // Crear movimiento de inventario (ENTRADA por compra)
+                MovimientoInventario movimiento = new MovimientoInventario();
+                movimiento.setInventario(inventario);
+                movimiento.setProducto(prod);
+                movimiento.setAlmacen(almacen);
+                movimiento.setTipoMovimiento(MovimientoInventario.TipoMovimiento.ENTRADA);
+                movimiento.setCantidad(detalle.getCantidad());
+                movimiento.setStockAnterior(stockAnterior);
+                movimiento.setStockNuevo(stockNuevo);
+                movimiento.setMotivo("Entrada por OC #" + compra.getId() + " - " + compra.getNumeroComprobante());
+                if (compra.getUsuario() != null) {
+                    movimiento.setIdUsuario(compra.getUsuario().getId().intValue());
+                }
+                movimientoInventarioRepository.save(movimiento);
+
+                // Actualizar stock global del producto
+                int stockGlobal = prod.getStock() != null ? prod.getStock() : 0;
+                prod.setStock(stockGlobal + detalle.getCantidad());
+                prod.setPrecioCompra(detalle.getPrecioUnitario());
+                productoRepository.save(prod);
+            }
+        }
+
+        return compra;
     }
 }
