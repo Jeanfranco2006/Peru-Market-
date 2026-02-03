@@ -1,427 +1,590 @@
-import { useState, useMemo, useEffect } from 'react';
+import React, { useState, useMemo, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
-  IoMdArrowRoundBack, IoMdAdd
-} from 'react-icons/io';
-import {
-  IoIosDocument, IoIosCash, IoIosCheckmarkCircle, IoIosTime, IoIosSearch
-} from 'react-icons/io';
-import { FaReceipt, FaTruck } from 'react-icons/fa';
+  FiSearch, FiPlus, FiFileText, FiDollarSign, FiCheckCircle,
+  FiClock, FiEye, FiTruck, FiRefreshCw, FiCalendar, FiUser,
+  FiMapPin, FiAlertTriangle, FiXCircle, FiChevronLeft, FiChevronRight,
+  FiX, FiFilter, FiShoppingBag
+} from 'react-icons/fi';
 import { useThemeClasses } from '../../hooks/useThemeClasses';
 import { ventaService } from '../../services/ventas/ventaService';
 import ModalTicket from './ModalTicket';
 
-// --- ESTILOS DE ESTADO ---
-const getStatusStylesLight = (status: string) => {
-  const s = status ? status.toUpperCase() : '';
-  switch (s) {
-    case 'COMPLETADA': return 'bg-emerald-50 text-emerald-700 border-emerald-200 ring-1 ring-emerald-600/20';
-    case 'PENDIENTE': return 'bg-amber-50 text-amber-700 border-amber-200 ring-1 ring-amber-600/20';
-    case 'ANULADA': return 'bg-rose-50 text-rose-700 border-rose-200 ring-1 ring-rose-600/20';
-    default: return 'bg-slate-50 text-slate-700 border-slate-200 ring-1 ring-slate-600/20';
-  }
+/* ── Helpers ─────────────────────────────────────────── */
+
+const STATUS_MAP: Record<string, { light: string; dark: string; icon: React.ReactNode }> = {
+  COMPLETADA: {
+    light: 'bg-emerald-50 text-emerald-700 border border-emerald-200',
+    dark: 'bg-emerald-900/30 text-emerald-400 border border-emerald-800/50',
+    icon: <FiCheckCircle size={12} />,
+  },
+  PENDIENTE: {
+    light: 'bg-amber-50 text-amber-700 border border-amber-200',
+    dark: 'bg-amber-900/30 text-amber-400 border border-amber-800/50',
+    icon: <FiClock size={12} />,
+  },
+  ANULADA: {
+    light: 'bg-rose-50 text-rose-700 border border-rose-200',
+    dark: 'bg-rose-900/30 text-rose-400 border border-rose-800/50',
+    icon: <FiXCircle size={12} />,
+  },
 };
 
-const getStatusStylesDark = (status: string) => {
-  const s = status ? status.toUpperCase() : '';
-  switch (s) {
-    case 'COMPLETADA': return 'bg-emerald-900/40 text-emerald-400 border-emerald-700 ring-1 ring-emerald-500/20';
-    case 'PENDIENTE': return 'bg-amber-900/40 text-amber-400 border-amber-700 ring-1 ring-amber-500/20';
-    case 'ANULADA': return 'bg-rose-900/40 text-rose-400 border-rose-700 ring-1 ring-rose-500/20';
-    default: return 'bg-gray-700 text-gray-400 border-gray-600 ring-1 ring-gray-500/20';
-  }
+const getStatusStyles = (status: string, isDark: boolean) => {
+  const entry = STATUS_MAP[(status || '').toUpperCase()];
+  if (!entry) return isDark ? 'bg-gray-700 text-gray-400 border border-gray-600' : 'bg-gray-100 text-gray-600 border border-gray-200';
+  return isDark ? entry.dark : entry.light;
 };
+
+const getStatusIcon = (status: string) => STATUS_MAP[(status || '').toUpperCase()]?.icon ?? null;
+
+function formatMoney(v: number) {
+  return 'S/ ' + v.toLocaleString('es-PE', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+}
+
+function formatFecha(fecha: string) {
+  if (!fecha) return '-';
+  const d = new Date(fecha);
+  return d.toLocaleDateString('es-PE', { day: '2-digit', month: '2-digit', year: 'numeric' }) +
+    ' ' + d.toLocaleTimeString('es-PE', { hour: '2-digit', minute: '2-digit' });
+}
+
+function formatFechaCorta(fecha: string) {
+  if (!fecha) return '-';
+  const d = new Date(fecha);
+  return d.toLocaleDateString('es-PE', { day: '2-digit', month: 'short' });
+}
+
+const ITEMS_PER_PAGE = 15;
+
+/* ── Component ───────────────────────────────────────── */
 
 export default function VentasHistorial() {
   const {
-    isDark, colors, pageBg, heading, textTertiary,
-    tableHeader, tableHeaderText, emptyState
+    isDark, colors, pageBg, card, cardHover, heading, textPrimary,
+    textSecondary, textTertiary, textMuted, border, borderLight, input,
+    select, emptyState, tableHeader, tableHeaderText, tableRow, tableCell,
+    btnSecondary, btnGhost, subtleBg, listItemHover, shadow, divider
   } = useThemeClasses();
   const navigate = useNavigate();
 
-  const getStatusStyles = isDark ? getStatusStylesDark : getStatusStylesLight;
-
-  // --- ESTADOS ---
   const [ventas, setVentas] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
   const [filterEstado, setFilterEstado] = useState('all');
-
-  // Estado para ModalTicket
   const [ventaSeleccionada, setVentaSeleccionada] = useState<any>(null);
   const [mostrarTicket, setMostrarTicket] = useState(false);
+  const [currentPage, setCurrentPage] = useState(1);
 
-  // --- CARGAR DATOS ---
-  useEffect(() => {
-    const cargarVentas = async () => {
-      try {
-        setLoading(true);
-        const data = await ventaService.fetchVentas();
-        // Ordenar por fecha descendente (mas reciente primero)
-        const dataOrdenada = data.sort((a: any, b: any) => {
-          const fechaA = new Date(a.fecha || a.fechaCreacion).getTime();
-          const fechaB = new Date(b.fecha || b.fechaCreacion).getTime();
-          return fechaB - fechaA;
-        });
-        setVentas(dataOrdenada);
-      } catch (error) {
-        console.error('Error al cargar historial de ventas:', error);
-      } finally {
-        setLoading(false);
-      }
-    };
-    cargarVentas();
+  const cargarVentas = useCallback(async (isRefresh = false) => {
+    if (isRefresh) setRefreshing(true);
+    else setLoading(true);
+    setError(null);
+    try {
+      const data = await ventaService.fetchVentas();
+      const sorted = data.sort((a: any, b: any) =>
+        new Date(b.fecha || b.fechaCreacion).getTime() - new Date(a.fecha || a.fechaCreacion).getTime()
+      );
+      setVentas(sorted);
+    } catch (err: any) {
+      console.error('Error al cargar ventas:', err);
+      setError(err?.message || 'No se pudieron cargar las ventas. Verifica tu conexión.');
+    } finally {
+      setLoading(false);
+      setRefreshing(false);
+    }
   }, []);
 
-  // --- FILTROS Y CALCULOS ---
+  useEffect(() => {
+    cargarVentas();
+  }, [cargarVentas]);
+
+  // Reset page when filters change
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [searchTerm, filterEstado]);
+
   const ventasFiltradas = useMemo(() => {
-    return ventas.filter((venta) => {
+    return ventas.filter(v => {
       const term = searchTerm.toLowerCase();
       const matchSearch =
-        (venta.nombreCliente || '').toLowerCase().includes(term) ||
-        (venta.nombreUsuario || '').toLowerCase().includes(term) ||
-        String(venta.id || '').toLowerCase().includes(term);
-
-      const matchEstado = filterEstado === 'all' || venta.estado === filterEstado;
-
+        (v.nombreCliente || '').toLowerCase().includes(term) ||
+        (v.nombreUsuario || '').toLowerCase().includes(term) ||
+        String(v.id || '').includes(term);
+      const matchEstado = filterEstado === 'all' || v.estado === filterEstado;
       return matchSearch && matchEstado;
     });
   }, [searchTerm, filterEstado, ventas]);
 
-  const totalVentas = ventas.length;
-  const montoTotal = ventas.reduce((sum, v) => sum + (v.total || 0), 0);
-  const completadas = ventas.filter((v) => v.estado === 'COMPLETADA').length;
-  const pendientes = ventas.filter((v) => v.estado === 'PENDIENTE').length;
+  // Pagination
+  const totalPages = Math.max(1, Math.ceil(ventasFiltradas.length / ITEMS_PER_PAGE));
+  const paginatedVentas = useMemo(() => {
+    const start = (currentPage - 1) * ITEMS_PER_PAGE;
+    return ventasFiltradas.slice(start, start + ITEMS_PER_PAGE);
+  }, [ventasFiltradas, currentPage]);
 
-  const formatearFecha = (fecha: string) => {
-    if (!fecha) return '-';
-    const d = new Date(fecha);
-    const dia = String(d.getDate()).padStart(2, '0');
-    const mes = String(d.getMonth() + 1).padStart(2, '0');
-    const anio = d.getFullYear();
-    const horas = String(d.getHours()).padStart(2, '0');
-    const minutos = String(d.getMinutes()).padStart(2, '0');
-    return `${dia}/${mes}/${anio} ${horas}:${minutos}`;
+  const totalVentas = ventas.length;
+  const montoTotal = ventas.reduce((s, v) => s + (v.total || 0), 0);
+  const completadas = ventas.filter(v => v.estado === 'COMPLETADA').length;
+  const pendientes = ventas.filter(v => v.estado === 'PENDIENTE').length;
+
+  const hasActiveFilters = searchTerm !== '' || filterEstado !== 'all';
+
+  const clearFilters = () => {
+    setSearchTerm('');
+    setFilterEstado('all');
   };
 
-  const onVerTicket = (venta: any) => {
+  const handleVerTicket = (venta: any) => {
     setVentaSeleccionada(venta);
     setMostrarTicket(true);
   };
 
-  // --- SKELETON LOADING ---
+  const kpis = [
+    { label: 'Total Ventas', value: totalVentas.toString(), icon: <FiShoppingBag size={20} />, accent: true },
+    { label: 'Monto Total', value: formatMoney(montoTotal), icon: <FiDollarSign size={20} /> },
+    { label: 'Completadas', value: completadas.toString(), icon: <FiCheckCircle size={20} /> },
+    { label: 'Pendientes', value: pendientes.toString(), icon: <FiClock size={20} /> },
+  ];
+
+  // ── Loading skeleton ──
   if (loading) {
+    const pulseClass = isDark ? 'bg-gray-700' : 'bg-gray-200';
     return (
-      <div className={`min-h-screen ${isDark ? 'bg-gray-900' : 'bg-slate-50/50'} pb-20 font-sans`}>
+      <div className={`min-h-screen ${pageBg} p-4 md:p-8 font-sans`}>
         {/* Header skeleton */}
-        <div className={`${isDark ? 'bg-gray-800 border-gray-700' : 'bg-white border-slate-200'} border-b`}>
-          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-            <div className="flex justify-between items-center py-4">
-              <div className="flex items-center gap-4">
-                <div className={`w-10 h-10 rounded-lg ${isDark ? 'bg-gray-700' : 'bg-gray-200'} animate-pulse`} />
-                <div>
-                  <div className={`h-6 w-48 rounded ${isDark ? 'bg-gray-700' : 'bg-gray-200'} animate-pulse mb-2`} />
-                  <div className={`h-4 w-64 rounded ${isDark ? 'bg-gray-700' : 'bg-gray-200'} animate-pulse`} />
-                </div>
+        <div className={`rounded-2xl border p-5 mb-6 ${card}`}>
+          <div className="flex flex-col md:flex-row justify-between items-center gap-4">
+            <div className="flex items-center gap-3">
+              <div className={`w-12 h-12 rounded-xl animate-pulse ${pulseClass}`} />
+              <div>
+                <div className={`h-7 w-52 rounded-lg animate-pulse mb-2 ${pulseClass}`} />
+                <div className={`h-3 w-72 rounded animate-pulse ${isDark ? 'bg-gray-700/60' : 'bg-gray-100'}`} />
               </div>
-              <div className={`h-10 w-32 rounded-lg ${isDark ? 'bg-gray-700' : 'bg-gray-200'} animate-pulse`} />
+            </div>
+            <div className="flex gap-3">
+              <div className={`h-10 w-10 rounded-xl animate-pulse ${pulseClass}`} />
+              <div className={`h-10 w-36 rounded-xl animate-pulse ${pulseClass}`} />
             </div>
           </div>
         </div>
-
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-          {/* KPI skeleton */}
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
-            {[1, 2, 3, 4].map((i) => (
-              <div key={i} className={`${isDark ? 'bg-gray-800 border-gray-700' : 'bg-white border-slate-100'} rounded-xl p-6 shadow-sm border flex items-center gap-4`}>
-                <div className={`w-12 h-12 rounded-lg ${isDark ? 'bg-gray-700' : 'bg-gray-200'} animate-pulse`} />
-                <div className="flex-1">
-                  <div className={`h-3 w-20 rounded ${isDark ? 'bg-gray-700' : 'bg-gray-200'} animate-pulse mb-2`} />
-                  <div className={`h-7 w-16 rounded ${isDark ? 'bg-gray-700' : 'bg-gray-200'} animate-pulse`} />
-                </div>
+        {/* KPI skeleton */}
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
+          {[1, 2, 3, 4].map(i => (
+            <div key={i} className={`p-5 rounded-2xl border ${card}`}>
+              <div className="flex items-center justify-between mb-4">
+                <div className={`h-3 w-20 rounded animate-pulse ${pulseClass}`} />
+                <div className={`h-9 w-9 rounded-xl animate-pulse ${pulseClass}`} />
               </div>
-            ))}
+              <div className={`h-8 w-28 rounded-lg animate-pulse ${pulseClass}`} />
+            </div>
+          ))}
+        </div>
+        {/* Table skeleton */}
+        <div className={`rounded-2xl border ${card} overflow-hidden`}>
+          <div className={`p-5 border-b ${border} flex gap-3`}>
+            <div className={`h-10 flex-1 md:max-w-sm rounded-xl animate-pulse ${isDark ? 'bg-gray-700/60' : 'bg-gray-100'}`} />
+            <div className={`h-10 w-36 rounded-xl animate-pulse ${isDark ? 'bg-gray-700/60' : 'bg-gray-100'}`} />
           </div>
-
-          {/* Table skeleton */}
-          <div className={`${isDark ? 'bg-gray-800 border-gray-700' : 'bg-white border-slate-200'} rounded-xl shadow-sm border overflow-hidden`}>
-            <div className={`p-5 border-b ${isDark ? 'border-gray-700' : 'border-slate-100'}`}>
-              <div className={`h-10 w-full md:w-96 rounded-lg ${isDark ? 'bg-gray-700' : 'bg-gray-200'} animate-pulse`} />
-            </div>
-            <div className="p-4 space-y-4">
-              {[1, 2, 3, 4, 5].map((i) => (
-                <div key={i} className={`h-14 w-full rounded ${isDark ? 'bg-gray-700' : 'bg-gray-200'} animate-pulse`} />
-              ))}
-            </div>
+          <div className="p-5 space-y-3">
+            {[1, 2, 3, 4, 5, 6].map(i => (
+              <div key={i} className={`h-12 rounded-xl animate-pulse ${pulseClass}`} style={{ opacity: 1 - i * 0.12 }} />
+            ))}
           </div>
         </div>
       </div>
     );
   }
 
+  // ── Error state ──
+  if (error && ventas.length === 0) {
+    return (
+      <div className={`min-h-screen ${pageBg} p-4 md:p-8 font-sans flex items-center justify-center`}>
+        <div className={`rounded-2xl border p-8 max-w-md w-full text-center ${card}`}>
+          <div className={`inline-flex p-4 rounded-2xl mb-5 ${isDark ? 'bg-rose-900/20' : 'bg-rose-50'}`}>
+            <FiAlertTriangle size={36} className={isDark ? 'text-rose-400' : 'text-rose-500'} />
+          </div>
+          <h2 className={`text-xl font-bold mb-2 ${heading}`}>Error al cargar ventas</h2>
+          <p className={`text-sm mb-6 ${textTertiary}`}>{error}</p>
+          <button
+            onClick={() => cargarVentas()}
+            className="btn-primary inline-flex items-center gap-2 px-6 py-2.5 text-sm font-semibold rounded-xl"
+          >
+            <FiRefreshCw size={16} />
+            Reintentar
+          </button>
+        </div>
+      </div>
+    );
+  }
+
   return (
-    <div className={`min-h-screen ${isDark ? 'bg-gray-900 text-gray-300' : 'bg-slate-50/50 text-slate-600'} pb-20 font-sans relative`}>
+    <div className={`min-h-screen ${pageBg} p-4 md:p-8 font-sans`}>
 
-      {/* HEADER */}
-      <div className={`${isDark ? 'bg-gray-800 border-gray-700' : 'bg-white border-slate-200'} border-b sticky top-0 z-10`}>
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex flex-col sm:flex-row justify-between items-center py-4 gap-4">
-            <div className="flex items-center gap-4 w-full sm:w-auto">
-              <button
-                onClick={() => navigate('/')}
-                className={`p-2 rounded-lg ${isDark ? 'hover:bg-gray-700 text-gray-400' : 'hover:bg-slate-100 text-slate-500'} transition-colors`}
-              >
-                <IoMdArrowRoundBack className="h-6 w-6" />
-              </button>
-              <div>
-                <h1 className={`text-2xl font-bold ${heading}`}>Historial de Ventas</h1>
-                <p className={`text-sm ${textTertiary}`}>Consulta y gestiona todas tus ventas realizadas</p>
-              </div>
+      {/* ── Inline error banner ── */}
+      {error && ventas.length > 0 && (
+        <div className={`rounded-xl border px-4 py-3 mb-4 flex items-center gap-3 ${isDark ? 'bg-rose-900/20 border-rose-800/40 text-rose-300' : 'bg-rose-50 border-rose-200 text-rose-700'}`}>
+          <FiAlertTriangle size={16} className="flex-shrink-0" />
+          <span className="text-sm flex-1">{error}</span>
+          <button onClick={() => setError(null)} className="p-1 rounded-lg hover:bg-black/10 transition-colors">
+            <FiX size={14} />
+          </button>
+        </div>
+      )}
+
+      {/* ── Header Card ── */}
+      <div className={`rounded-2xl ${shadow} border p-5 mb-6 ${card}`}>
+        <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+          <div className="flex items-center gap-4">
+            <div className="p-3 rounded-xl text-white shadow-lg" style={{ background: `linear-gradient(135deg, ${colors[500]}, ${colors[700] || colors[600]})` }}>
+              <FiFileText size={24} />
             </div>
-
+            <div>
+              <h1 className={`text-2xl font-bold tracking-tight leading-none ${heading}`}>Historial de Ventas</h1>
+              <p className={`text-sm mt-1.5 ${textTertiary}`}>Consulta y gestiona todas las ventas realizadas</p>
+            </div>
+          </div>
+          <div className="flex gap-2.5 w-full md:w-auto">
+            <button
+              onClick={() => cargarVentas(true)}
+              disabled={refreshing}
+              className={`p-2.5 rounded-xl border text-sm font-medium transition-all ${btnSecondary} ${refreshing ? 'opacity-60' : ''}`}
+              title="Actualizar datos"
+            >
+              <FiRefreshCw size={18} className={refreshing ? 'animate-spin' : ''} />
+            </button>
             <button
               onClick={() => navigate('/ventas/nueva')}
-              className="group relative inline-flex items-center justify-center px-5 py-2.5 text-sm font-medium text-white transition-all duration-200 bg-indigo-600 rounded-lg hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-600 shadow-sm shadow-indigo-200"
+              className="flex-1 md:flex-none btn-primary inline-flex items-center justify-center gap-2 px-5 py-2.5 text-sm font-semibold rounded-xl shadow-lg transition-all transform hover:scale-[1.02] active:scale-95"
             >
-              <IoMdAdd className="mr-2 w-5 h-5 group-hover:scale-110 transition-transform" />
+              <FiPlus size={18} />
               Nueva Venta
             </button>
           </div>
         </div>
       </div>
 
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-
-        {/* KPI CARDS */}
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
-          <div className={`${isDark ? 'bg-gray-800 border-gray-700' : 'bg-white border-slate-100'} rounded-xl p-6 shadow-sm border flex items-center gap-4`}>
-            <div className={`p-3 ${isDark ? 'bg-blue-900/30 text-blue-400' : 'bg-blue-50 text-blue-600'} rounded-lg`}>
-              <IoIosDocument className="w-6 h-6" />
+      {/* ── KPI Cards ── */}
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+        {kpis.map((kpi, i) => (
+          <div
+            key={i}
+            className={`p-5 rounded-2xl border transition-all duration-200 ${
+              kpi.accent
+                ? 'text-white border-transparent shadow-lg hover:shadow-xl'
+                : `${cardHover}`
+            }`}
+            style={kpi.accent ? { background: `linear-gradient(135deg, ${colors[500]}, ${colors[700] || colors[600]})` } : {}}
+          >
+            <div className="flex items-center justify-between mb-3">
+              <p className={`text-[11px] font-semibold uppercase tracking-wider ${
+                kpi.accent ? 'text-white/70' : textMuted
+              }`}>{kpi.label}</p>
+              <div className={`p-2 rounded-xl ${
+                kpi.accent ? 'bg-white/15' : isDark ? 'bg-gray-700/60' : 'bg-gray-50'
+              }`}>
+                <span style={!kpi.accent ? { color: colors[500] } : {}}>{kpi.icon}</span>
+              </div>
             </div>
-            <div>
-              <p className={`text-xs font-medium ${textTertiary} uppercase`}>Total de Ventas</p>
-              <p className={`text-2xl font-bold ${heading}`}>{totalVentas}</p>
-            </div>
+            <p className={`text-2xl font-extrabold tracking-tight ${kpi.accent ? '' : heading}`}>{kpi.value}</p>
           </div>
+        ))}
+      </div>
 
-          <div className={`${isDark ? 'bg-gray-800 border-gray-700' : 'bg-white border-slate-100'} rounded-xl p-6 shadow-sm border flex items-center gap-4`}>
-            <div className={`p-3 ${isDark ? 'bg-emerald-900/30 text-emerald-400' : 'bg-emerald-50 text-emerald-600'} rounded-lg`}>
-              <IoIosCash className="w-6 h-6" />
-            </div>
-            <div>
-              <p className={`text-xs font-medium ${textTertiary} uppercase`}>Monto Total</p>
-              <p className={`text-2xl font-bold ${heading}`}>S/ {montoTotal.toLocaleString('es-PE', { minimumFractionDigits: 2 })}</p>
-            </div>
-          </div>
+      {/* ── Table Card ── */}
+      <div className={`rounded-2xl border overflow-hidden ${shadow} ${card}`}>
 
-          <div className={`${isDark ? 'bg-gray-800 border-gray-700' : 'bg-white border-slate-100'} rounded-xl p-6 shadow-sm border flex items-center gap-4`}>
-            <div className={`p-3 ${isDark ? 'bg-green-900/30 text-green-400' : 'bg-green-50 text-green-600'} rounded-lg`}>
-              <IoIosCheckmarkCircle className="w-6 h-6" />
-            </div>
-            <div>
-              <p className={`text-xs font-medium ${textTertiary} uppercase`}>Completadas</p>
-              <p className={`text-2xl font-bold ${heading}`}>{completadas}</p>
-            </div>
-          </div>
-
-          <div className={`${isDark ? 'bg-gray-800 border-gray-700' : 'bg-white border-slate-100'} rounded-xl p-6 shadow-sm border flex items-center gap-4`}>
-            <div className={`p-3 ${isDark ? 'bg-amber-900/30 text-amber-400' : 'bg-amber-50 text-amber-600'} rounded-lg`}>
-              <IoIosTime className="w-6 h-6" />
-            </div>
-            <div>
-              <p className={`text-xs font-medium ${textTertiary} uppercase`}>Pendientes</p>
-              <p className={`text-2xl font-bold ${heading}`}>{pendientes}</p>
-            </div>
-          </div>
-        </div>
-
-        {/* TABLA PRINCIPAL */}
-        <div className={`${isDark ? 'bg-gray-800 border-gray-700' : 'bg-white border-slate-200'} rounded-xl shadow-sm border overflow-hidden`}>
-
-          {/* Filtros */}
-          <div className={`p-5 border-b ${isDark ? 'border-gray-700 bg-gray-800/80' : 'border-slate-100 bg-slate-50/50'} flex flex-col md:flex-row justify-between items-center gap-4`}>
-            <div className="relative w-full md:w-96">
-              <IoIosSearch className={`w-5 h-5 absolute left-3 top-1/2 -translate-y-1/2 ${isDark ? 'text-gray-500' : 'text-slate-400'}`} />
+        {/* Filters bar */}
+        <div className={`p-4 md:p-5 border-b ${border}`}>
+          <div className="flex flex-col md:flex-row justify-between items-stretch md:items-center gap-3">
+            <div className="relative flex-1 md:max-w-sm">
+              <FiSearch className={`w-4 h-4 absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none ${textMuted}`} />
               <input
                 type="text"
-                placeholder="Buscar por cliente, vendedor o N venta..."
-                className={`w-full pl-10 pr-4 py-2.5 ${isDark ? 'bg-gray-700 border-gray-600 text-gray-200 placeholder-gray-500' : 'bg-white border-slate-200 text-slate-700'} border rounded-lg text-sm focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 transition-all`}
+                placeholder="Buscar por cliente, vendedor o N..."
+                className={`w-full pl-10 pr-4 py-2.5 border rounded-xl text-sm transition-all focus:ring-2 ${input}`}
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
               />
+              {searchTerm && (
+                <button
+                  onClick={() => setSearchTerm('')}
+                  className={`absolute right-3 top-1/2 -translate-y-1/2 p-0.5 rounded-full transition-colors ${btnGhost}`}
+                >
+                  <FiX size={14} />
+                </button>
+              )}
             </div>
-
-            <div className="flex items-center gap-2 w-full md:w-auto">
-              <span className={`text-sm ${textTertiary} hidden sm:block`}>Estado:</span>
-              <select
-                className={`w-full md:w-auto border ${isDark ? 'border-gray-600 bg-gray-700 text-gray-200' : 'border-slate-200 bg-white text-slate-700'} rounded-lg px-3 py-2.5 text-sm focus:border-indigo-500 outline-none cursor-pointer`}
-                value={filterEstado}
-                onChange={(e) => setFilterEstado(e.target.value)}
-              >
-                <option value="all">Todos</option>
-                <option value="COMPLETADA">Completada</option>
-                <option value="PENDIENTE">Pendiente</option>
-                <option value="ANULADA">Anulada</option>
-              </select>
+            <div className="flex items-center gap-2">
+              <div className="flex items-center gap-2">
+                <FiFilter size={14} className={textMuted} />
+                <select
+                  className={`border rounded-xl px-3 py-2.5 text-sm cursor-pointer transition-all ${select}`}
+                  value={filterEstado}
+                  onChange={(e) => setFilterEstado(e.target.value)}
+                >
+                  <option value="all">Todos los estados</option>
+                  <option value="COMPLETADA">Completada</option>
+                  <option value="PENDIENTE">Pendiente</option>
+                  <option value="ANULADA">Anulada</option>
+                </select>
+              </div>
+              {hasActiveFilters && (
+                <button
+                  onClick={clearFilters}
+                  className={`px-3 py-2.5 rounded-xl text-xs font-medium transition-all ${btnGhost}`}
+                  title="Limpiar filtros"
+                >
+                  <FiX size={14} />
+                </button>
+              )}
             </div>
-          </div>
-
-          {/* Desktop Table */}
-          <div className="hidden lg:block overflow-x-auto">
-            <table className={`min-w-full divide-y ${isDark ? 'divide-gray-700' : 'divide-slate-200'}`}>
-              <thead className={tableHeader}>
-                <tr>
-                  <th className={`px-6 py-4 text-left text-xs font-semibold ${tableHeaderText} uppercase tracking-wider`}># Venta</th>
-                  <th className={`px-6 py-4 text-left text-xs font-semibold ${tableHeaderText} uppercase tracking-wider`}>Fecha</th>
-                  <th className={`px-6 py-4 text-left text-xs font-semibold ${tableHeaderText} uppercase tracking-wider`}>Cliente</th>
-                  <th className={`px-6 py-4 text-left text-xs font-semibold ${tableHeaderText} uppercase tracking-wider`}>Vendedor</th>
-                  <th className={`px-6 py-4 text-left text-xs font-semibold ${tableHeaderText} uppercase tracking-wider`}>Almacen</th>
-                  <th className={`px-6 py-4 text-right text-xs font-semibold ${tableHeaderText} uppercase tracking-wider`}>Total</th>
-                  <th className={`px-6 py-4 text-center text-xs font-semibold ${tableHeaderText} uppercase tracking-wider`}>Estado</th>
-                  <th className={`px-6 py-4 text-center text-xs font-semibold ${tableHeaderText} uppercase tracking-wider`}>Envio</th>
-                  <th className={`px-6 py-4 text-center text-xs font-semibold ${tableHeaderText} uppercase tracking-wider`}>Acciones</th>
-                </tr>
-              </thead>
-              <tbody className={`${isDark ? 'bg-gray-800' : 'bg-white'} divide-y ${isDark ? 'divide-gray-700' : 'divide-slate-100'}`}>
-                {ventasFiltradas.length === 0 ? (
-                  <tr>
-                    <td colSpan={9} className={`px-6 py-12 text-center ${emptyState}`}>
-                      No se encontraron ventas.
-                    </td>
-                  </tr>
-                ) : (
-                  ventasFiltradas.map((venta) => (
-                    <tr key={venta.id} className={`${isDark ? 'hover:bg-gray-700/50' : 'hover:bg-slate-50/80'} transition-colors duration-150 group`}>
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        <span className="text-sm font-semibold text-indigo-600">#{venta.id}</span>
-                      </td>
-                      <td className={`px-6 py-4 whitespace-nowrap text-sm ${textTertiary}`}>
-                        {formatearFecha(venta.fecha || venta.fechaCreacion)}
-                      </td>
-                      <td className={`px-6 py-4 whitespace-nowrap text-sm font-medium ${isDark ? 'text-gray-300' : 'text-slate-700'}`}>
-                        {venta.nombreCliente || 'Sin cliente'}
-                      </td>
-                      <td className={`px-6 py-4 whitespace-nowrap text-sm ${textTertiary}`}>
-                        {venta.nombreUsuario || '-'}
-                      </td>
-                      <td className={`px-6 py-4 whitespace-nowrap text-sm ${textTertiary}`}>
-                        {venta.nombreAlmacen || '-'}
-                      </td>
-                      <td className={`px-6 py-4 whitespace-nowrap text-sm text-right font-bold ${isDark ? 'text-gray-200' : 'text-slate-700'}`}>
-                        S/ {(venta.total || 0).toFixed(2)}
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-center">
-                        <span className={`inline-flex px-2.5 py-0.5 rounded-full text-xs font-medium border ${getStatusStyles(venta.estado)}`}>
-                          {venta.estado}
-                        </span>
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-center">
-                        {venta.estado === 'PENDIENTE' ? (
-                          <span className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-medium border ${isDark ? 'bg-indigo-900/40 text-indigo-400 border-indigo-700' : 'bg-indigo-50 text-indigo-700 border-indigo-200'}`}>
-                            <FaTruck className="w-3 h-3" />
-                            Delivery
-                          </span>
-                        ) : (
-                          <span className={`text-xs ${textTertiary}`}>Directa</span>
-                        )}
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-center">
-                        <button
-                          onClick={() => onVerTicket(venta)}
-                          className={`${isDark ? 'text-gray-500 hover:text-indigo-400 hover:bg-indigo-900/30' : 'text-slate-400 hover:text-indigo-600 hover:bg-indigo-50'} transition-colors p-2 rounded-full inline-flex items-center gap-1`}
-                          title="Ver Ticket"
-                        >
-                          <FaReceipt className="w-4 h-4" />
-                          <span className="text-xs font-medium">Ver Ticket</span>
-                        </button>
-                      </td>
-                    </tr>
-                  ))
-                )}
-              </tbody>
-            </table>
-          </div>
-
-          {/* Mobile Cards */}
-          <div className="block lg:hidden">
-            {ventasFiltradas.length === 0 ? (
-              <div className={`px-6 py-12 text-center ${emptyState}`}>
-                No se encontraron ventas.
-              </div>
-            ) : (
-              <div className="divide-y ${isDark ? 'divide-gray-700' : 'divide-slate-100'}">
-                {ventasFiltradas.map((venta) => (
-                  <div
-                    key={venta.id}
-                    className={`p-4 ${isDark ? 'hover:bg-gray-700/30' : 'hover:bg-gray-50'} transition-colors`}
-                  >
-                    <div className="flex items-center justify-between mb-3">
-                      <span className="text-sm font-semibold text-indigo-600">Venta #{venta.id}</span>
-                      <span className={`inline-flex px-2.5 py-0.5 rounded-full text-xs font-medium border ${getStatusStyles(venta.estado)}`}>
-                        {venta.estado}
-                      </span>
-                    </div>
-
-                    <div className="space-y-1.5 mb-3">
-                      <div className="flex justify-between">
-                        <span className={`text-xs ${textTertiary}`}>Fecha</span>
-                        <span className={`text-xs font-medium ${isDark ? 'text-gray-300' : 'text-slate-700'}`}>
-                          {formatearFecha(venta.fecha || venta.fechaCreacion)}
-                        </span>
-                      </div>
-                      <div className="flex justify-between">
-                        <span className={`text-xs ${textTertiary}`}>Cliente</span>
-                        <span className={`text-xs font-medium ${isDark ? 'text-gray-300' : 'text-slate-700'}`}>
-                          {venta.nombreCliente || 'Sin cliente'}
-                        </span>
-                      </div>
-                      <div className="flex justify-between">
-                        <span className={`text-xs ${textTertiary}`}>Vendedor</span>
-                        <span className={`text-xs font-medium ${isDark ? 'text-gray-300' : 'text-slate-700'}`}>
-                          {venta.nombreUsuario || '-'}
-                        </span>
-                      </div>
-                      <div className="flex justify-between">
-                        <span className={`text-xs ${textTertiary}`}>Almacen</span>
-                        <span className={`text-xs font-medium ${isDark ? 'text-gray-300' : 'text-slate-700'}`}>
-                          {venta.nombreAlmacen || '-'}
-                        </span>
-                      </div>
-                      <div className="flex justify-between">
-                        <span className={`text-xs ${textTertiary}`}>Total</span>
-                        <span className={`text-sm font-bold ${isDark ? 'text-gray-200' : 'text-slate-700'}`}>
-                          S/ {(venta.total || 0).toFixed(2)}
-                        </span>
-                      </div>
-                      <div className="flex justify-between">
-                        <span className={`text-xs ${textTertiary}`}>Envio</span>
-                        {venta.estado === 'PENDIENTE' ? (
-                          <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium ${isDark ? 'bg-indigo-900/40 text-indigo-400' : 'bg-indigo-50 text-indigo-700'}`}>
-                            <FaTruck className="w-3 h-3" />
-                            Delivery
-                          </span>
-                        ) : (
-                          <span className={`text-xs ${textTertiary}`}>Directa</span>
-                        )}
-                      </div>
-                    </div>
-
-                    <button
-                      onClick={() => onVerTicket(venta)}
-                      className="w-full flex items-center justify-center gap-2 py-2 text-sm font-medium text-indigo-600 bg-indigo-50 hover:bg-indigo-100 rounded-lg transition-colors"
-                    >
-                      <FaReceipt className="w-4 h-4" />
-                      Ver Ticket
-                    </button>
-                  </div>
-                ))}
-              </div>
-            )}
           </div>
         </div>
+
+        {/* Results summary bar */}
+        <div className={`px-5 py-2 text-xs font-medium ${textMuted} border-b ${borderLight} flex items-center justify-between`}>
+          <span>
+            {hasActiveFilters ? (
+              <>Mostrando <span style={{ color: colors[500] }} className="font-bold">{ventasFiltradas.length}</span> de {ventas.length} ventas</>
+            ) : (
+              <>{ventas.length} ventas en total</>
+            )}
+          </span>
+          {ventasFiltradas.length > ITEMS_PER_PAGE && (
+            <span>Página {currentPage} de {totalPages}</span>
+          )}
+        </div>
+
+        {/* ── Desktop Table ── */}
+        <div className="hidden lg:block overflow-x-auto">
+          <table className="w-full">
+            <thead>
+              <tr className={tableHeader}>
+                {['# Venta', 'Fecha', 'Cliente', 'Vendedor', 'Almacén', 'Total', 'Estado', 'Tipo', ''].map((h, i) => (
+                  <th key={i} className={`px-5 py-3 text-left text-[11px] font-semibold uppercase tracking-wider ${tableHeaderText} ${
+                    h === 'Total' ? 'text-right' : h === 'Estado' || h === 'Tipo' || h === '' ? 'text-center' : ''
+                  }`}>{h}</th>
+                ))}
+              </tr>
+            </thead>
+            <tbody className={`divide-y ${divider}`}>
+              {paginatedVentas.length === 0 ? (
+                <tr>
+                  <td colSpan={9} className="px-6 py-16 text-center">
+                    <div className={`inline-flex flex-col items-center ${emptyState}`}>
+                      <div className={`p-5 rounded-2xl mb-4 ${subtleBg}`}>
+                        <FiSearch size={28} className="opacity-40" />
+                      </div>
+                      <p className={`font-semibold text-base mb-1 ${textSecondary}`}>No se encontraron ventas</p>
+                      <p className={`text-sm mb-4 ${textMuted}`}>Intenta con otros filtros de búsqueda</p>
+                      {hasActiveFilters && (
+                        <button
+                          onClick={clearFilters}
+                          className={`inline-flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-medium transition-all ${btnSecondary}`}
+                        >
+                          <FiX size={14} />
+                          Limpiar filtros
+                        </button>
+                      )}
+                    </div>
+                  </td>
+                </tr>
+              ) : (
+                paginatedVentas.map(venta => (
+                  <tr key={venta.id} className={`${tableRow} transition-colors cursor-pointer group`} onClick={() => handleVerTicket(venta)}>
+                    <td className="px-5 py-3 whitespace-nowrap">
+                      <span className="text-sm font-bold" style={{ color: colors[500] }}>#{venta.id}</span>
+                    </td>
+                    <td className="px-5 py-3 whitespace-nowrap">
+                      <div className="flex items-center gap-2">
+                        <FiCalendar size={13} className={textMuted} />
+                        <span className={`text-sm ${tableCell}`}>{formatFecha(venta.fecha || venta.fechaCreacion)}</span>
+                      </div>
+                    </td>
+                    <td className="px-5 py-3 whitespace-nowrap">
+                      <div className="flex items-center gap-2.5">
+                        <div
+                          className="w-7 h-7 rounded-full flex items-center justify-center text-white text-[10px] font-bold flex-shrink-0 shadow-sm"
+                          style={{ backgroundColor: colors[500] }}
+                        >
+                          {(venta.nombreCliente || 'S')[0].toUpperCase()}
+                        </div>
+                        <span className={`text-sm font-medium ${textPrimary}`}>{venta.nombreCliente || 'Sin cliente'}</span>
+                      </div>
+                    </td>
+                    <td className={`px-5 py-3 whitespace-nowrap text-sm ${tableCell}`}>
+                      {venta.nombreUsuario || '-'}
+                    </td>
+                    <td className="px-5 py-3 whitespace-nowrap">
+                      <div className="flex items-center gap-1.5">
+                        <FiMapPin size={12} className={textMuted} />
+                        <span className={`text-sm ${tableCell}`}>{venta.nombreAlmacen || '-'}</span>
+                      </div>
+                    </td>
+                    <td className="px-5 py-3 whitespace-nowrap text-right">
+                      <span className={`text-sm font-bold ${heading}`}>{formatMoney(venta.total || 0)}</span>
+                    </td>
+                    <td className="px-5 py-3 whitespace-nowrap text-center">
+                      <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-semibold ${getStatusStyles(venta.estado, isDark)}`}>
+                        {getStatusIcon(venta.estado)}
+                        {venta.estado}
+                      </span>
+                    </td>
+                    <td className="px-5 py-3 whitespace-nowrap text-center">
+                      {venta.estado === 'PENDIENTE' ? (
+                        <span className="inline-flex items-center gap-1 text-xs font-medium" style={{ color: colors[500] }}>
+                          <FiTruck size={13} />
+                          Delivery
+                        </span>
+                      ) : (
+                        <span className={`text-xs ${textMuted}`}>Directa</span>
+                      )}
+                    </td>
+                    <td className="px-5 py-3 whitespace-nowrap text-center">
+                      <button
+                        onClick={(e) => { e.stopPropagation(); handleVerTicket(venta); }}
+                        className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-all opacity-0 group-hover:opacity-100 ${btnGhost}`}
+                      >
+                        <FiEye size={14} />
+                        Ver
+                      </button>
+                    </td>
+                  </tr>
+                ))
+              )}
+            </tbody>
+          </table>
+        </div>
+
+        {/* ── Mobile Cards ── */}
+        <div className="block lg:hidden">
+          {paginatedVentas.length === 0 ? (
+            <div className="px-6 py-16 text-center">
+              <div className={`inline-flex flex-col items-center ${emptyState}`}>
+                <div className={`p-5 rounded-2xl mb-4 ${subtleBg}`}>
+                  <FiSearch size={28} className="opacity-40" />
+                </div>
+                <p className={`font-semibold mb-1 ${textSecondary}`}>No se encontraron ventas</p>
+                <p className={`text-sm mb-4 ${textMuted}`}>Intenta con otros filtros</p>
+                {hasActiveFilters && (
+                  <button onClick={clearFilters} className={`inline-flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-medium ${btnSecondary}`}>
+                    <FiX size={14} /> Limpiar filtros
+                  </button>
+                )}
+              </div>
+            </div>
+          ) : (
+            <div className={`divide-y ${divider}`}>
+              {paginatedVentas.map(venta => (
+                <div
+                  key={venta.id}
+                  className={`p-4 ${listItemHover} transition-colors`}
+                  onClick={() => handleVerTicket(venta)}
+                >
+                  {/* Top row: avatar + ID + status */}
+                  <div className="flex items-center justify-between mb-3">
+                    <div className="flex items-center gap-2.5">
+                      <div
+                        className="w-9 h-9 rounded-full flex items-center justify-center text-white text-xs font-bold flex-shrink-0 shadow-sm"
+                        style={{ backgroundColor: colors[500] }}
+                      >
+                        {(venta.nombreCliente || 'S')[0].toUpperCase()}
+                      </div>
+                      <div>
+                        <div className="flex items-center gap-2">
+                          <span className="text-sm font-bold" style={{ color: colors[500] }}>#{venta.id}</span>
+                          <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-semibold ${getStatusStyles(venta.estado, isDark)}`}>
+                            {getStatusIcon(venta.estado)}
+                            {venta.estado}
+                          </span>
+                        </div>
+                        <p className={`text-xs mt-0.5 ${textMuted}`}>
+                          <FiCalendar size={10} className="inline mr-1" />
+                          {formatFechaCorta(venta.fecha || venta.fechaCreacion)}
+                        </p>
+                      </div>
+                    </div>
+                    <span className={`text-lg font-bold ${heading}`}>{formatMoney(venta.total || 0)}</span>
+                  </div>
+
+                  {/* Detail row */}
+                  <div className={`ml-[46px] flex items-center gap-4 text-xs ${textMuted}`}>
+                    <span className="flex items-center gap-1">
+                      <FiUser size={11} />
+                      {venta.nombreCliente || 'Sin cliente'}
+                    </span>
+                    <span className="flex items-center gap-1">
+                      <FiMapPin size={11} />
+                      {venta.nombreAlmacen || '-'}
+                    </span>
+                    {venta.estado === 'PENDIENTE' && (
+                      <span className="flex items-center gap-1" style={{ color: colors[500] }}>
+                        <FiTruck size={11} />
+                        Delivery
+                      </span>
+                    )}
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+
+        {/* ── Pagination ── */}
+        {totalPages > 1 && (
+          <div className={`px-5 py-3 border-t ${border} flex items-center justify-between`}>
+            <p className={`text-xs ${textMuted} hidden sm:block`}>
+              {((currentPage - 1) * ITEMS_PER_PAGE) + 1}–{Math.min(currentPage * ITEMS_PER_PAGE, ventasFiltradas.length)} de {ventasFiltradas.length}
+            </p>
+            <div className="flex items-center gap-1 mx-auto sm:mx-0">
+              <button
+                onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+                disabled={currentPage === 1}
+                className={`p-2 rounded-lg text-sm transition-all disabled:opacity-30 disabled:cursor-not-allowed ${btnGhost}`}
+              >
+                <FiChevronLeft size={16} />
+              </button>
+              {Array.from({ length: totalPages }, (_, i) => i + 1)
+                .filter(p => p === 1 || p === totalPages || Math.abs(p - currentPage) <= 1)
+                .reduce<(number | 'dots')[]>((acc, p, i, arr) => {
+                  if (i > 0 && p - (arr[i - 1] as number) > 1) acc.push('dots');
+                  acc.push(p);
+                  return acc;
+                }, [])
+                .map((item, i) =>
+                  item === 'dots' ? (
+                    <span key={`d${i}`} className={`px-1 text-xs ${textMuted}`}>...</span>
+                  ) : (
+                    <button
+                      key={item}
+                      onClick={() => setCurrentPage(item as number)}
+                      className={`w-8 h-8 rounded-lg text-xs font-semibold transition-all ${
+                        currentPage === item
+                          ? 'text-white shadow-sm'
+                          : btnGhost
+                      }`}
+                      style={currentPage === item ? { backgroundColor: colors[500] } : {}}
+                    >
+                      {item}
+                    </button>
+                  )
+                )}
+              <button
+                onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
+                disabled={currentPage === totalPages}
+                className={`p-2 rounded-lg text-sm transition-all disabled:opacity-30 disabled:cursor-not-allowed ${btnGhost}`}
+              >
+                <FiChevronRight size={16} />
+              </button>
+            </div>
+          </div>
+        )}
       </div>
 
-      {/* MODAL TICKET */}
+      {/* Modal Ticket */}
       <ModalTicket
         isOpen={mostrarTicket}
         onClose={() => setMostrarTicket(false)}
