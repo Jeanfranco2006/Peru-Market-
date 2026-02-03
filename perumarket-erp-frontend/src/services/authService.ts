@@ -72,14 +72,18 @@ export const authService = {
       localStorage.setItem("logged", "true");
       localStorage.setItem("username", data.user.username);
       localStorage.setItem("userRole", data.user.rol);
-      
-      console.log('💾 Datos de autenticación guardados:', {
+      localStorage.setItem("usuarioId", String(data.user.id));
+      if (data.user.almacenId) {
+        localStorage.setItem("almacenId", String(data.user.almacenId));
+      }
+
+      console.log('Datos de autenticación guardados:', {
         user: data.user.username,
         role: data.user.rol,
         modules: data.modules.length
       });
     } catch (storageError) {
-      console.error('❌ Error guardando en localStorage:', storageError);
+      console.error('Error guardando en localStorage:', storageError);
     }
   },
 
@@ -99,9 +103,10 @@ export const authService = {
       localStorage.removeItem("logged");
       localStorage.removeItem("username");
       localStorage.removeItem("userRole");
-      console.log('🚪 Sesión cerrada');
+      localStorage.removeItem("usuarioId");
+      localStorage.removeItem("almacenId");
     } catch (error) {
-      console.error('❌ Error durante logout:', error);
+      console.error('Error durante logout:', error);
     }
   },
 

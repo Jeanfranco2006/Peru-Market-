@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from "react";
 import { useNavigate } from "react-router-dom";
-import { FiUser, FiLogOut, FiSettings, FiChevronDown, FiBell } from "react-icons/fi";
+import { FiUser, FiLogOut, FiSettings, FiChevronDown, FiBell, FiSun, FiMoon } from "react-icons/fi";
 import ModalConfirmarLogout from "./modals/ModalConfirmarLogout";
 import { useTheme } from "../context/ThemeContext";
 
@@ -22,7 +22,7 @@ interface AuthData {
 }
 
 export default function Header() {
-  const { mode, colors } = useTheme();
+  const { mode, colors, toggleMode } = useTheme();
   const isDark = mode === "dark";
 
   const [user, setUser] = useState<UserInfo | null>(null);
@@ -85,6 +85,17 @@ export default function Header() {
         isDark ? "bg-gray-900 border-gray-700" : "bg-white border-gray-100"
       }`}>
         <div className="flex items-center gap-6">
+          {/* Dark/Light Mode Toggle */}
+          <button
+            onClick={toggleMode}
+            className={`relative p-2 rounded-full transition-all duration-200 ${
+              isDark ? "text-yellow-400 hover:bg-gray-800" : "text-gray-500 hover:bg-gray-50"
+            }`}
+            title={isDark ? "Cambiar a modo claro" : "Cambiar a modo oscuro"}
+          >
+            {isDark ? <FiSun className="w-5 h-5" /> : <FiMoon className="w-5 h-5" />}
+          </button>
+
           {/* Notifications */}
           <button className={`relative p-2 rounded-full transition-all duration-200 ${
             isDark ? "text-gray-400 hover:bg-gray-800" : "text-gray-400 hover:bg-gray-50"

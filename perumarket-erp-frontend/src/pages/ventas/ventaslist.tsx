@@ -1,6 +1,9 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { FaTimes, FaShoppingCart, FaTrash, FaMinus, FaPlus, FaSearch, FaUserPlus, FaImage, FaBoxOpen, FaMoneyBillWave, FaReceipt } from 'react-icons/fa';
+import {
+  FiX, FiShoppingCart, FiTrash2, FiMinus, FiPlus, FiSearch,
+  FiUserPlus, FiImage, FiBox, FiDollarSign, FiFileText, FiTruck, FiAlertTriangle
+} from 'react-icons/fi';
 import ModalCliente from './ModalCliente';
 import ModalPago from './ModalPago';
 import type { Cliente } from '../../types/clientes/Client';
@@ -24,18 +27,18 @@ const ProductImage = ({
 
   if (imageError || !src) {
     return (
-      <div className={`${className} ${isDark ? 'bg-gray-700 text-gray-500' : 'bg-slate-100 text-slate-400'} flex flex-col items-center justify-center`}>
-        <FaImage className="text-3xl mb-1 opacity-50" />
+      <div className={`${className} ${isDark ? 'bg-gray-700 text-gray-500' : 'bg-gray-100 text-gray-400'} flex flex-col items-center justify-center`}>
+        <FiImage className="text-3xl mb-1 opacity-50" />
         <span className="text-[10px] font-medium uppercase tracking-wide">Sin imagen</span>
       </div>
     );
   }
 
   return (
-    <div className={`w-full h-full relative overflow-hidden ${isDark ? 'bg-gray-700' : 'bg-slate-100'}`}>
+    <div className={`w-full h-full relative overflow-hidden ${isDark ? 'bg-gray-700' : 'bg-gray-100'}`}>
       {imageLoading && (
-        <div className={`absolute inset-0 ${isDark ? 'bg-gray-600' : 'bg-slate-200'} animate-pulse flex items-center justify-center z-10`}>
-          <FaImage className={`${isDark ? 'text-gray-500' : 'text-slate-300'} text-3xl`} />
+        <div className={`absolute inset-0 ${isDark ? 'bg-gray-600' : 'bg-gray-200'} animate-pulse flex items-center justify-center z-10`}>
+          <FiImage className={`${isDark ? 'text-gray-500' : 'text-gray-300'} text-3xl`} />
         </div>
       )}
       <img
@@ -54,7 +57,10 @@ const ProductImage = ({
 
 const VentasList: React.FC = () => {
   const navigate = useNavigate();
-  const { isDark, colors, pageBg, heading, textTertiary } = useThemeClasses();
+  const {
+    isDark, colors, pageBg, card, heading, textTertiary, textSecondary,
+    border, input, modalOverlay, modalContent, btnPrimary, btnSecondary
+  } = useThemeClasses();
 
   // Estados principales
   const [productos, setProductos] = useState<Producto[]>([]);
@@ -75,8 +81,6 @@ const VentasList: React.FC = () => {
   const [conEnvio, setConEnvio] = useState(false);
   const [direccionEnvio, setDireccionEnvio] = useState('');
 
-
-  // Inicializar datos
   useEffect(() => {
     cargarDatosIniciales();
   }, []);
@@ -90,7 +94,6 @@ const VentasList: React.FC = () => {
         ventaService.fetchProductos(),
         ventaService.fetchAlmacenes()
       ]);
-
       setMetodosPago(metodos);
       setClientes(clientesData);
       setProductos(productosData);
@@ -103,7 +106,6 @@ const VentasList: React.FC = () => {
     }
   };
 
-  // Filtrar clientes
   useEffect(() => {
     if (busquedaCliente.trim() === '') {
       setClientesFiltrados([]);
@@ -118,17 +120,14 @@ const VentasList: React.FC = () => {
     }
   }, [busquedaCliente, clientes]);
 
-  // Funciones del carrito
   const limpiarCarrito = useCallback(() => {
     if (carrito.length === 0) return;
     if (!confirm('¿Estás seguro de limpiar el carrito?')) return;
-
     const productosActualizados = productos.map(p => {
       const itemCarrito = carrito.find(item => item.producto.id === p.id);
       if (!itemCarrito) return p;
       return { ...p, stock: p.stock + itemCarrito.cantidad };
     });
-
     setProductos(productosActualizados);
     setCarrito([]);
   }, [carrito, productos]);
@@ -138,9 +137,7 @@ const VentasList: React.FC = () => {
       alert('No hay stock disponible');
       return;
     }
-
     const existe = carrito.find(item => item.producto.id === producto.id);
-
     if (existe) {
       if (producto.stock - 1 < 0) {
         alert('No hay más unidades disponibles');
@@ -154,7 +151,6 @@ const VentasList: React.FC = () => {
     } else {
       setCarrito([...carrito, { producto, cantidad: 1, subtotal: producto.precio }]);
     }
-
     setProductos(productos.map(p =>
       p.id === producto.id ? { ...p, stock: p.stock - 1 } : p
     ));
@@ -163,9 +159,7 @@ const VentasList: React.FC = () => {
   const actualizarCantidad = useCallback((id: number, cantidad: number) => {
     const item = carrito.find(i => i.producto.id === id);
     if (!item) return;
-
     const diferencia = cantidad - item.cantidad;
-
     if (diferencia > 0) {
       const producto = productos.find(p => p.id === id);
       if (!producto || producto.stock < diferencia) {
@@ -173,7 +167,6 @@ const VentasList: React.FC = () => {
         return;
       }
     }
-
     if (cantidad === 0) {
       setCarrito(carrito.filter(item => item.producto.id !== id));
     } else {
@@ -183,7 +176,6 @@ const VentasList: React.FC = () => {
           : item
       ));
     }
-
     setProductos(productos.map(p =>
       p.id === id ? { ...p, stock: p.stock - diferencia } : p
     ));
@@ -219,18 +211,14 @@ const VentasList: React.FC = () => {
         alert("Agrega productos al carrito primero");
         return;
       }
-
       const totalPagos = detallesPago.reduce((sum, pago) => sum + pago.monto, 0);
       const { total } = ventaService.calcularTotales(carrito);
-
       if (Math.abs(totalPagos - total) > 0.01) {
         alert(`El total de los pagos (S/ ${totalPagos.toFixed(2)}) no coincide con el total de la venta (S/ ${total.toFixed(2)})`);
         return;
       }
-
       const { idUsuario, idAlmacen } = ventaService.obtenerDatosSesion();
       const { subtotal, igv, total: totalVenta } = ventaService.calcularTotales(carrito);
-
       const ventaBody = {
         idCliente: clienteSeleccionado.id,
         idUsuario,
@@ -252,27 +240,16 @@ const VentasList: React.FC = () => {
         conEnvio,
         direccionEnvio: conEnvio ? direccionEnvio : undefined,
       };
-
-      // 1. Enviar venta al backend (El backend ya descuenta el stock)
       const resultado = await ventaService.procesarVenta(ventaBody);
-
-      // SECCIÓN ELIMINADA: Ya no llamamos a actualizarStock manualmente.
-      // El backend se encarga de la transacción completa.
-
       alert(`Venta #${resultado.id || resultado.numeroComprobante || '000'} procesada correctamente. Total: S/ ${totalVenta.toFixed(2)}`);
-
       setCarrito([]);
       setClienteSeleccionado(null);
       setBusquedaCliente('');
       setMostrarModalPago(false);
       setConEnvio(false);
       setDireccionEnvio('');
-
-      // 2. Recargar productos para ver el nuevo stock
       await ventaService.fetchProductos().then(setProductos);
-
       navigate('/ventas');
-
     } catch (error: any) {
       console.error('Error en procesarVenta:', error);
       alert(error.message || "Ocurrió un error al procesar la venta");
@@ -297,12 +274,73 @@ const VentasList: React.FC = () => {
 
   const { subtotal, igv, total } = ventaService.calcularTotales(carrito);
 
+  // ── Client Search Dropdown (reusable) ──
+  const ClientDropdown = ({ filtrados, onSelect }: { filtrados: Cliente[]; onSelect: (c: Cliente) => void }) => (
+    <div className={`absolute z-50 w-full mt-2 rounded-xl shadow-2xl border max-h-64 overflow-y-auto ${isDark ? 'bg-gray-800 border-gray-600' : 'bg-white border-gray-200'}`}>
+      {filtrados.map((cliente) => (
+        <div
+          key={cliente.persona.id}
+          onClick={() => onSelect(cliente)}
+          className={`p-3 cursor-pointer border-b last:border-0 transition-colors ${isDark ? 'hover:bg-gray-700 border-gray-700' : 'hover:bg-gray-50 border-gray-100'}`}
+        >
+          <div className="flex items-center gap-2">
+            <div
+              className="w-8 h-8 rounded-full flex items-center justify-center font-bold text-xs text-white flex-shrink-0"
+              style={{ backgroundColor: colors[500] }}
+            >
+              {cliente.persona.nombres.charAt(0)}
+            </div>
+            <div className="flex-1 min-w-0">
+              <div className={`font-bold text-sm truncate ${heading}`}>
+                {cliente.persona.nombres} {cliente.persona.apellidoPaterno}
+              </div>
+              <div className={`text-xs ${textTertiary} font-mono`}>
+                {cliente.persona.tipoDocumento}: {cliente.persona.numeroDocumento}
+              </div>
+            </div>
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+
+  // ── Client Selected Card (reusable) ──
+  const ClienteCard = ({ cliente, onRemove, compact = false }: { cliente: Cliente; onRemove: () => void; compact?: boolean }) => (
+    <div className={`rounded-xl p-${compact ? '3' : '4'} border relative ${isDark ? 'bg-emerald-900/20 border-emerald-800' : 'bg-emerald-50 border-emerald-200'}`}>
+      <button
+        onClick={onRemove}
+        className={`absolute top-2 right-2 p-1.5 rounded-full transition-colors ${isDark ? 'text-gray-500 hover:text-red-400 hover:bg-red-900/30' : 'text-gray-400 hover:text-red-500 hover:bg-red-50'}`}
+      >
+        <FiX size={14} />
+      </button>
+      <div className="flex items-center gap-3 mb-2">
+        <div className="w-9 h-9 rounded-full bg-emerald-600 text-white flex items-center justify-center font-bold text-xs shadow-md flex-shrink-0">
+          {cliente.persona.nombres.charAt(0)}
+        </div>
+        <div>
+          <p className={`font-bold text-sm leading-tight ${isDark ? 'text-emerald-300' : 'text-emerald-900'}`}>
+            {cliente.persona.nombres} {cliente.persona.apellidoPaterno}
+          </p>
+          <p className={`text-xs font-mono mt-0.5 ${isDark ? 'text-emerald-400' : 'text-emerald-700'}`}>
+            {cliente.persona.numeroDocumento}
+          </p>
+        </div>
+      </div>
+      <div className={`flex items-center gap-1.5 mt-2 pt-2 border-t ${isDark ? 'border-emerald-800' : 'border-emerald-200'}`}>
+        <svg className="w-3.5 h-3.5 text-emerald-600" fill="currentColor" viewBox="0 0 20 20">
+          <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
+        </svg>
+        <span className={`text-[10px] font-bold uppercase tracking-wide ${isDark ? 'text-emerald-400' : 'text-emerald-700'}`}>Cliente Verificado</span>
+      </div>
+    </div>
+  );
+
+  // ── Loading skeleton ──
   if (loading) {
     return (
       <div className={`min-h-screen ${pageBg} p-4 lg:p-6`}>
         <div className="max-w-[1920px] mx-auto">
-          {/* Skeleton header */}
-          <div className={`${isDark ? 'bg-gray-800 border-gray-700' : 'bg-white border-slate-200'} rounded-xl border p-4 mb-6 flex flex-col md:flex-row justify-between items-center gap-4`}>
+          <div className={`rounded-xl border p-4 mb-6 flex flex-col md:flex-row justify-between items-center gap-4 ${card}`}>
             <div className="flex items-center gap-3">
               <div className={`w-12 h-12 rounded-lg animate-pulse ${isDark ? 'bg-gray-700' : 'bg-gray-200'}`} />
               <div>
@@ -315,17 +353,14 @@ const VentasList: React.FC = () => {
               <div className={`h-10 w-32 rounded-lg animate-pulse ${isDark ? 'bg-gray-700' : 'bg-gray-200'}`} />
             </div>
           </div>
-          {/* Skeleton grid */}
           <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
             <div className="lg:col-span-8 space-y-6">
-              {/* Skeleton search */}
-              <div className={`${isDark ? 'bg-gray-800 border-gray-700' : 'bg-white border-slate-200'} p-2 rounded-xl border`}>
+              <div className={`p-2 rounded-xl border ${card}`}>
                 <div className={`h-12 w-full rounded-lg animate-pulse ${isDark ? 'bg-gray-700' : 'bg-gray-100'}`} />
               </div>
-              {/* Skeleton product cards */}
               <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4 gap-5">
                 {[...Array(8)].map((_, i) => (
-                  <div key={i} className={`${isDark ? 'bg-gray-800 border-gray-700' : 'bg-white border-slate-200'} rounded-2xl border overflow-hidden`}>
+                  <div key={i} className={`rounded-2xl border overflow-hidden ${card}`}>
                     <div className={`h-48 animate-pulse ${isDark ? 'bg-gray-700' : 'bg-gray-100'}`} />
                     <div className="p-4 space-y-3">
                       <div className={`h-4 w-16 rounded animate-pulse ${isDark ? 'bg-gray-700' : 'bg-gray-200'}`} />
@@ -337,14 +372,13 @@ const VentasList: React.FC = () => {
                 ))}
               </div>
             </div>
-            {/* Skeleton sidebar */}
             <div className="hidden lg:block lg:col-span-4 space-y-5">
-              <div className={`${isDark ? 'bg-gray-800 border-gray-700' : 'bg-white border-slate-200'} rounded-xl border p-5`}>
+              <div className={`rounded-xl border p-5 ${card}`}>
                 <div className={`h-5 w-32 rounded animate-pulse mb-4 ${isDark ? 'bg-gray-700' : 'bg-gray-200'}`} />
                 <div className={`h-10 w-full rounded-lg animate-pulse ${isDark ? 'bg-gray-700' : 'bg-gray-100'}`} />
               </div>
-              <div className={`${isDark ? 'bg-gray-800 border-gray-700' : 'bg-white border-slate-200'} rounded-xl border h-[400px]`}>
-                <div className={`h-14 rounded-t-xl animate-pulse ${isDark ? 'bg-gray-900' : 'bg-slate-900'}`} />
+              <div className={`rounded-xl border h-[400px] ${card}`}>
+                <div className={`h-14 rounded-t-xl animate-pulse`} style={{ backgroundColor: colors[700] || colors[600] }} />
                 <div className="p-4 space-y-3">
                   {[...Array(3)].map((_, i) => (
                     <div key={i} className={`h-16 w-full rounded-xl animate-pulse ${isDark ? 'bg-gray-700' : 'bg-gray-100'}`} />
@@ -359,174 +393,140 @@ const VentasList: React.FC = () => {
   }
 
   return (
-    <div className={`min-h-screen ${pageBg} p-4 lg:p-6 font-sans ${isDark ? 'text-gray-200' : 'text-slate-800'}`}>
+    <div className={`min-h-screen ${pageBg} p-4 lg:p-6 font-sans ${isDark ? 'text-gray-200' : 'text-gray-800'}`}>
       <div className="max-w-[1920px] mx-auto">
 
-        {/* === HEADER FORMAL === */}
-        <div className={`${isDark ? 'bg-gray-800 border-gray-700' : 'bg-white border-slate-200'} rounded-xl shadow-sm border p-4 mb-6 flex flex-col md:flex-row justify-between items-center gap-4`}>
+        {/* ── HEADER ── */}
+        <div className={`rounded-xl shadow-sm border p-4 mb-6 flex flex-col md:flex-row justify-between items-center gap-4 ${card}`}>
           <div className="flex items-center gap-3">
             <div className="p-3 rounded-lg shadow-lg text-white" style={{ backgroundColor: colors[600] }}>
-              <FaBoxOpen size={24} />
+              <FiBox size={24} />
             </div>
             <div>
-              <h1 className={`text-2xl font-bold ${heading} tracking-tight leading-none`}>Punto de Venta</h1>
-              <p className={`text-xs ${textTertiary} font-medium mt-1 uppercase tracking-wide`}>Nueva Operación</p>
+              <h1 className={`text-2xl font-bold tracking-tight leading-none ${heading}`}>Punto de Venta</h1>
+              <p className={`text-xs font-medium mt-1 uppercase tracking-wide ${textTertiary}`}>Nueva Operación</p>
             </div>
           </div>
-
           <div className="flex gap-3 w-full md:w-auto">
             <button
               onClick={cancelarVenta}
-              className={`flex-1 md:flex-none px-5 py-2.5 rounded-lg border ${isDark ? 'border-gray-600 text-gray-300 hover:bg-red-900/30 hover:text-red-400 hover:border-red-800' : 'border-slate-300 text-slate-600 hover:bg-red-50 hover:text-red-600 hover:border-red-200'} transition-all font-medium text-sm flex items-center justify-center gap-2`}
+              className={`flex-1 md:flex-none px-5 py-2.5 rounded-lg border transition-all font-medium text-sm flex items-center justify-center gap-2 ${
+                isDark
+                  ? 'border-gray-600 text-gray-300 hover:bg-red-900/30 hover:text-red-400 hover:border-red-800'
+                  : 'border-gray-300 text-gray-600 hover:bg-red-50 hover:text-red-600 hover:border-red-200'
+              }`}
             >
-              <FaTimes /> Cancelar
+              <FiX size={16} /> Cancelar
             </button>
             <button
               onClick={abrirModalPago}
               disabled={carrito.length === 0 || !clienteSeleccionado}
-              className={`flex-1 md:flex-none px-6 py-2.5 rounded-lg ${isDark ? 'bg-gray-200 text-gray-900 hover:bg-white' : 'bg-slate-800 text-white hover:bg-slate-900'} shadow-md hover:shadow-lg transition-all font-bold text-sm flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed transform active:scale-95`}
+              className="flex-1 md:flex-none px-6 py-2.5 rounded-lg btn-primary shadow-md hover:shadow-lg transition-all font-bold text-sm flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed transform active:scale-95"
             >
-              <FaMoneyBillWave /> Procesar {total > 0 && `S/ ${total.toFixed(2)}`}
+              <FiDollarSign size={16} /> Procesar {total > 0 && `S/ ${total.toFixed(2)}`}
             </button>
           </div>
         </div>
 
-        {/* === GRID PRINCIPAL === */}
+        {/* ── GRID PRINCIPAL ── */}
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
 
-          {/* === COLUMNA IZQUIERDA: PRODUCTOS (8 cols) === */}
+          {/* ── COLUMNA IZQUIERDA: PRODUCTOS ── */}
           <div className="lg:col-span-8 space-y-6">
 
-            {/* Buscador Moderno */}
-            <div className={`${isDark ? 'bg-gray-800 border-gray-700' : 'bg-white border-slate-200'} p-2 rounded-xl shadow-sm border sticky top-4 z-20`}>
+            {/* Buscador */}
+            <div className={`p-2 rounded-xl shadow-sm border sticky top-4 z-20 ${card}`}>
               <div className="relative">
-                <FaSearch className={`absolute left-4 top-1/2 transform -translate-y-1/2 ${isDark ? 'text-gray-500' : 'text-slate-400'} text-lg`} />
+                <FiSearch className={`absolute left-4 top-1/2 transform -translate-y-1/2 text-lg ${isDark ? 'text-gray-500' : 'text-gray-400'}`} />
                 <input
                   type="text"
                   placeholder="Buscar producto por nombre, código o categoría..."
                   value={busquedaProducto}
                   onChange={(e) => setBusquedaProducto(e.target.value)}
-                  className={`w-full pl-12 pr-4 py-3 ${isDark ? 'bg-gray-700 text-gray-200 placeholder-gray-500 focus:ring-blue-500/30' : 'bg-slate-50 text-slate-700 placeholder-slate-400 focus:ring-blue-500/20'} border-none rounded-lg focus:ring-2 transition-all`}
+                  className={`w-full pl-12 pr-4 py-3 border-none rounded-lg focus:ring-2 transition-all ${
+                    isDark
+                      ? 'bg-gray-700 text-gray-200 placeholder-gray-500 focus:ring-[var(--color-primary-500)]/30'
+                      : 'bg-gray-50 text-gray-700 placeholder-gray-400 focus:ring-[var(--color-primary-500)]/20'
+                  }`}
                 />
               </div>
             </div>
 
-            {/* Panel de Cliente para MÓVILES */}
-            <div className={`lg:hidden ${isDark ? 'bg-gray-800 border-gray-700' : 'bg-white border-slate-200'} rounded-xl shadow-sm border overflow-hidden mb-6`}>
-              <div className={`px-5 py-4 border-b ${isDark ? 'border-gray-700 bg-gray-750' : 'border-slate-100 bg-slate-50'} flex items-center gap-2`}>
-                <FaUserPlus style={{ color: colors[500] }} />
-                <h2 className={`font-bold ${isDark ? 'text-gray-300' : 'text-slate-700'} text-sm uppercase tracking-wide`}>Datos del Cliente</h2>
+            {/* Panel de Cliente MÓVILES */}
+            <div className={`lg:hidden rounded-xl shadow-sm border overflow-hidden mb-6 ${card}`}>
+              <div className={`px-5 py-4 border-b flex items-center gap-2 ${border} ${isDark ? 'bg-gray-800' : 'bg-gray-50'}`}>
+                <FiUserPlus style={{ color: colors[500] }} />
+                <h2 className={`font-bold text-sm uppercase tracking-wide ${textSecondary}`}>Datos del Cliente</h2>
               </div>
-
               <div className="p-5">
                 <div className="relative mb-3">
-                  <FaSearch className={`absolute left-3 top-3 ${isDark ? 'text-gray-500' : 'text-slate-400'} text-sm`} />
+                  <FiSearch className={`absolute left-3 top-3 text-sm ${isDark ? 'text-gray-500' : 'text-gray-400'}`} />
                   <input
                     type="text"
                     value={busquedaCliente}
                     onChange={(e) => setBusquedaCliente(e.target.value)}
                     placeholder="Buscar DNI o Nombre..."
-                    className={`w-full pl-9 pr-3 py-2.5 ${isDark ? 'bg-gray-700 border-gray-600 text-gray-200 focus:border-blue-500 focus:ring-blue-500/30' : 'bg-white border-slate-300 text-sm focus:border-blue-500 focus:ring-blue-500'} border rounded-lg text-sm focus:outline-none focus:ring-1 transition-all`}
+                    className={`w-full pl-9 pr-3 py-2.5 border rounded-lg text-sm focus:outline-none focus:ring-1 transition-all ${input}`}
                   />
                   {busquedaCliente && clientesFiltrados.length > 0 && (
-                    <div className={`absolute z-50 w-full mt-2 ${isDark ? 'bg-gray-800 border-gray-600' : 'bg-white border-slate-200'} border rounded-xl shadow-2xl max-h-64 overflow-y-auto`}>
-                      {clientesFiltrados.map((cliente) => (
-                        <div
-                          key={cliente.persona.id}
-                          onClick={() => {
-                            setClienteSeleccionado(cliente);
-                            setBusquedaCliente('');
-                          }}
-                          className={`p-3 ${isDark ? 'hover:bg-gray-700 border-gray-700' : 'hover:bg-blue-50 border-slate-100'} cursor-pointer border-b last:border-0 transition-colors`}
-                        >
-                          <div className={`font-bold ${isDark ? 'text-gray-200' : 'text-slate-800'} text-sm`}>
-                            {cliente.persona.nombres} {cliente.persona.apellidoPaterno}
-                          </div>
-                          <div className={`text-xs ${textTertiary} mt-0.5`}>
-                            DOC: <span className={`font-mono ${isDark ? 'text-gray-400' : 'text-slate-600'}`}>{cliente.persona.numeroDocumento}</span>
-                          </div>
-                        </div>
-                      ))}
-                    </div>
+                    <ClientDropdown filtrados={clientesFiltrados} onSelect={(c) => { setClienteSeleccionado(c); setBusquedaCliente(''); }} />
                   )}
                 </div>
-
                 {!clienteSeleccionado ? (
                   <button
                     onClick={() => setMostrarModalCliente(true)}
-                    className={`w-full py-2.5 border-2 border-dashed ${isDark ? 'border-blue-700 text-blue-400 hover:bg-blue-900/30 hover:border-blue-600' : 'border-blue-200 text-blue-600 hover:bg-blue-50 hover:border-blue-300'} rounded-lg transition-all text-sm font-bold flex items-center justify-center gap-2`}
+                    className="w-full py-2.5 border-2 border-dashed rounded-lg transition-all text-sm font-bold flex items-center justify-center gap-2"
+                    style={{ borderColor: `${colors[300]}`, color: colors[500] }}
                   >
-                    <FaUserPlus /> Crear Nuevo Cliente
+                    <FiUserPlus /> Crear Nuevo Cliente
                   </button>
                 ) : (
-                  <div className={`${isDark ? 'bg-blue-900/20 border-blue-800' : 'bg-blue-50/50 border-blue-100'} rounded-xl p-4 border relative`}>
-                    <button
-                      onClick={() => setClienteSeleccionado(null)}
-                      className={`absolute top-2 right-2 ${isDark ? 'text-gray-500 hover:text-red-400 hover:bg-red-900/30' : 'text-slate-400 hover:text-red-500 hover:bg-red-50'} p-1.5 rounded-full transition-colors`}
-                    >
-                      <FaTimes size={12} />
-                    </button>
-                    <div className="flex items-center gap-3 mb-2">
-                      <div className={`w-8 h-8 rounded-full ${isDark ? 'bg-blue-900/50 text-blue-400' : 'bg-blue-100 text-blue-600'} flex items-center justify-center font-bold text-xs`}>
-                        {clienteSeleccionado.persona.nombres.charAt(0)}
-                      </div>
-                      <div>
-                        <p className={`font-bold ${isDark ? 'text-gray-200' : 'text-slate-800'} text-sm leading-tight`}>
-                          {clienteSeleccionado.persona.nombres} {clienteSeleccionado.persona.apellidoPaterno}
-                        </p>
-                        <p className={`text-xs ${textTertiary} font-mono mt-0.5`}>
-                          {clienteSeleccionado.persona.numeroDocumento}
-                        </p>
-                      </div>
-                    </div>
-                    <div className="flex gap-2 mt-3">
-                      <span className={`text-[10px] ${isDark ? 'bg-gray-700 border-blue-800 text-blue-400' : 'bg-white border-blue-100 text-blue-600'} border px-2 py-0.5 rounded shadow-sm`}>Cliente Verificado</span>
-                    </div>
-                  </div>
+                  <ClienteCard cliente={clienteSeleccionado} onRemove={() => setClienteSeleccionado(null)} compact />
                 )}
               </div>
             </div>
 
             {/* Product count */}
-            <div className={`flex items-center justify-between mb-1`}>
+            <div className="flex items-center justify-between mb-1">
               <p className={`text-xs font-medium ${textTertiary}`}>
                 {productosFiltrados.length} producto{productosFiltrados.length !== 1 ? 's' : ''} disponible{productosFiltrados.length !== 1 ? 's' : ''}
                 {busquedaProducto && ' (filtrado)'}
               </p>
             </div>
 
-            {/* Grid de Cards Mejoradas */}
+            {/* Grid de Productos */}
             {productosFiltrados.length === 0 ? (
-              <div className={`flex flex-col items-center justify-center py-20 ${isDark ? 'bg-gray-800 border-gray-600' : 'bg-white border-slate-300'} rounded-2xl border border-dashed`}>
-                <div className={`${isDark ? 'bg-gray-700' : 'bg-slate-50'} p-4 rounded-full mb-3`}>
-                  <FaSearch className={`${isDark ? 'text-gray-500' : 'text-slate-300'} text-3xl`} />
+              <div className={`flex flex-col items-center justify-center py-20 rounded-2xl border border-dashed ${isDark ? 'bg-gray-800 border-gray-600' : 'bg-white border-gray-300'}`}>
+                <div className={`p-4 rounded-full mb-3 ${isDark ? 'bg-gray-700' : 'bg-gray-50'}`}>
+                  <FiSearch className={`text-3xl ${isDark ? 'text-gray-500' : 'text-gray-300'}`} />
                 </div>
-                <h3 className={`${isDark ? 'text-gray-400' : 'text-slate-600'} font-medium text-lg`}>No se encontraron productos</h3>
-                <p className={`${isDark ? 'text-gray-500' : 'text-slate-400'} text-sm`}>Intenta con otro término de búsqueda</p>
+                <h3 className={`font-medium text-lg ${isDark ? 'text-gray-400' : 'text-gray-600'}`}>No se encontraron productos</h3>
+                <p className={`text-sm ${isDark ? 'text-gray-500' : 'text-gray-400'}`}>Intenta con otro término de búsqueda</p>
               </div>
             ) : (
               <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4 gap-5 pb-10">
                 {productosFiltrados.map((producto) => {
                   const hasStock = producto.stock > 0;
                   const lowStock = producto.stock > 0 && producto.stock <= 5;
-
                   return (
                     <div
                       key={producto.id}
-                      className={`group ${isDark ? 'bg-gray-800 border-gray-700 hover:border-blue-500' : 'bg-white border-slate-200 hover:border-blue-300'} rounded-2xl shadow-sm border overflow-hidden hover:shadow-xl transition-all duration-300 flex flex-col h-[380px] relative`}
+                      className={`group rounded-2xl shadow-sm border overflow-hidden hover:shadow-xl transition-all duration-300 flex flex-col h-[380px] relative ${card}`}
+                      style={{ ['--hover-border' as any]: colors[400] }}
                     >
-                      {/* Badge de Stock */}
+                      {/* Stock Badge */}
                       <div className="absolute top-3 right-3 z-10">
-                        <span className={`px-3 py-1 rounded-full text-[10px] font-bold shadow-sm uppercase tracking-wide backdrop-blur-md ${!hasStock ? 'bg-red-500/90 text-white' :
-                            lowStock ? 'bg-amber-400/90 text-white' :
-                              'bg-emerald-500/90 text-white'
-                          }`}>
+                        <span className={`px-3 py-1 rounded-full text-[10px] font-bold shadow-sm uppercase tracking-wide backdrop-blur-md ${
+                          !hasStock ? 'bg-red-500/90 text-white' :
+                          lowStock ? 'bg-amber-400/90 text-white' :
+                          'bg-emerald-500/90 text-white'
+                        }`}>
                           {hasStock ? `${producto.stock} ${producto.unidadMedida || 'UND'}` : 'AGOTADO'}
                         </span>
                       </div>
 
-                      {/* Imagen con efecto zoom */}
-                      <div className={`h-48 overflow-hidden ${isDark ? 'bg-gray-700' : 'bg-slate-50'}`}>
+                      {/* Image */}
+                      <div className={`h-48 overflow-hidden ${isDark ? 'bg-gray-700' : 'bg-gray-50'}`}>
                         <ProductImage
                           src={producto.imagen || ""}
                           alt={producto.nombre}
@@ -535,39 +535,46 @@ const VentasList: React.FC = () => {
                         />
                       </div>
 
-                      {/* Contenido */}
+                      {/* Content */}
                       <div className="p-4 flex flex-col flex-1 justify-between">
                         <div>
                           <div className="mb-2">
-                            <span className={`text-[10px] font-bold uppercase tracking-wider px-2 py-1 rounded-md border ${isDark ? 'text-blue-400 bg-blue-900/30 border-blue-800' : 'text-blue-600 bg-blue-50 border-blue-100'}`}>
+                            <span
+                              className="text-[10px] font-bold uppercase tracking-wider px-2 py-1 rounded-md border"
+                              style={{
+                                color: colors[600],
+                                backgroundColor: isDark ? `${colors[900]}30` : `${colors[50]}`,
+                                borderColor: isDark ? `${colors[800]}` : `${colors[100]}`
+                              }}
+                            >
                               {producto.categoria.nombre}
                             </span>
                           </div>
-                          <h3 className={`font-bold ${isDark ? 'text-gray-200' : 'text-slate-800'} text-base leading-snug line-clamp-2`} title={producto.nombre}>
+                          <h3 className={`font-bold text-base leading-snug line-clamp-2 ${heading}`} title={producto.nombre}>
                             {producto.nombre}
                           </h3>
                           {producto.sku && (
-                            <p className={`text-[10px] mt-0.5 font-mono ${isDark ? 'text-gray-500' : 'text-slate-400'}`}>
+                            <p className={`text-[10px] mt-0.5 font-mono ${isDark ? 'text-gray-500' : 'text-gray-400'}`}>
                               SKU: {producto.sku}
                             </p>
                           )}
                         </div>
-
-                        <div className={`flex items-end justify-between mt-3 pt-3 border-t ${isDark ? 'border-gray-700' : 'border-slate-100'}`}>
+                        <div className={`flex items-end justify-between mt-3 pt-3 border-t ${border}`}>
                           <div className="flex flex-col">
-                            <span className={`text-[10px] ${isDark ? 'text-gray-500' : 'text-slate-400'} font-medium uppercase`}>Precio Unitario</span>
-                            <span className={`text-xl font-extrabold ${isDark ? 'text-gray-100' : 'text-slate-900'}`}>S/ {producto.precio.toFixed(2)}</span>
+                            <span className={`text-[10px] font-medium uppercase ${isDark ? 'text-gray-500' : 'text-gray-400'}`}>Precio Unitario</span>
+                            <span className={`text-xl font-extrabold ${heading}`}>S/ {producto.precio.toFixed(2)}</span>
                           </div>
                           <button
                             onClick={() => agregarAlCarrito(producto)}
                             disabled={!hasStock}
-                            className={`w-10 h-10 rounded-xl flex items-center justify-center transition-all shadow-md ${hasStock
-                                ? `text-white hover:scale-105`
-                                : `${isDark ? 'bg-gray-700 text-gray-500' : 'bg-slate-100 text-slate-300'} cursor-not-allowed`
-                              }`}
+                            className={`w-10 h-10 rounded-xl flex items-center justify-center transition-all shadow-md ${
+                              hasStock
+                                ? 'text-white hover:scale-105 active:scale-95'
+                                : `${isDark ? 'bg-gray-700 text-gray-500' : 'bg-gray-100 text-gray-300'} cursor-not-allowed`
+                            }`}
                             style={hasStock ? { backgroundColor: colors[600] } : undefined}
                           >
-                            <FaShoppingCart className="text-sm" />
+                            <FiShoppingCart size={16} />
                           </button>
                         </div>
                       </div>
@@ -578,19 +585,16 @@ const VentasList: React.FC = () => {
             )}
           </div>
 
-          {/* ============================================ */}
-          {/* VERSIÓN MÓVIL: Carrito Flotante (Burbuja) */}
-          {/* ============================================ */}
+          {/* ── VERSIÓN MÓVIL: Carrito Flotante ── */}
           <div className="lg:hidden">
-            {/* Burbuja colapsada - Botón flotante */}
             {!carritoAbierto && carrito.length > 0 && (
               <button
                 onClick={() => setCarritoAbierto(true)}
                 className="fixed bottom-6 right-6 text-white rounded-full shadow-2xl transition-all z-50 flex items-center gap-3 pr-5 pl-4 py-4 hover:scale-105 active:scale-95 border-4 border-white"
-                style={{ background: `linear-gradient(to bottom right, ${colors[600]}, ${colors[700] || colors[600]})` }}
+                style={{ background: `linear-gradient(to bottom right, ${colors[500]}, ${colors[700] || colors[600]})` }}
               >
                 <div className="relative">
-                  <FaShoppingCart size={24} />
+                  <FiShoppingCart size={24} />
                   {carrito.length > 0 && (
                     <span className="absolute -top-2 -right-2 bg-red-500 text-white text-xs font-bold rounded-full w-5 h-5 flex items-center justify-center animate-pulse">
                       {carrito.length}
@@ -604,98 +608,70 @@ const VentasList: React.FC = () => {
               </button>
             )}
 
-            {/* Panel expandido */}
             {carritoAbierto && (
               <>
-                {/* Backdrop */}
-                <div
-                  className="fixed inset-0 bg-black/40 backdrop-blur-sm z-40 transition-opacity duration-200"
-                  onClick={() => setCarritoAbierto(false)}
-                />
-
-                {/* Panel del carrito */}
-                <div className={`fixed inset-x-0 bottom-0 ${isDark ? 'bg-gray-800' : 'bg-white'} rounded-t-3xl shadow-2xl z-50 flex flex-col max-h-[85vh] animate-in slide-in-from-bottom duration-300`}>
+                <div className="fixed inset-0 bg-black/40 backdrop-blur-sm z-40 transition-opacity duration-200" onClick={() => setCarritoAbierto(false)} />
+                <div className={`fixed inset-x-0 bottom-0 rounded-t-3xl shadow-2xl z-50 flex flex-col max-h-[85vh] ${isDark ? 'bg-gray-800' : 'bg-white'}`}>
 
                   {/* Header */}
-                  <div className={`px-5 py-4 border-b ${isDark ? 'border-gray-700 bg-gray-900' : 'border-slate-200 bg-slate-900'} text-white rounded-t-3xl flex justify-between items-center shadow-md`}>
+                  <div
+                    className="px-5 py-4 text-white rounded-t-3xl flex justify-between items-center shadow-md"
+                    style={{ background: `linear-gradient(135deg, ${colors[600]}, ${colors[700] || colors[600]})` }}
+                  >
                     <h2 className="font-bold text-sm uppercase tracking-wide flex items-center gap-2">
-                      <FaShoppingCart className="text-blue-400" /> Detalle de Venta
+                      <FiShoppingCart size={16} /> Detalle de Venta
                     </h2>
                     <div className="flex items-center gap-3">
-                      <div className={`${isDark ? 'bg-gray-800' : 'bg-slate-800'} px-3 py-1 rounded-full text-xs font-mono text-blue-200`}>
-                        {carrito.length} Items
-                      </div>
-                      <button
-                        onClick={() => setCarritoAbierto(false)}
-                        className="text-slate-300 hover:text-white p-2 hover:bg-slate-800 rounded-full transition-colors"
-                      >
-                        <FaTimes size={18} />
+                      <div className="bg-white/15 px-3 py-1 rounded-full text-xs font-mono">{carrito.length} Items</div>
+                      <button onClick={() => setCarritoAbierto(false)} className="text-white/70 hover:text-white p-2 hover:bg-white/10 rounded-full transition-colors">
+                        <FiX size={18} />
                       </button>
                     </div>
                   </div>
 
-                  {/* Lista de productos - Scrollable */}
-                  <div className={`flex-1 overflow-y-auto p-3 space-y-2 ${isDark ? 'bg-gray-850' : 'bg-slate-50'}`}>
+                  {/* Cart items */}
+                  <div className={`flex-1 overflow-y-auto p-3 space-y-2 ${isDark ? 'bg-gray-850' : 'bg-gray-50'}`}>
                     {carrito.length === 0 ? (
-                      <div className={`h-full flex flex-col items-center justify-center ${isDark ? 'text-gray-500' : 'text-slate-400'} py-12`}>
-                        <FaReceipt size={48} className={`mb-3 ${isDark ? 'text-gray-600' : 'text-slate-300'}`} />
+                      <div className={`h-full flex flex-col items-center justify-center py-12 ${isDark ? 'text-gray-500' : 'text-gray-400'}`}>
+                        <FiFileText size={48} className={`mb-3 ${isDark ? 'text-gray-600' : 'text-gray-300'}`} />
                         <p className="text-sm font-medium">El carrito está vacío</p>
                         <p className="text-xs">Agrega productos para comenzar</p>
                       </div>
                     ) : (
                       carrito.map((item) => (
-                        <div
-                          key={item.producto.id}
-                          className={`${isDark ? 'bg-gray-800 border-gray-700' : 'bg-white border-slate-200'} p-3 rounded-xl border shadow-sm`}
-                        >
+                        <div key={item.producto.id} className={`p-3 rounded-xl border shadow-sm ${card}`}>
                           <div className="flex gap-3">
-                            {/* Imagen */}
-                            <div className={`w-16 h-16 rounded-lg overflow-hidden border ${isDark ? 'border-gray-600' : 'border-slate-100'} flex-shrink-0`}>
+                            <div className={`w-16 h-16 rounded-lg overflow-hidden border flex-shrink-0 ${border}`}>
                               <ProductImage src={item.producto.imagen} alt={item.producto.nombre} className="w-full h-full object-cover" isDark={isDark} />
                             </div>
-
-                            {/* Info */}
                             <div className="flex-1 min-w-0">
-                              <h4 className={`text-sm font-bold ${isDark ? 'text-gray-200' : 'text-slate-800'} line-clamp-2 leading-tight mb-1`}>
-                                {item.producto.nombre}
-                              </h4>
+                              <h4 className={`text-sm font-bold line-clamp-2 leading-tight mb-1 ${heading}`}>{item.producto.nombre}</h4>
                               <div className="flex items-center justify-between">
                                 <p className={`text-xs ${textTertiary}`}>
-                                  Unit: <span className={`font-medium ${isDark ? 'text-gray-300' : 'text-slate-700'}`}>S/ {item.producto.precio.toFixed(2)}</span>
+                                  Unit: <span className={`font-medium ${textSecondary}`}>S/ {item.producto.precio.toFixed(2)}</span>
                                 </p>
-                                <span className={`font-bold ${isDark ? 'text-gray-100' : 'text-slate-900'} text-sm`}>
-                                  S/ {item.subtotal.toFixed(2)}
-                                </span>
+                                <span className={`font-bold text-sm ${heading}`}>S/ {item.subtotal.toFixed(2)}</span>
                               </div>
                             </div>
                           </div>
-
-                          {/* Controles */}
-                          <div className={`flex items-center justify-between mt-3 pt-3 border-t ${isDark ? 'border-gray-700' : 'border-slate-100'}`}>
+                          <div className={`flex items-center justify-between mt-3 pt-3 border-t ${border}`}>
                             <div className="flex items-center gap-2">
                               <button
                                 onClick={() => actualizarCantidad(item.producto.id, item.cantidad - 1)}
-                                className={`w-8 h-8 flex items-center justify-center ${isDark ? 'bg-gray-700 text-gray-300' : 'bg-slate-100 text-slate-600'} rounded-lg hover:bg-red-500 hover:text-white transition-colors`}
+                                className={`w-8 h-8 flex items-center justify-center rounded-lg hover:bg-red-500 hover:text-white transition-colors ${isDark ? 'bg-gray-700 text-gray-300' : 'bg-gray-100 text-gray-600'}`}
                               >
-                                {item.cantidad === 1 ? <FaTrash size={12} /> : <FaMinus size={12} />}
+                                {item.cantidad === 1 ? <FiTrash2 size={12} /> : <FiMinus size={12} />}
                               </button>
-                              <span className={`text-sm font-bold ${isDark ? 'text-gray-200' : 'text-slate-800'} min-w-[2rem] text-center`}>
-                                {item.cantidad}
-                              </span>
+                              <span className={`text-sm font-bold min-w-[2rem] text-center ${heading}`}>{item.cantidad}</span>
                               <button
                                 onClick={() => actualizarCantidad(item.producto.id, item.cantidad + 1)}
-                                className={`w-8 h-8 flex items-center justify-center ${isDark ? 'bg-gray-700 text-gray-300' : 'bg-slate-100 text-slate-600'} rounded-lg hover:text-white transition-colors`}
-                                style={{ ['--tw-hover-bg' as any]: colors[600] }}
-                                onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = colors[600], e.currentTarget.style.color = '#fff')}
-                                onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = '', e.currentTarget.style.color = '')}
+                                className="w-8 h-8 flex items-center justify-center rounded-lg text-white transition-colors"
+                                style={{ backgroundColor: colors[600] }}
                               >
-                                <FaPlus size={12} />
+                                <FiPlus size={12} />
                               </button>
                             </div>
-                            <button
-                              onClick={() => actualizarCantidad(item.producto.id, 0)}
-                              className="text-xs text-red-400 hover:text-red-600 font-medium"
-                            >
+                            <button onClick={() => actualizarCantidad(item.producto.id, 0)} className="text-xs text-red-400 hover:text-red-600 font-medium">
                               Eliminar
                             </button>
                           </div>
@@ -704,90 +680,65 @@ const VentasList: React.FC = () => {
                     )}
                   </div>
 
-                  {/* Footer Totales */}
-                  <div className={`p-4 ${isDark ? 'bg-gray-800 border-gray-700' : 'bg-white border-slate-200'} border-t-2 shadow-[0_-4px_12px_rgba(0,0,0,0.08)]`}>
+                  {/* Footer */}
+                  <div className={`p-4 border-t-2 shadow-[0_-4px_12px_rgba(0,0,0,0.08)] ${isDark ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-200'}`}>
 
-                    {/* Sección Cliente con Búsqueda Integrada */}
-                    <div className={`mb-4 pb-4 border-b ${isDark ? 'border-gray-700' : 'border-slate-200'}`}>
+                    {/* Client section */}
+                    <div className={`mb-4 pb-4 border-b ${border}`}>
                       {!clienteSeleccionado ? (
                         <div className="space-y-3">
-                          {/* Alerta */}
-                          <div className={`${isDark ? 'bg-amber-900/30 border-amber-800' : 'bg-amber-50 border-amber-200'} border rounded-lg p-3`}>
+                          <div className={`border rounded-lg p-3 ${isDark ? 'bg-amber-900/30 border-amber-800' : 'bg-amber-50 border-amber-200'}`}>
                             <div className="flex items-start gap-2">
-                              <svg className={`w-4 h-4 ${isDark ? 'text-amber-400' : 'text-amber-600'} mt-0.5 flex-shrink-0`} fill="currentColor" viewBox="0 0 20 20">
-                                <path fillRule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
-                              </svg>
+                              <FiAlertTriangle className={`w-4 h-4 mt-0.5 flex-shrink-0 ${isDark ? 'text-amber-400' : 'text-amber-600'}`} />
                               <div className="flex-1">
                                 <p className={`text-xs font-bold ${isDark ? 'text-amber-300' : 'text-amber-800'}`}>Cliente no seleccionado</p>
                                 <p className={`text-[10px] ${isDark ? 'text-amber-400' : 'text-amber-700'}`}>Busca o crea un cliente para continuar</p>
                               </div>
                             </div>
                           </div>
-
-                          {/* Buscador de Clientes */}
                           <div className="relative">
-                            <FaSearch className={`absolute left-3 top-3 ${isDark ? 'text-gray-500' : 'text-slate-400'} text-sm z-10`} />
+                            <FiSearch className={`absolute left-3 top-3 text-sm z-10 ${isDark ? 'text-gray-500' : 'text-gray-400'}`} />
                             <input
                               type="text"
                               value={busquedaCliente}
                               onChange={(e) => setBusquedaCliente(e.target.value)}
                               placeholder="Buscar por DNI o nombre..."
-                              className={`w-full pl-9 pr-3 py-2.5 ${isDark ? 'bg-gray-700 border-gray-600 text-gray-200 focus:border-blue-500 focus:ring-blue-500/30' : 'bg-white border-2 border-slate-300 text-sm focus:border-blue-500 focus:ring-blue-200'} border rounded-lg text-sm focus:outline-none focus:ring-2 transition-all`}
+                              className={`w-full pl-9 pr-3 py-2.5 border rounded-lg text-sm focus:outline-none focus:ring-2 transition-all ${input}`}
                             />
-
-                            {/* Dropdown de Resultados */}
                             {busquedaCliente && clientesFiltrados.length > 0 && (
-                              <div className={`absolute z-[60] w-full mt-2 ${isDark ? 'bg-gray-800 border-blue-700' : 'bg-white border-2 border-blue-300'} border rounded-xl shadow-2xl max-h-48 overflow-y-auto`}>
-                                <div className={`p-2 ${isDark ? 'bg-blue-900/30 border-blue-800' : 'bg-blue-50 border-blue-200'} border-b`}>
-                                  <p className={`text-xs font-bold ${isDark ? 'text-blue-300' : 'text-blue-800'}`}>
-                                    {clientesFiltrados.length} resultado{clientesFiltrados.length !== 1 ? 's' : ''} encontrado{clientesFiltrados.length !== 1 ? 's' : ''}
+                              <div className={`absolute z-[60] w-full mt-2 border rounded-xl shadow-2xl max-h-48 overflow-y-auto ${isDark ? 'bg-gray-800 border-gray-600' : 'bg-white border-gray-200'}`}>
+                                <div className={`p-2 border-b ${isDark ? 'bg-gray-700/50 border-gray-600' : 'bg-gray-50 border-gray-200'}`}>
+                                  <p className={`text-xs font-bold`} style={{ color: colors[500] }}>
+                                    {clientesFiltrados.length} resultado{clientesFiltrados.length !== 1 ? 's' : ''}
                                   </p>
                                 </div>
                                 {clientesFiltrados.map((cliente) => (
                                   <div
                                     key={cliente.persona.id}
-                                    onClick={() => {
-                                      setClienteSeleccionado(cliente);
-                                      setBusquedaCliente('');
-                                    }}
-                                    className={`p-3 ${isDark ? 'hover:bg-gray-700 border-gray-700 active:bg-gray-600' : 'hover:bg-blue-50 border-slate-100 active:bg-blue-100'} cursor-pointer border-b last:border-0 transition-colors`}
+                                    onClick={() => { setClienteSeleccionado(cliente); setBusquedaCliente(''); }}
+                                    className={`p-3 cursor-pointer border-b last:border-0 transition-colors ${isDark ? 'hover:bg-gray-700 border-gray-700' : 'hover:bg-gray-50 border-gray-100'}`}
                                   >
                                     <div className="flex items-center gap-2">
-                                      <div className={`w-8 h-8 rounded-full ${isDark ? 'bg-blue-900/50 text-blue-400' : 'bg-blue-100 text-blue-600'} flex items-center justify-center font-bold text-xs flex-shrink-0`}>
+                                      <div className="w-8 h-8 rounded-full flex items-center justify-center font-bold text-xs text-white flex-shrink-0" style={{ backgroundColor: colors[500] }}>
                                         {cliente.persona.nombres.charAt(0)}
                                       </div>
                                       <div className="flex-1 min-w-0">
-                                        <div className={`font-bold ${isDark ? 'text-gray-200' : 'text-slate-800'} text-sm truncate`}>
-                                          {cliente.persona.nombres} {cliente.persona.apellidoPaterno}
-                                        </div>
-                                        <div className={`text-xs ${textTertiary} font-mono`}>
-                                          {cliente.persona.tipoDocumento}: {cliente.persona.numeroDocumento}
-                                        </div>
+                                        <div className={`font-bold text-sm truncate ${heading}`}>{cliente.persona.nombres} {cliente.persona.apellidoPaterno}</div>
+                                        <div className={`text-xs ${textTertiary} font-mono`}>{cliente.persona.tipoDocumento}: {cliente.persona.numeroDocumento}</div>
                                       </div>
-                                      <svg className="w-5 h-5 text-blue-500 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-                                      </svg>
                                     </div>
                                   </div>
                                 ))}
                               </div>
                             )}
-
-                            {/* Sin resultados */}
                             {busquedaCliente && busquedaCliente.length >= 3 && clientesFiltrados.length === 0 && (
-                              <div className={`absolute z-[60] w-full mt-2 ${isDark ? 'bg-gray-800 border-red-700' : 'bg-white border-2 border-red-300'} border rounded-xl shadow-2xl p-4`}>
+                              <div className={`absolute z-[60] w-full mt-2 border rounded-xl shadow-2xl p-4 ${isDark ? 'bg-gray-800 border-gray-600' : 'bg-white border-gray-200'}`}>
                                 <div className="text-center">
-                                  <svg className={`w-12 h-12 ${isDark ? 'text-gray-600' : 'text-slate-300'} mx-auto mb-2`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
-                                  </svg>
-                                  <p className={`text-sm font-bold ${isDark ? 'text-gray-400' : 'text-slate-600'} mb-1`}>Cliente no encontrado</p>
-                                  <p className={`text-xs ${textTertiary} mb-3`}>No existe ningún cliente con ese DNI o nombre</p>
+                                  <FiSearch className={`w-10 h-10 mx-auto mb-2 ${isDark ? 'text-gray-600' : 'text-gray-300'}`} />
+                                  <p className={`text-sm font-bold mb-1 ${isDark ? 'text-gray-400' : 'text-gray-600'}`}>Cliente no encontrado</p>
                                   <button
-                                    onClick={() => {
-                                      setCarritoAbierto(false);
-                                      setMostrarModalCliente(true);
-                                    }}
-                                    className="text-xs text-blue-600 hover:text-blue-800 font-bold underline"
+                                    onClick={() => { setCarritoAbierto(false); setMostrarModalCliente(true); }}
+                                    className="text-xs font-bold underline" style={{ color: colors[500] }}
                                   >
                                     Crear nuevo cliente
                                   </button>
@@ -795,63 +746,27 @@ const VentasList: React.FC = () => {
                               </div>
                             )}
                           </div>
-
-                          {/* Divider con texto */}
                           <div className="relative">
                             <div className="absolute inset-0 flex items-center">
-                              <div className={`w-full border-t ${isDark ? 'border-gray-600' : 'border-slate-300'}`}></div>
+                              <div className={`w-full border-t ${border}`}></div>
                             </div>
                             <div className="relative flex justify-center text-xs">
-                              <span className={`px-2 ${isDark ? 'bg-gray-800 text-gray-500' : 'bg-white text-slate-500'} font-medium`}>o</span>
+                              <span className={`px-2 font-medium ${isDark ? 'bg-gray-800 text-gray-500' : 'bg-white text-gray-500'}`}>o</span>
                             </div>
                           </div>
-
-                          {/* Botón Crear Cliente */}
                           <button
-                            onClick={() => {
-                              setCarritoAbierto(false);
-                              setMostrarModalCliente(true);
-                            }}
-                            className="w-full py-2.5 bg-gradient-to-r from-blue-500 to-blue-600 hover:from-blue-600 hover:to-blue-700 text-white rounded-lg transition-all text-sm font-bold flex items-center justify-center gap-2 shadow-md hover:shadow-lg active:scale-95"
+                            onClick={() => { setCarritoAbierto(false); setMostrarModalCliente(true); }}
+                            className="w-full py-2.5 btn-primary rounded-lg transition-all text-sm font-bold flex items-center justify-center gap-2 shadow-md hover:shadow-lg active:scale-95"
                           >
-                            <FaUserPlus /> Crear Nuevo Cliente
+                            <FiUserPlus size={14} /> Crear Nuevo Cliente
                           </button>
                         </div>
                       ) : (
-                        <div className={`${isDark ? 'bg-emerald-900/20 border-emerald-800' : 'bg-emerald-50 border-emerald-200'} border rounded-xl p-3`}>
-                          <div className="flex items-center justify-between mb-2">
-                            <div className="flex items-center gap-2 flex-1 min-w-0">
-                              <div className="w-10 h-10 rounded-full bg-emerald-600 text-white flex items-center justify-center font-bold text-sm shadow-md flex-shrink-0">
-                                {clienteSeleccionado.persona.nombres.charAt(0)}
-                              </div>
-                              <div className="flex-1 min-w-0">
-                                <p className={`text-sm font-bold ${isDark ? 'text-emerald-300' : 'text-emerald-900'} leading-tight truncate`}>
-                                  {clienteSeleccionado.persona.nombres} {clienteSeleccionado.persona.apellidoPaterno}
-                                </p>
-                                <p className={`text-xs ${isDark ? 'text-emerald-400' : 'text-emerald-700'} font-mono`}>
-                                  {clienteSeleccionado.persona.tipoDocumento}: {clienteSeleccionado.persona.numeroDocumento}
-                                </p>
-                              </div>
-                            </div>
-                            <button
-                              onClick={() => setClienteSeleccionado(null)}
-                              className="p-2 text-emerald-600 hover:text-white hover:bg-red-500 rounded-full transition-colors flex-shrink-0"
-                              title="Cambiar cliente"
-                            >
-                              <FaTimes size={16} />
-                            </button>
-                          </div>
-                          <div className={`flex items-center gap-1.5 mt-3 pt-3 border-t ${isDark ? 'border-emerald-800' : 'border-emerald-200'}`}>
-                            <svg className="w-4 h-4 text-emerald-600" fill="currentColor" viewBox="0 0 20 20">
-                              <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
-                            </svg>
-                            <span className={`text-xs font-bold ${isDark ? 'text-emerald-400' : 'text-emerald-700'} uppercase tracking-wide`}>Cliente Verificado</span>
-                          </div>
-                        </div>
+                        <ClienteCard cliente={clienteSeleccionado} onRemove={() => setClienteSeleccionado(null)} compact />
                       )}
                     </div>
 
-                    {/* Totales */}
+                    {/* Totals */}
                     <div className="space-y-2 mb-3">
                       <div className={`flex justify-between text-xs ${textTertiary}`}>
                         <span>Subtotal</span>
@@ -862,36 +777,23 @@ const VentasList: React.FC = () => {
                         <span className="font-mono">S/ {igv.toFixed(2)}</span>
                       </div>
                     </div>
-
-                    <div className={`pt-3 border-t ${isDark ? 'border-gray-700' : 'border-slate-200'} flex justify-between items-center mb-4`}>
-                      <span className={`font-bold ${isDark ? 'text-gray-200' : 'text-slate-800'} text-sm uppercase`}>Total a Pagar</span>
-                      <span className="text-2xl font-black tracking-tight" style={{ color: colors[500] }}>
-                        S/ {total.toFixed(2)}
-                      </span>
+                    <div className={`pt-3 border-t flex justify-between items-center mb-4 ${border}`}>
+                      <span className={`font-bold text-sm uppercase ${textSecondary}`}>Total a Pagar</span>
+                      <span className="text-2xl font-black tracking-tight" style={{ color: colors[500] }}>S/ {total.toFixed(2)}</span>
                     </div>
-
-                    {/* Botones de acción */}
                     <div className="space-y-2">
                       <button
-                        onClick={() => {
-                          setCarritoAbierto(false);
-                          abrirModalPago();
-                        }}
+                        onClick={() => { setCarritoAbierto(false); abrirModalPago(); }}
                         disabled={!clienteSeleccionado}
                         className="w-full text-white py-3.5 rounded-xl font-bold shadow-lg transition-all active:scale-95 flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed disabled:grayscale"
                         style={{ backgroundColor: colors[600] }}
                       >
-                        <FaMoneyBillWave />
+                        <FiDollarSign size={16} />
                         {!clienteSeleccionado ? 'Selecciona un cliente' : 'Procesar Pago'}
                       </button>
-
                       {carrito.length > 0 && (
                         <button
-                          onClick={() => {
-                            if (confirm('¿Estás seguro de vaciar el carrito?')) {
-                              limpiarCarrito();
-                            }
-                          }}
+                          onClick={() => { if (confirm('¿Estás seguro de vaciar el carrito?')) limpiarCarrito(); }}
                           className="w-full text-xs text-red-400 hover:text-red-600 hover:underline text-center transition-colors py-2"
                         >
                           Vaciar todo el carrito
@@ -904,135 +806,89 @@ const VentasList: React.FC = () => {
             )}
           </div>
 
-          {/* ============================================ */}
-          {/* VERSIÓN DESKTOP: Panel Lateral (Original) */}
-          {/* ============================================ */}
+          {/* ── VERSIÓN DESKTOP: Panel Lateral ── */}
           <div className="hidden lg:block lg:col-span-4 space-y-5 lg:sticky lg:top-4 h-fit">
 
-            {/* 1. Panel de Cliente - Desktop */}
-            <div className={`${isDark ? 'bg-gray-800 border-gray-700' : 'bg-white border-slate-200'} rounded-xl shadow-sm border overflow-hidden`}>
-              <div className={`px-5 py-4 border-b ${isDark ? 'border-gray-700 bg-gray-750' : 'border-slate-100 bg-slate-50'} flex items-center gap-2`}>
-                <FaUserPlus style={{ color: colors[500] }} />
-                <h2 className={`font-bold ${isDark ? 'text-gray-300' : 'text-slate-700'} text-sm uppercase tracking-wide`}>Datos del Cliente</h2>
+            {/* Panel de Cliente */}
+            <div className={`rounded-xl shadow-sm border overflow-hidden ${card}`}>
+              <div className={`px-5 py-4 border-b flex items-center gap-2 ${border} ${isDark ? 'bg-gray-800' : 'bg-gray-50'}`}>
+                <FiUserPlus style={{ color: colors[500] }} size={16} />
+                <h2 className={`font-bold text-sm uppercase tracking-wide ${textSecondary}`}>Datos del Cliente</h2>
               </div>
-
               <div className="p-5">
                 <div className="relative mb-3">
-                  <FaSearch className={`absolute left-3 top-3 ${isDark ? 'text-gray-500' : 'text-slate-400'} text-sm`} />
+                  <FiSearch className={`absolute left-3 top-3 text-sm ${isDark ? 'text-gray-500' : 'text-gray-400'}`} />
                   <input
                     type="text"
                     value={busquedaCliente}
                     onChange={(e) => setBusquedaCliente(e.target.value)}
                     placeholder="Buscar DNI o Nombre..."
-                    className={`w-full pl-9 pr-3 py-2.5 ${isDark ? 'bg-gray-700 border-gray-600 text-gray-200 focus:border-blue-500 focus:ring-blue-500/30' : 'bg-white border-slate-300 focus:border-blue-500 focus:ring-blue-500'} border rounded-lg text-sm focus:outline-none focus:ring-1 transition-all`}
+                    className={`w-full pl-9 pr-3 py-2.5 border rounded-lg text-sm focus:outline-none focus:ring-1 transition-all ${input}`}
                   />
                   {busquedaCliente && clientesFiltrados.length > 0 && (
-                    <div className={`absolute z-50 w-full mt-2 ${isDark ? 'bg-gray-800 border-gray-600' : 'bg-white border-slate-200'} border rounded-xl shadow-2xl max-h-64 overflow-y-auto`}>
-                      {clientesFiltrados.map((cliente) => (
-                        <div
-                          key={cliente.persona.id}
-                          onClick={() => {
-                            setClienteSeleccionado(cliente);
-                            setBusquedaCliente('');
-                          }}
-                          className={`p-3 ${isDark ? 'hover:bg-gray-700 border-gray-700' : 'hover:bg-blue-50 border-slate-100'} cursor-pointer border-b last:border-0 transition-colors`}
-                        >
-                          <div className={`font-bold ${isDark ? 'text-gray-200' : 'text-slate-800'} text-sm`}>
-                            {cliente.persona.nombres} {cliente.persona.apellidoPaterno}
-                          </div>
-                          <div className={`text-xs ${textTertiary} mt-0.5`}>
-                            DOC: <span className={`font-mono ${isDark ? 'text-gray-400' : 'text-slate-600'}`}>{cliente.persona.numeroDocumento}</span>
-                          </div>
-                        </div>
-                      ))}
-                    </div>
+                    <ClientDropdown filtrados={clientesFiltrados} onSelect={(c) => { setClienteSeleccionado(c); setBusquedaCliente(''); }} />
                   )}
                 </div>
-
                 {!clienteSeleccionado ? (
                   <button
                     onClick={() => setMostrarModalCliente(true)}
-                    className={`w-full py-2.5 border-2 border-dashed ${isDark ? 'border-blue-700 text-blue-400 hover:bg-blue-900/30 hover:border-blue-600' : 'border-blue-200 text-blue-600 hover:bg-blue-50 hover:border-blue-300'} rounded-lg transition-all text-sm font-bold flex items-center justify-center gap-2`}
+                    className="w-full py-2.5 border-2 border-dashed rounded-lg transition-all text-sm font-bold flex items-center justify-center gap-2"
+                    style={{ borderColor: `${colors[300]}`, color: colors[500] }}
                   >
-                    <FaUserPlus /> Crear Nuevo Cliente
+                    <FiUserPlus size={14} /> Crear Nuevo Cliente
                   </button>
                 ) : (
-                  <div className={`${isDark ? 'bg-blue-900/20 border-blue-800' : 'bg-blue-50/50 border-blue-100'} rounded-xl p-4 border relative`}>
-                    <button
-                      onClick={() => setClienteSeleccionado(null)}
-                      className={`absolute top-2 right-2 ${isDark ? 'text-gray-500 hover:text-red-400 hover:bg-red-900/30' : 'text-slate-400 hover:text-red-500 hover:bg-red-50'} p-1.5 rounded-full transition-colors`}
-                    >
-                      <FaTimes size={12} />
-                    </button>
-                    <div className="flex items-center gap-3 mb-2">
-                      <div className={`w-8 h-8 rounded-full ${isDark ? 'bg-blue-900/50 text-blue-400' : 'bg-blue-100 text-blue-600'} flex items-center justify-center font-bold text-xs`}>
-                        {clienteSeleccionado.persona.nombres.charAt(0)}
-                      </div>
-                      <div>
-                        <p className={`font-bold ${isDark ? 'text-gray-200' : 'text-slate-800'} text-sm leading-tight`}>
-                          {clienteSeleccionado.persona.nombres} {clienteSeleccionado.persona.apellidoPaterno}
-                        </p>
-                        <p className={`text-xs ${textTertiary} font-mono mt-0.5`}>
-                          {clienteSeleccionado.persona.numeroDocumento}
-                        </p>
-                      </div>
-                    </div>
-                    <div className="flex gap-2 mt-3">
-                      <span className={`text-[10px] ${isDark ? 'bg-gray-700 border-blue-800 text-blue-400' : 'bg-white border-blue-100 text-blue-600'} border px-2 py-0.5 rounded shadow-sm`}>Cliente Verificado</span>
-                    </div>
-                  </div>
+                  <ClienteCard cliente={clienteSeleccionado} onRemove={() => setClienteSeleccionado(null)} />
                 )}
               </div>
             </div>
 
-            {/* 2. Panel del Carrito - Desktop (tu código original) */}
-            <div className={`${isDark ? 'bg-gray-800 border-gray-700' : 'bg-white border-slate-200'} rounded-xl shadow-lg border flex flex-col h-[500px]`}>
-              <div className={`px-5 py-4 border-b ${isDark ? 'border-gray-700 bg-gray-900' : 'border-slate-200 bg-slate-900'} text-white rounded-t-xl flex justify-between items-center shadow-md z-10`}>
+            {/* Panel del Carrito */}
+            <div className={`rounded-xl shadow-lg border flex flex-col h-[500px] ${card}`}>
+              <div
+                className="px-5 py-4 border-b text-white rounded-t-xl flex justify-between items-center shadow-md z-10"
+                style={{ background: `linear-gradient(135deg, ${colors[600]}, ${colors[700] || colors[600]})` }}
+              >
                 <h2 className="font-bold text-sm uppercase tracking-wide flex items-center gap-2">
-                  <FaShoppingCart className="text-blue-400" /> Detalle de Venta
+                  <FiShoppingCart size={16} /> Detalle de Venta
                 </h2>
-                <div className={`${isDark ? 'bg-gray-800' : 'bg-slate-800'} px-2 py-1 rounded text-xs font-mono text-blue-200`}>
-                  {carrito.length} Items
-                </div>
+                <div className="bg-white/15 px-2 py-1 rounded text-xs font-mono">{carrito.length} Items</div>
               </div>
 
-              <div className={`flex-grow overflow-y-auto p-2 space-y-2 ${isDark ? 'bg-gray-850' : 'bg-slate-50'} custom-scrollbar`}>
+              <div className={`flex-grow overflow-y-auto p-2 space-y-2 custom-scrollbar ${isDark ? 'bg-gray-850' : 'bg-gray-50'}`}>
                 {carrito.length === 0 ? (
-                  <div className={`h-full flex flex-col items-center justify-center ${isDark ? 'text-gray-500' : 'text-slate-400'} opacity-70`}>
-                    <FaReceipt size={48} className={`mb-3 ${isDark ? 'text-gray-600' : 'text-slate-300'}`} />
+                  <div className={`h-full flex flex-col items-center justify-center opacity-70 ${isDark ? 'text-gray-500' : 'text-gray-400'}`}>
+                    <FiFileText size={48} className={`mb-3 ${isDark ? 'text-gray-600' : 'text-gray-300'}`} />
                     <p className="text-sm font-medium">El carrito está vacío</p>
                     <p className="text-xs">Agrega productos para comenzar</p>
                   </div>
                 ) : (
                   carrito.map((item) => (
-                    <div key={item.producto.id} className={`group flex gap-3 p-3 ${isDark ? 'bg-gray-800 border-gray-700 hover:border-blue-500' : 'bg-white border-slate-200 hover:border-blue-400'} border rounded-xl hover:shadow-md transition-all`}>
-                      <div className={`w-16 h-16 rounded-lg overflow-hidden border ${isDark ? 'border-gray-600' : 'border-slate-100'} flex-shrink-0`}>
+                    <div key={item.producto.id} className={`group flex gap-3 p-3 border rounded-xl hover:shadow-md transition-all ${card}`}>
+                      <div className={`w-16 h-16 rounded-lg overflow-hidden border flex-shrink-0 ${border}`}>
                         <ProductImage src={item.producto.imagen} alt={item.producto.nombre} className="w-full h-full object-cover" isDark={isDark} />
                       </div>
-
                       <div className="flex-grow min-w-0 flex flex-col justify-between">
-                        <h4 className={`text-sm font-bold ${isDark ? 'text-gray-200' : 'text-slate-800'} truncate`} title={item.producto.nombre}>
-                          {item.producto.nombre}
-                        </h4>
+                        <h4 className={`text-sm font-bold truncate ${heading}`} title={item.producto.nombre}>{item.producto.nombre}</h4>
                         <div className="flex justify-between items-end">
-                          <p className={`text-xs ${textTertiary}`}>Unit: <span className={`font-medium ${isDark ? 'text-gray-300' : 'text-slate-700'}`}>S/ {item.producto.precio.toFixed(2)}</span></p>
-                          <span className={`font-bold ${isDark ? 'text-gray-100' : 'text-slate-900'} text-sm`}>S/ {item.subtotal.toFixed(2)}</span>
+                          <p className={`text-xs ${textTertiary}`}>Unit: <span className={`font-medium ${textSecondary}`}>S/ {item.producto.precio.toFixed(2)}</span></p>
+                          <span className={`font-bold text-sm ${heading}`}>S/ {item.subtotal.toFixed(2)}</span>
                         </div>
                       </div>
-
-                      <div className={`flex flex-col items-center justify-between pl-2 border-l ${isDark ? 'border-gray-700' : 'border-slate-100'}`}>
+                      <div className={`flex flex-col items-center justify-between pl-2 border-l ${border}`}>
                         <button
                           onClick={() => actualizarCantidad(item.producto.id, item.cantidad + 1)}
-                          className={`w-6 h-6 flex items-center justify-center ${isDark ? 'bg-gray-700 text-gray-300 hover:bg-blue-600 hover:text-white' : 'bg-slate-100 text-slate-600 hover:bg-blue-600 hover:text-white'} rounded-md transition-colors text-[10px]`}
+                          className="w-6 h-6 flex items-center justify-center rounded-md transition-colors text-[10px] text-white"
+                          style={{ backgroundColor: colors[600] }}
                         >
-                          <FaPlus />
+                          <FiPlus />
                         </button>
-                        <span className={`text-xs font-bold ${isDark ? 'text-gray-200' : 'text-slate-800'} my-1`}>{item.cantidad}</span>
+                        <span className={`text-xs font-bold my-1 ${heading}`}>{item.cantidad}</span>
                         <button
                           onClick={() => actualizarCantidad(item.producto.id, item.cantidad - 1)}
-                          className={`w-6 h-6 flex items-center justify-center ${isDark ? 'bg-gray-700 text-gray-300 hover:bg-red-500 hover:text-white' : 'bg-slate-100 text-slate-600 hover:bg-red-500 hover:text-white'} rounded-md transition-colors text-[10px]`}
+                          className={`w-6 h-6 flex items-center justify-center rounded-md transition-colors text-[10px] ${isDark ? 'bg-gray-700 text-gray-300 hover:bg-red-500 hover:text-white' : 'bg-gray-100 text-gray-600 hover:bg-red-500 hover:text-white'}`}
                         >
-                          {item.cantidad === 1 ? <FaTrash /> : <FaMinus />}
+                          {item.cantidad === 1 ? <FiTrash2 /> : <FiMinus />}
                         </button>
                       </div>
                     </div>
@@ -1040,7 +896,7 @@ const VentasList: React.FC = () => {
                 )}
               </div>
 
-              <div className={`p-5 ${isDark ? 'bg-gray-800 border-gray-700' : 'bg-white border-slate-200'} border-t rounded-b-xl shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.05)] z-20`}>
+              <div className={`p-5 border-t rounded-b-xl shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.05)] z-20 ${isDark ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-200'}`}>
                 <div className="space-y-2 mb-4">
                   <div className={`flex justify-between text-xs ${textTertiary}`}>
                     <span>Subtotal</span>
@@ -1051,31 +907,24 @@ const VentasList: React.FC = () => {
                     <span className="font-mono">S/ {igv.toFixed(2)}</span>
                   </div>
                 </div>
-                <div className={`pt-3 border-t ${isDark ? 'border-gray-700' : 'border-slate-100'} flex justify-between items-center`}>
-                  <span className={`font-bold ${isDark ? 'text-gray-200' : 'text-slate-800'} text-sm uppercase`}>Total a Pagar</span>
+                <div className={`pt-3 border-t flex justify-between items-center ${border}`}>
+                  <span className={`font-bold text-sm uppercase ${textSecondary}`}>Total a Pagar</span>
                   <span className="text-3xl font-black tracking-tight" style={{ color: colors[500] }}>S/ {total.toFixed(2)}</span>
                 </div>
                 {carrito.length > 0 && (
-                  <button
-                    onClick={limpiarCarrito}
-                    className="w-full mt-3 text-xs text-red-400 hover:text-red-600 hover:underline text-center transition-colors"
-                  >
+                  <button onClick={limpiarCarrito} className="w-full mt-3 text-xs text-red-400 hover:text-red-600 hover:underline text-center transition-colors">
                     Vaciar todo el carrito
                   </button>
                 )}
 
-                {/* DELIVERY TOGGLE */}
+                {/* Delivery toggle */}
                 <div className={`mt-3 p-3 rounded-xl border ${isDark ? 'border-gray-700 bg-gray-800' : 'border-gray-200 bg-gray-50'}`}>
                   <label className="flex items-center gap-3 cursor-pointer">
-                    <input
-                      type="checkbox"
-                      checked={conEnvio}
-                      onChange={(e) => setConEnvio(e.target.checked)}
-                      className="w-4 h-4 rounded"
-                    />
-                    <span className={`text-sm font-medium ${isDark ? 'text-gray-300' : 'text-gray-700'}`}>
-                      Envio a domicilio
-                    </span>
+                    <input type="checkbox" checked={conEnvio} onChange={(e) => setConEnvio(e.target.checked)} className="w-4 h-4 rounded" style={{ accentColor: colors[500] }} />
+                    <div className="flex items-center gap-2">
+                      <FiTruck size={14} style={{ color: colors[500] }} />
+                      <span className={`text-sm font-medium ${textSecondary}`}>Envio a domicilio</span>
+                    </div>
                   </label>
                   {conEnvio && (
                     <input
@@ -1083,7 +932,7 @@ const VentasList: React.FC = () => {
                       placeholder="Direccion de envio..."
                       value={direccionEnvio}
                       onChange={(e) => setDireccionEnvio(e.target.value)}
-                      className={`mt-2 w-full px-3 py-2 rounded-lg text-sm border ${isDark ? 'bg-gray-700 border-gray-600 text-white placeholder-gray-400' : 'bg-white border-gray-300 text-gray-700'}`}
+                      className={`mt-2 w-full px-3 py-2 rounded-lg text-sm border ${input}`}
                     />
                   )}
                 </div>

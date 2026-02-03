@@ -1,6 +1,6 @@
 import { useState } from "react";
 import ClienteForm from "../Clients/ClientFrom";
-import { FaUserPlus } from "react-icons/fa";
+import { FiUserPlus, FiX } from "react-icons/fi";
 import type { Cliente } from "../../types/clientes/Client";
 import { useThemeClasses } from '../../hooks/useThemeClasses';
 
@@ -13,7 +13,7 @@ interface Props {
 export default function ModalCliente({ isOpen, onClose, onRegistrar }: Props) {
   if (!isOpen) return null;
 
-  const { isDark, colors, heading } = useThemeClasses();
+  const { isDark, colors, heading, modalOverlay, modalContent, border } = useThemeClasses();
 
   const [cliente, setCliente] = useState<Cliente>({
     tipo: "NATURAL",
@@ -34,29 +34,15 @@ export default function ModalCliente({ isOpen, onClose, onRegistrar }: Props) {
 
   const setField = (path: string, value: any) => {
     const parts = path.split(".");
-
     setCliente((prev) => {
-      // caso simple: tipo, fechaCreacion, fechaActualizacion
       if (parts.length === 1) {
         const key = parts[0] as keyof Cliente;
-        return {
-          ...prev,
-          [key]: value
-        };
+        return { ...prev, [key]: value };
       }
-
-      // caso anidado: persona.algo
       if (parts.length === 2 && parts[0] === "persona") {
         const prop = parts[1] as keyof Cliente["persona"];
-        return {
-          ...prev,
-          persona: {
-            ...prev.persona,
-            [prop]: value
-          }
-        };
+        return { ...prev, persona: { ...prev.persona, [prop]: value } };
       }
-
       return prev;
     });
   };
@@ -67,12 +53,21 @@ export default function ModalCliente({ isOpen, onClose, onRegistrar }: Props) {
   };
 
   return (
-    <div className={`fixed inset-0 ${isDark ? 'bg-black/70' : 'bg-black bg-opacity-50'} flex items-center justify-center p-4 z-50`}>
-      <div className={`${isDark ? 'bg-gray-800' : 'bg-white'} rounded-lg shadow-xl w-full max-w-2xl max-h-[90vh] overflow-y-auto`}>
-
-        <div className={`p-4 ${isDark ? 'border-gray-700' : 'border-b'} border-b flex items-center gap-2`}>
-          <FaUserPlus style={{ color: colors[500] }} />
-          <h2 className={`text-lg font-bold ${heading}`}>Registrar Cliente</h2>
+    <div className={modalOverlay}>
+      <div className={`rounded-2xl shadow-2xl w-full max-w-2xl max-h-[90vh] overflow-y-auto border ${modalContent}`}>
+        <div className={`p-5 border-b flex items-center justify-between ${border}`}>
+          <div className="flex items-center gap-3">
+            <div className="p-2 rounded-lg" style={{ backgroundColor: isDark ? `${colors[900]}40` : colors[50], color: colors[500] }}>
+              <FiUserPlus size={20} />
+            </div>
+            <h2 className={`text-lg font-bold ${heading}`}>Registrar Cliente</h2>
+          </div>
+          <button
+            onClick={onClose}
+            className={`p-2 rounded-full transition-colors ${isDark ? 'text-gray-500 hover:text-gray-300 hover:bg-gray-700' : 'text-gray-400 hover:text-gray-600 hover:bg-gray-100'}`}
+          >
+            <FiX size={18} />
+          </button>
         </div>
 
         <ClienteForm

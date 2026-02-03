@@ -1,4 +1,5 @@
 import React from 'react';
+import { FiX, FiPrinter } from 'react-icons/fi';
 import { useThemeClasses } from '../../hooks/useThemeClasses';
 
 interface ModalTicketProps {
@@ -8,7 +9,7 @@ interface ModalTicketProps {
 }
 
 const ModalTicket: React.FC<ModalTicketProps> = ({ isOpen, onClose, venta }) => {
-  const { isDark, colors } = useThemeClasses();
+  const { isDark, colors, heading, border, modalOverlay, modalContent } = useThemeClasses();
 
   if (!isOpen) return null;
   if (!venta) return null;
@@ -23,17 +24,13 @@ const ModalTicket: React.FC<ModalTicketProps> = ({ isOpen, onClose, venta }) => 
     return `${dd}/${mm}/${yyyy} ${HH}:${min}`;
   };
 
-  const formatPrice = (value: number) => {
-    return `S/ ${Number(value).toFixed(2)}`;
-  };
+  const formatPrice = (value: number) => `S/ ${Number(value).toFixed(2)}`;
 
   const handlePrint = () => {
     const ticketContent = document.getElementById('ticket-content');
     if (!ticketContent) return;
-
     const printWindow = window.open('', '_blank');
     if (!printWindow) return;
-
     printWindow.document.write(`
       <html>
         <head>
@@ -63,19 +60,15 @@ const ModalTicket: React.FC<ModalTicketProps> = ({ isOpen, onClose, venta }) => 
   const detalles = venta.detalles || [];
 
   return (
-    <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-      <div
-        className={`w-full max-w-md max-h-[90vh] overflow-y-auto rounded-2xl shadow-2xl ${
-          isDark ? 'bg-gray-800' : 'bg-white'
-        }`}
-      >
-        {/* Ticket content - always white bg, black text, monospace */}
+    <div className={modalOverlay}>
+      <div className={`w-full max-w-md max-h-[90vh] overflow-y-auto rounded-2xl shadow-2xl border ${modalContent}`}>
+
+        {/* Ticket content - always white bg for print */}
         <div
           id="ticket-content"
           className="bg-white text-black font-mono p-6 mx-4 mt-4 rounded-lg"
           style={{ fontSize: '12px' }}
         >
-          {/* Header */}
           <div className="text-center mb-2">
             <h2 className="text-xl font-bold">PERU MARKET</h2>
             <p className="text-xs">RUC: 20XXXXXXXXX</p>
@@ -83,7 +76,6 @@ const ModalTicket: React.FC<ModalTicketProps> = ({ isOpen, onClose, venta }) => 
           </div>
           <div className="border-t border-dashed border-gray-400 my-2" />
 
-          {/* Sale info */}
           <div className="text-xs space-y-1 mb-2">
             <p className="font-bold">Venta #{venta.id}</p>
             <p>Fecha: {formatFecha(venta.fecha)}</p>
@@ -93,7 +85,6 @@ const ModalTicket: React.FC<ModalTicketProps> = ({ isOpen, onClose, venta }) => 
           </div>
           <div className="border-t border-dashed border-gray-400 my-2" />
 
-          {/* Products table */}
           <div className="mb-2">
             <table className="w-full text-xs">
               <thead>
@@ -107,23 +98,15 @@ const ModalTicket: React.FC<ModalTicketProps> = ({ isOpen, onClose, venta }) => 
               <tbody>
                 {detalles.length === 0 ? (
                   <tr>
-                    <td colSpan={4} className="text-center py-2 text-gray-500">
-                      Sin productos
-                    </td>
+                    <td colSpan={4} className="text-center py-2 text-gray-500">Sin productos</td>
                   </tr>
                 ) : (
                   detalles.map((detalle: any, index: number) => (
                     <tr key={index}>
-                      <td className="text-left py-0.5 max-w-[120px] truncate">
-                        {detalle.nombreProducto}
-                      </td>
+                      <td className="text-left py-0.5 max-w-[120px] truncate">{detalle.nombreProducto}</td>
                       <td className="text-center py-0.5">{detalle.cantidad}</td>
-                      <td className="text-right py-0.5">
-                        {formatPrice(detalle.precioUnitario)}
-                      </td>
-                      <td className="text-right py-0.5">
-                        {formatPrice(detalle.subtotal)}
-                      </td>
+                      <td className="text-right py-0.5">{formatPrice(detalle.precioUnitario)}</td>
+                      <td className="text-right py-0.5">{formatPrice(detalle.subtotal)}</td>
                     </tr>
                   ))
                 )}
@@ -132,7 +115,6 @@ const ModalTicket: React.FC<ModalTicketProps> = ({ isOpen, onClose, venta }) => 
           </div>
           <div className="border-t border-dashed border-gray-400 my-2" />
 
-          {/* Totals */}
           <div className="text-xs space-y-1 mb-2">
             <div className="flex justify-between">
               <span>Subtotal:</span>
@@ -149,31 +131,29 @@ const ModalTicket: React.FC<ModalTicketProps> = ({ isOpen, onClose, venta }) => 
           </div>
           <div className="border-t border-dashed border-gray-400 my-2" />
 
-          {/* Footer */}
           <div className="text-center text-xs mt-2">
             <p className="font-bold">Gracias por su compra!</p>
             <p className="mt-1 text-gray-500">{new Date().toLocaleString()}</p>
           </div>
         </div>
 
-        {/* Buttons - outside ticket-content, not printed */}
-        <div className="flex gap-3 p-4 justify-end">
+        {/* Buttons */}
+        <div className={`flex gap-3 p-4 justify-end border-t ${border}`}>
           <button
             onClick={onClose}
             className={`px-5 py-2.5 rounded-xl border text-sm font-bold transition-all ${
               isDark
                 ? 'border-gray-600 text-gray-300 hover:bg-gray-700 hover:text-gray-100'
-                : 'border-slate-300 text-slate-600 hover:bg-slate-50 hover:text-slate-800'
+                : 'border-gray-300 text-gray-600 hover:bg-gray-50 hover:text-gray-800'
             }`}
           >
             Cerrar
           </button>
           <button
             onClick={handlePrint}
-            className="px-5 py-2.5 rounded-xl text-white text-sm font-bold transition-all shadow-lg hover:shadow-xl transform active:scale-95"
-            style={{ backgroundColor: colors[600] }}
+            className="px-5 py-2.5 rounded-xl text-sm font-bold transition-all shadow-lg hover:shadow-xl transform active:scale-95 btn-primary flex items-center gap-2"
           >
-            Imprimir Ticket
+            <FiPrinter size={16} /> Imprimir Ticket
           </button>
         </div>
       </div>

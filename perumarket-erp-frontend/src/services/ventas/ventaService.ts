@@ -213,15 +213,36 @@ async buscarClientesActivos(texto: string): Promise<Cliente[]> {
 
   // Obtener datos de sesión
   obtenerDatosSesion() {
-    const idUsuario = Number(localStorage.getItem("usuarioId"));
-    const idAlmacen = Number(localStorage.getItem("almacenId")) || 1;
+    let idUsuario = Number(localStorage.getItem("usuarioId"));
+    let idAlmacen = Number(localStorage.getItem("almacenId")) || 0;
+
+    // Si no se encontró en keys individuales, intentar obtener del objeto auth
+    if (!idUsuario || idUsuario <= 0) {
+      try {
+        const authData = localStorage.getItem("auth");
+        if (authData) {
+          const parsed = JSON.parse(authData);
+          if (parsed?.user?.id) {
+            idUsuario = Number(parsed.user.id);
+            localStorage.setItem("usuarioId", String(idUsuario));
+          }
+          if (parsed?.user?.almacenId) {
+            idAlmacen = Number(parsed.user.almacenId);
+            localStorage.setItem("almacenId", String(idAlmacen));
+          }
+        }
+      } catch (e) {
+        console.error("Error leyendo auth data:", e);
+      }
+    }
 
     if (!idUsuario || idUsuario <= 0) {
       throw new Error("Usuario no válido. Por favor, inicia sesión de nuevo.");
     }
 
+    // Si aún no hay almacén, usar 1 como default
     if (!idAlmacen || idAlmacen <= 0) {
-      throw new Error("Almacén no válido. Selecciona un almacén.");
+      idAlmacen = 1;
     }
 
     return { idUsuario, idAlmacen };
